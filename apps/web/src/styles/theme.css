@@ -1,0 +1,191 @@
+/* ==========================================================================
+   Marginalia — design tokens
+   Extracted from the Claude Design reference pages. See /DESIGN_SYSTEM.md.
+
+   Two layers:
+   1. :root custom properties — the runtime-themeable palette. Swap these to
+      retheme (e.g. a future dark mode) without touching any utility class.
+   2. @theme — Tailwind v4 token declarations that generate the utilities.
+      Colours reference layer 1, so `bg-clay` follows the runtime palette.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Runtime palette
+   -------------------------------------------------------------------------- */
+
+:root {
+  /* Accent — one accent, used sparingly (principle 02) */
+  --clay: #c96442;
+  --clay-deep: #b0553a;
+
+  /* Neutrals */
+  --page: #faf9f5;
+  --surface: #ffffff;
+  --tint: #f0ece2;
+  --rule: #e6e2d7;
+
+  /* Text ramp, darkest to lightest */
+  --ink: #141413;
+  --body: #3d3a34;
+  --secondary: #6b665c;
+  --muted: #8f8a7e;
+
+  /* Semantic. Deliberately not traffic lights — success is ink, not green. */
+  --success: var(--ink);
+  --error: var(--clay);
+  --warning: var(--clay-deep);
+  --info-bg: var(--tint);
+  --info-fg: var(--secondary);
+
+  /* Support */
+  --overlay: rgb(20 20 19 / 0.28);
+  --clay-ring: rgb(201 100 66 / 0.18);
+
+  /* Motion budget (principle 04) */
+  --duration-press: 150ms;
+  --duration-spin: 700ms;
+  --duration-shimmer: 1400ms;
+}
+
+/* No dark mode is defined in the reference pages. When one is specified, add:
+   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { … } }
+   :root[data-theme="dark"] { … }
+   redefining only the variables above. */
+
+/* --------------------------------------------------------------------------
+   2. Tailwind theme
+   -------------------------------------------------------------------------- */
+
+@theme {
+  /* --- Colours -------------------------------------------------------- */
+  --color-clay: var(--clay);
+  --color-clay-deep: var(--clay-deep);
+
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-tint: var(--tint);
+  --color-rule: var(--rule);
+
+  --color-ink: var(--ink);
+  --color-body: var(--body);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
+
+  --color-success: var(--success);
+  --color-error: var(--error);
+  --color-warning: var(--warning);
+  --color-info: var(--info-bg);
+  --color-info-fg: var(--info-fg);
+
+  --color-overlay: var(--overlay);
+
+  /* --- Type families -------------------------------------------------- */
+  --font-serif: var(--font-lora), Georgia, serif;
+  --font-sans: var(--font-public-sans), Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, Menlo, Monaco, "Cascadia Mono", monospace;
+
+  /* --- Named type scale ----------------------------------------------- */
+  --text-display: 3.5rem; /* 56 */
+  --text-display--line-height: 1.06;
+  --text-display--letter-spacing: -0.01em;
+
+  --text-h1: 2.75rem; /* 44 */
+  --text-h1--line-height: 1.1;
+
+  --text-h2: 1.75rem; /* 28 */
+  --text-h2--line-height: 1.2;
+
+  --text-h3: 1.375rem; /* 22 */
+  --text-h3--line-height: 1.25;
+
+  --text-h4: 1rem; /* 16 */
+  --text-h4--line-height: 1.4;
+  --text-h4--font-weight: 600;
+
+  --text-body: 0.875rem; /* 14 */
+  --text-body--line-height: 1.7;
+
+  --text-caption: 0.78125rem; /* 12.5 */
+  --text-caption--line-height: 1.6;
+
+  --text-eyebrow: 0.65625rem; /* 10.5 */
+  --text-eyebrow--line-height: 1.6;
+  --text-eyebrow--letter-spacing: 0.1em;
+
+  /* --- Raw px ramp, for the intermediate sizes the layouts actually use - */
+  --text-10: 0.625rem;
+  --text-11: 0.6875rem;
+  --text-11\.5: 0.71875rem;
+  --text-12: 0.75rem;
+  --text-13: 0.8125rem;
+  --text-13\.5: 0.84375rem;
+  --text-14\.5: 0.90625rem;
+  --text-15: 0.9375rem;
+  --text-17: 1.0625rem;
+  --text-18: 1.125rem;
+  --text-19: 1.1875rem;
+  --text-20: 1.25rem;
+  --text-24: 1.5rem;
+  --text-26: 1.625rem;
+  --text-30: 1.875rem;
+  --text-32: 2rem;
+  --text-36: 2.25rem;
+  --text-40: 2.5rem;
+  --text-48: 3rem;
+  --text-52: 3.25rem;
+  --text-64: 4rem;
+
+  /* --- Tracking -------------------------------------------------------- */
+  --tracking-eyebrow: 0.1em;
+  --tracking-label: 0.14em;
+  --tracking-wordmark: 0.18em;
+  --tracking-orderid: 0.08em;
+
+  /* --- Spacing --------------------------------------------------------- */
+  /* Base unit is 8px. Tailwind's 0.25rem step means the 8px scale is
+     `2 4 6 8 10 14 22 28`; these aliases name them by role. */
+  --spacing-gutter: 2.5rem; /* 40 — grid gutter */
+  --spacing-block: 3.5rem; /* 56 — block spacing in a section */
+  --spacing-section: 7rem; /* 112 — section to section */
+  --spacing-page-mobile: 1.5rem; /* 24 */
+  --spacing-page-tablet: 2.5rem; /* 40 */
+  --spacing-page-desktop: 5.5rem; /* 88 */
+  --spacing-touch: 2.75rem; /* 44 — minimum touch target */
+
+  /* --- Layout ---------------------------------------------------------- */
+  --container-shell: 80rem; /* 1280 — max content width */
+
+  --breakpoint-sm: 40rem; /* 640  — tablet floor */
+  --breakpoint-lg: 64rem; /* 1024 — desktop floor */
+
+  /* --- Radius ---------------------------------------------------------- */
+  --radius-xs: 0.25rem; /* 4  — skeleton bars, tiny thumbs */
+  --radius-sm: 0.3125rem; /* 5  — checkbox */
+  --radius-md: 0.375rem; /* 6  — metadata badges, menu items */
+  --radius-control: 0.5rem; /* 8  — buttons, inputs, covers */
+  --radius-notice: 0.625rem; /* 10 — toasts, inline notices */
+  --radius-container: 0.75rem; /* 12 — cards, modals, tinted blocks */
+  --radius-sheet: 1rem; /* 16 — full page frames */
+  --radius-pill: 999px;
+
+  /* --- Elevation -------------------------------------------------------
+     The system has no drop shadows. Depth is 1px rules and the tint layer.
+     The only box-shadow is the halo on a live status dot. */
+  --shadow-live: 0 0 0 4px var(--clay-ring);
+
+  /* --- Motion ----------------------------------------------------------- */
+  --animate-spin-slow: spin var(--duration-spin) linear infinite;
+  --animate-shimmer: shimmer var(--duration-shimmer) ease-in-out infinite;
+
+  --ease-standard: ease-in-out;
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}

@@ -1,0 +1,205 @@
+@import "tailwindcss";
+@import "../styles/theme.css";
+
+/* ==========================================================================
+   Base styles
+   ========================================================================== */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--page);
+    color: var(--body);
+    font-family: var(--font-sans);
+    font-size: 0.875rem; /* body 14 */
+    line-height: 1.7;
+    font-weight: 400;
+  }
+
+  /* Titles are Lora. Interface sub-heads (h4+) stay in the sans — see §3.2. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    color: var(--ink);
+    text-wrap: balance;
+  }
+
+  h1 {
+    font-size: 2.75rem;
+    line-height: 1.1;
+  }
+  h2 {
+    font-size: 1.75rem;
+    line-height: 1.2;
+  }
+  h3 {
+    font-size: 1.375rem;
+    line-height: 1.25;
+  }
+
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    color: var(--ink);
+    font-size: 1rem;
+    line-height: 1.4;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  a {
+    color: var(--ink);
+    text-decoration: none;
+    transition: color var(--duration-press) ease;
+  }
+
+  a:hover {
+    color: var(--clay);
+  }
+
+  /* The references use `outline: none` everywhere and signal focus only with an
+     ink border — not sufficient for keyboard users. Baseline ring added here;
+     flagged as open question 4 in DESIGN_SYSTEM.md. */
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  input,
+  button,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  ::selection {
+    background-color: var(--clay);
+    color: var(--surface);
+  }
+
+  /* Principle 04: motion only as confirmation. Honour the OS switch anyway. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ==========================================================================
+   Foundational utilities
+
+   Low-level primitives only — recurring treatments that would otherwise be
+   retyped on every component. Real components come later.
+   ========================================================================== */
+
+@utility shell {
+  /* Centred 1280px container with the responsive page margin. */
+  margin-inline: auto;
+  width: 100%;
+  max-width: calc(80rem + 2 * var(--spacing-page-desktop));
+  padding-inline: var(--spacing-page-mobile);
+
+  @media (width >= 40rem) {
+    padding-inline: var(--spacing-page-tablet);
+  }
+  @media (width >= 64rem) {
+    padding-inline: var(--spacing-page-desktop);
+  }
+}
+
+@utility grid-12 {
+  /* The 12-column grid with the 40px gutter. */
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--spacing-gutter);
+}
+
+@utility grid-books {
+  /* Uniform book grid: 2 up mobile, 3 up tablet, 4 up desktop. */
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-gutter);
+
+  @media (width >= 40rem) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  @media (width >= 64rem) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@utility rail {
+  /* Content + summary rail, 7fr / 5fr. Stacks under tablet. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--spacing-block);
+  align-items: start;
+
+  @media (width >= 64rem) {
+    grid-template-columns: 7fr 5fr;
+  }
+}
+
+@utility measure {
+  max-width: 66ch;
+}
+
+@utility eyebrow {
+  /* Mono caps label. The system's most repeated micro-pattern. */
+  font-family: var(--font-mono);
+  font-size: 0.65625rem;
+  line-height: 1.6;
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+@utility wordmark {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: var(--tracking-wordmark);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+@utility hairline {
+  border-top: 1px solid var(--rule);
+}
+
+@utility cover {
+  /* Every cover is a 2:3 crop with an 8px radius and a 1px rule, so pale
+     covers still hold an edge on cream. */
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--rule);
+  background-color: var(--tint);
+  object-fit: cover;
+  width: 100%;
+}
+
+@utility skeleton {
+  background-color: var(--tint);
+  border-radius: var(--radius-xs);
+  animation: var(--animate-shimmer);
+}
