@@ -198,6 +198,66 @@
   width: 100%;
 }
 
+@utility cover-hatch {
+  /* Placeholder for a cover we do not have art for. The one sanctioned use of
+     --hatch. Pairs with `cover` for the crop, radius and rule. */
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--tint) 0 8px,
+    var(--hatch) 8px 16px
+  );
+}
+
+@utility radio-checked {
+  /* A selected radio is a 5px clay ring on white, not a dot. Tailwind exposes
+     no border-width theme namespace, so the token is applied here. */
+  border: var(--radio-ring) solid var(--clay);
+}
+
+/* Line grids — thumbnail · content · amount. One per rung of the thumbnail
+   ladder, so cart lines, order lines and compact rows never hand-roll a
+   grid-template-columns. */
+@utility grid-line-xs {
+  display: grid;
+  grid-template-columns: var(--spacing-thumb-xs) minmax(0, 1fr) auto;
+}
+@utility grid-line-sm {
+  display: grid;
+  grid-template-columns: var(--spacing-thumb-sm) minmax(0, 1fr) auto;
+}
+@utility grid-line-md {
+  display: grid;
+  grid-template-columns: var(--spacing-thumb-md) minmax(0, 1fr) auto;
+}
+@utility grid-line-lg {
+  display: grid;
+  grid-template-columns: var(--spacing-thumb-lg) minmax(0, 1fr) auto;
+}
+
+@utility grid-detail {
+  /* Book detail: cover · content · buy rail. Stacks under desktop. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--spacing-block);
+  align-items: start;
+
+  @media (width >= 64rem) {
+    grid-template-columns: var(--container-detail-cover) minmax(0, 1fr) var(
+        --container-detail-rail
+      );
+    gap: 4rem;
+  }
+}
+
+@utility grid-shelf {
+  /* The asymmetric curated shelf. 12 columns at a tighter 28px gutter —
+     reserved for hand-curated shelves, never the catalog (§5.3). */
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1.75rem;
+  align-items: start;
+}
+
 @utility skeleton {
   background-color: var(--tint);
   border-radius: var(--radius-xs);

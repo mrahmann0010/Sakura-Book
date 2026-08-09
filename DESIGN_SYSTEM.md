@@ -373,3 +373,7 @@ Flagged for confirmation before component work begins.
 | Font loading (Lora, Public Sans) | [apps/web/src/app/layout.tsx](apps/web/src/app/layout.tsx) |
 | `cn()` class merger | [apps/web/src/lib/utils.ts](apps/web/src/lib/utils.ts) |
 | `cva` primitive variants | [apps/web/src/lib/variants.ts](apps/web/src/lib/variants.ts) |
+| UI primitives | [apps/web/src/components/ui/](apps/web/src/components/ui/) |
+| Domain components (+ reuse notes) | [apps/web/src/components/domain/](apps/web/src/components/domain/) |
+| Layout shells | [apps/web/src/components/layout/](apps/web/src/components/layout/) |
+| Internal component playground | [apps/web/src/app/playground/page.tsx](apps/web/src/app/playground/page.tsx) |

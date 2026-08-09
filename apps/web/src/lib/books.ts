@@ -1,98 +1,117 @@
+import type { BookSummary } from "@/components/domain";
+
 /* Placeholder catalogue. Stands in for the API until apps/api exists — the
-   shape is what the landing page and catalog both read. */
+   shape is BookSummary, which is what every book-shaped component reads. */
 
-export type BookFlag = "editors-pick" | "last-copy" | "signed";
-
-export type Book = {
-  slug: string;
-  title: string;
-  author: string;
-  price: string;
-  /** Metadata badge shown between cover and title. At most one per card. */
-  flag?: BookFlag;
-  /** Sold-out cards drop to 55% and trade the price for the words. */
-  inStock: boolean;
-};
-
-export const flagLabels: Record<BookFlag, string> = {
-  "editors-pick": "Editor's pick",
-  "last-copy": "Last copy",
-  signed: "Signed",
-};
-
-/** Six titles, freshly shelved. The first two rows of the landing page. */
-export const recentlyAdded: Book[] = [
+/** Six titles, freshly shelved. */
+export const recentlyAdded: BookSummary[] = [
   {
-    slug: "the-quiet-shelf",
+    id: "the-quiet-shelf",
     title: "The Quiet Shelf",
     author: "Ana Belén Ruiz",
     price: "£14.00",
+    href: "/books/the-quiet-shelf",
     flag: "editors-pick",
-    inStock: true,
   },
   {
-    slug: "letters-to-a-cartographer",
+    id: "letters-to-a-cartographer",
     title: "Letters to a Cartographer",
     author: "Hiroshi Tanabe",
     price: "£11.50",
+    href: "/books/letters-to-a-cartographer",
     flag: "last-copy",
-    inStock: true,
   },
   {
-    slug: "salt-and-almanac",
+    id: "salt-and-almanac",
     title: "Salt and Almanac",
     author: "Marguerite Okonkwo",
     price: "£16.00",
+    href: "/books/salt-and-almanac",
     flag: "signed",
-    inStock: true,
   },
   {
-    slug: "a-winter-of-small-repairs",
+    id: "a-winter-of-small-repairs",
     title: "A Winter of Small Repairs",
     author: "Tomas Lindqvist",
     price: "£12.00",
-    inStock: true,
+    href: "/books/a-winter-of-small-repairs",
   },
   {
-    slug: "the-long-field",
+    id: "the-long-field",
     title: "The Long Field",
     author: "Ide Ó Cuinneagáin",
     price: "£13.50",
-    inStock: false,
+    href: "/books/the-long-field",
+    soldOut: true,
   },
   {
-    slug: "nine-bridges",
+    id: "nine-bridges",
     title: "Nine Bridges",
     author: "Petra Sandoval",
     price: "£15.00",
-    inStock: true,
+    href: "/books/nine-bridges",
   },
 ];
 
 /** The second shelf. Same card, no badge. */
-export const staffPicks: Book[] = [
+export const staffPicks: BookSummary[] = [
   {
-    slug: "an-orchard-in-reverse",
+    id: "an-orchard-in-reverse",
     title: "An Orchard in Reverse",
     author: "Cordelia Nwachukwu",
     price: "£13.00",
-    inStock: true,
+    href: "/books/an-orchard-in-reverse",
   },
   {
-    slug: "the-weather-in-other-rooms",
+    id: "the-weather-in-other-rooms",
     title: "The Weather in Other Rooms",
     author: "Jonas Ferreira",
     price: "£10.50",
-    inStock: true,
+    href: "/books/the-weather-in-other-rooms",
+    format: "Paperback",
   },
   {
-    slug: "everything-we-kept",
+    id: "everything-we-kept",
     title: "Everything We Kept",
     author: "Su-jin Park",
     price: "£17.00",
-    inStock: true,
+    href: "/books/everything-we-kept",
+    format: "Paperback",
   },
 ];
 
 /** Shown on the hero count line. */
 export const titlesInStock = 41;
+
+export const primaryNav = [
+  { href: "/catalog", label: "Books" },
+  { href: "/staff-picks", label: "Staff picks" },
+  { href: "/orders", label: "Track order" },
+];
+
+export const footerColumns = [
+  {
+    heading: "Shop",
+    links: [
+      { href: "/catalog", label: "Books" },
+      { href: "/catalog?sort=new", label: "New this month" },
+      { href: "/gift-cards", label: "Gift cards" },
+    ],
+  },
+  {
+    heading: "Orders",
+    links: [
+      { href: "/orders", label: "Track an order" },
+      { href: "/delivery", label: "Delivery" },
+      { href: "/returns", label: "Returns" },
+    ],
+  },
+  {
+    heading: "Contact",
+    links: [
+      { href: "mailto:hello@marginalia.example", label: "hello@marginalia.co" },
+      { href: "/visit", label: "Visit us" },
+      { href: "https://instagram.com", label: "Instagram" },
+    ],
+  },
+];

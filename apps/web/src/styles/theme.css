@@ -41,6 +41,15 @@
   --overlay: rgb(20 20 19 / 0.28);
   --clay-ring: rgb(201 100 66 / 0.18);
 
+  /* Cover placeholder hatch. Not a UI surface — it only ever appears inside the
+     repeating gradient of a missing cover. */
+  --hatch: #e8e3d7;
+
+  /* The selected radio is a 5px clay ring, not a dot. Tailwind has no
+     border-width theme namespace, so the value lives here and is applied by
+     the `radio-checked` utility in globals.css. */
+  --radio-ring: 0.3125rem;
+
   /* Motion budget (principle 04) */
   --duration-press: 150ms;
   --duration-spin: 700ms;
@@ -114,6 +123,7 @@
 
   /* --- Raw px ramp, for the intermediate sizes the layouts actually use - */
   --text-10: 0.625rem;
+  --text-10\.5: 0.65625rem;
   --text-11: 0.6875rem;
   --text-11\.5: 0.71875rem;
   --text-12: 0.75rem;
@@ -133,7 +143,15 @@
   --text-40: 2.5rem;
   --text-48: 3rem;
   --text-52: 3.25rem;
+  --text-21: 1.3125rem;
+  --text-22: 1.375rem;
+  --text-28: 1.75rem;
+  --text-34: 2.125rem;
+  --text-42: 2.625rem;
+  --text-44: 2.75rem;
+  --text-56: 3.5rem;
   --text-64: 4rem;
+  --text-68: 4.25rem;
 
   /* --- Tracking -------------------------------------------------------- */
   --tracking-eyebrow: 0.1em;
@@ -152,8 +170,41 @@
   --spacing-page-desktop: 5.5rem; /* 88 */
   --spacing-touch: 2.75rem; /* 44 — minimum touch target */
 
+  /* Component-internal sizes. The doc calls these out as deliberately off the
+     8px layout rhythm (§4) — they are named here so no component ever reaches
+     for an arbitrary px value. */
+  --spacing-control-y: 0.8125rem; /* 13 — button + field vertical padding */
+  --spacing-control-x: 1.5rem; /* 24 — filled button horizontal padding */
+  --spacing-field-x: 0.875rem; /* 14 — field horizontal padding */
+  --spacing-choice: 1.125rem; /* 18 — checkbox and radio box */
+  --spacing-dot: 0.6875rem; /* 11 — timeline dot */
+  --spacing-count: 1.25rem; /* 20 — cart count badge */
+  --spacing-spinner: 1.375rem; /* 22 — standalone spinner */
+  --spacing-spinner-inline: 0.8125rem; /* 13 — spinner inside a button */
+  --spacing-card: 1.5rem; /* 24 — card padding, the standard */
+  --spacing-card-compact: 1.25rem; /* 20 */
+  --spacing-card-roomy: 1.75rem; /* 28 */
+  --spacing-notice-x: 1.125rem; /* 18 — toast and inline notice */
+  --spacing-chip-y: 0.4375rem; /* 7 — filter chip */
+
+  /* Cover thumbnail ladder, smallest to largest. Each is a documented size:
+     40 order-summary line · 44 list row · 56 confirmation line · 72 cart line. */
+  --spacing-thumb-xs: 2.5rem;
+  --spacing-thumb-sm: 2.75rem;
+  --spacing-thumb-md: 3.5rem;
+  --spacing-thumb-lg: 4.5rem;
+
   /* --- Layout ---------------------------------------------------------- */
   --container-shell: 80rem; /* 1280 — max content width */
+  --container-detail-cover: 20rem; /* 320 — book detail cover column */
+  --container-detail-rail: 18.75rem; /* 300 — book detail buy rail */
+
+  /* Measures (§3.4). Used as `max-w-measure`, `max-w-measure-book`, … */
+  --container-measure: 66ch;
+  --container-measure-book: 50ch;
+  --container-measure-lede: 44ch;
+  --container-measure-intro: 34ch;
+  --container-measure-blurb: 28ch;
 
   --breakpoint-sm: 40rem; /* 640  — tablet floor */
   --breakpoint-lg: 64rem; /* 1024 — desktop floor */
