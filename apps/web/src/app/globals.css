@@ -149,6 +149,22 @@
   }
 }
 
+@utility grid-books-3 {
+  /* The landing shelf: 1 up mobile, 2 up tablet, 3 up desktop at the shelf's
+     tighter 28px gutter. Panel cards are wider than a bare cover, so the
+     landing wireframe runs 3 across where the catalog runs 4. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.75rem;
+
+  @media (width >= 40rem) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  @media (width >= 64rem) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @utility rail {
   /* Content + summary rail, 7fr / 5fr. Stacks under tablet. */
   display: grid;
@@ -201,11 +217,7 @@
 @utility cover-hatch {
   /* Placeholder for a cover we do not have art for. The one sanctioned use of
      --hatch. Pairs with `cover` for the crop, radius and rule. */
-  background-image: repeating-linear-gradient(
-    135deg,
-    var(--tint) 0 8px,
-    var(--hatch) 8px 16px
-  );
+  background-image: repeating-linear-gradient(135deg, var(--tint) 0 8px, var(--hatch) 8px 16px);
 }
 
 @utility radio-checked {
@@ -242,9 +254,7 @@
   align-items: start;
 
   @media (width >= 64rem) {
-    grid-template-columns: var(--container-detail-cover) minmax(0, 1fr) var(
-        --container-detail-rail
-      );
+    grid-template-columns: var(--container-detail-cover) minmax(0, 1fr) var(--container-detail-rail);
     gap: 4rem;
   }
 }

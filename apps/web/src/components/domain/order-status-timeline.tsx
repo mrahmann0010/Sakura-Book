@@ -1,11 +1,6 @@
 import type { ReactNode } from "react";
 
-import {
-  timelineConnector,
-  timelineDot,
-  timelineLabel,
-  type TimelineStep,
-} from "@/lib/variants";
+import { timelineConnector, timelineDot, timelineLabel, type TimelineStep } from "@/lib/variants";
 import { cn } from "@/lib/utils";
 
 /**
@@ -53,10 +48,7 @@ export function OrderStatusTimeline({
   className,
 }: OrderStatusTimelineProps) {
   return (
-    <ol
-      aria-label="Order progress"
-      className={cn("grid grid-cols-4", className)}
-    >
+    <ol aria-label="Order progress" className={cn("grid grid-cols-4", className)}>
       {ORDER_STEPS.map((step, index) => {
         const state = stateOf(step, status);
         const isLast = index === ORDER_STEPS.length - 1;
@@ -69,9 +61,7 @@ export function OrderStatusTimeline({
           >
             <span className="flex items-center">
               <span aria-hidden className={timelineDot({ step: state })} />
-              {!isLast ? (
-                <span aria-hidden className={timelineConnector({ step: state })} />
-              ) : null}
+              {!isLast ? <span aria-hidden className={timelineConnector({ step: state })} /> : null}
             </span>
 
             <span className="mt-3.5">
@@ -87,9 +77,7 @@ export function OrderStatusTimeline({
                 {stepLabels[step]}
               </span>
               {size === "full" && detail?.[step] ? (
-                <span className="mt-1.5 block text-caption text-secondary">
-                  {detail[step]}
-                </span>
+                <span className="text-caption text-secondary mt-1.5 block">{detail[step]}</span>
               ) : null}
             </span>
           </li>

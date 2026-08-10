@@ -15,9 +15,7 @@ function detectLocale(request: NextRequest): string {
     .map((part) => part.split(";")[0].trim().toLowerCase());
 
   for (const lang of preferred) {
-    const match = locales.find(
-      (locale) => lang === locale || lang.startsWith(`${locale}-`),
-    );
+    const match = locales.find((locale) => lang === locale || lang.startsWith(`${locale}-`));
     if (match) return match;
   }
 

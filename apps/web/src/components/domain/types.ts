@@ -28,6 +28,13 @@ export type BookSummary = {
   flag?: BookFlag;
   /** Sold-out cards drop to 55% and trade the price for the words. */
   soldOut?: boolean;
+  /**
+   * Mean score out of 5, and how many ratings stand behind it. Rendered as
+   * words — "4.4 · 128 ratings" — never as stars: §1.03 wants state stated,
+   * and §2 has no colour to spend on a glyph scale.
+   */
+  rating?: number;
+  ratingCount?: number;
   /** "Paperback", "Hardback" — shown on cart lines beside the author. */
   format?: ReactNode;
 };

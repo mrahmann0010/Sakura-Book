@@ -29,14 +29,11 @@ export const button = cva(
   {
     variants: {
       variant: {
-        primary:
-          "bg-clay text-surface hover:bg-clay-deep disabled:bg-rule disabled:text-muted",
+        primary: "bg-clay text-surface hover:bg-clay-deep disabled:bg-rule disabled:text-muted",
         secondary:
           "bg-surface text-ink border border-rule hover:border-ink disabled:bg-page disabled:text-muted disabled:border-rule",
-        ghost:
-          "bg-transparent text-secondary hover:bg-tint hover:text-ink disabled:text-muted",
-        destructive:
-          "bg-transparent text-clay hover:bg-tint disabled:text-muted",
+        ghost: "bg-transparent text-secondary hover:bg-tint hover:text-ink disabled:text-muted",
+        destructive: "bg-transparent text-clay hover:bg-tint disabled:text-muted",
       },
       size: {
         sm: "px-5 py-2.5 text-13",
@@ -78,8 +75,7 @@ export const iconButton = cva(
   {
     variants: {
       variant: {
-        outline:
-          "border border-rule bg-surface text-muted hover:border-ink hover:text-ink",
+        outline: "border border-rule bg-surface text-muted hover:border-ink hover:text-ink",
         ghost: "bg-transparent text-muted hover:bg-tint hover:text-ink",
       },
       size: {
@@ -146,8 +142,7 @@ export const fieldHint = cva("mt-2.5 text-caption", {
    6px radius with the selected row tinted.
    -------------------------------------------------------------------------- */
 
-export const optionList =
-  "rounded-control border border-ink bg-surface p-1.5 text-body";
+export const optionList = "rounded-control border border-ink bg-surface p-1.5 text-body";
 
 export const optionItem = cva(
   "block w-full rounded-md px-2.5 py-2.5 text-left transition-colors duration-150",
@@ -320,18 +315,15 @@ export const radio = [
 ].join(" ");
 
 /** Row wrapper for a checkbox or radio and its label. 12px gap, 14px label. */
-export const choiceRow = cva(
-  "flex items-center gap-3 text-body select-none",
-  {
-    variants: {
-      disabled: {
-        true: "text-muted cursor-not-allowed",
-        false: "text-ink cursor-pointer",
-      },
+export const choiceRow = cva("flex items-center gap-3 text-body select-none", {
+  variants: {
+    disabled: {
+      true: "text-muted cursor-not-allowed",
+      false: "text-ink cursor-pointer",
     },
-    defaultVariants: { disabled: false },
   },
-);
+  defaultVariants: { disabled: false },
+});
 
 /* --------------------------------------------------------------------------
    Quantity stepper — Domain Components · CartItem.
@@ -360,22 +352,19 @@ export const stepperButton =
    goes translucent white so it reads on clay.
    -------------------------------------------------------------------------- */
 
-export const spinner = cva(
-  "inline-block shrink-0 rounded-full border-2 animate-spin-slow",
-  {
-    variants: {
-      size: {
-        inline: "size-spinner-inline",
-        md: "size-spinner",
-      },
-      tone: {
-        default: "border-rule border-t-clay",
-        onAccent: "border-surface/40 border-t-surface",
-      },
+export const spinner = cva("inline-block shrink-0 rounded-full border-2 animate-spin-slow", {
+  variants: {
+    size: {
+      inline: "size-spinner-inline",
+      md: "size-spinner",
     },
-    defaultVariants: { size: "md", tone: "default" },
+    tone: {
+      default: "border-rule border-t-clay",
+      onAccent: "border-surface/40 border-t-surface",
+    },
   },
-);
+  defaultVariants: { size: "md", tone: "default" },
+});
 
 export type SpinnerVariants = VariantProps<typeof spinner>;
 

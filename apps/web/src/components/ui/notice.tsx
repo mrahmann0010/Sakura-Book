@@ -19,11 +19,8 @@ export type NoticeProps = Variants<NoticeVariants> & {
  */
 export function Notice({ tone = "info", lead, children, className }: NoticeProps) {
   return (
-    <div
-      role={tone === "error" ? "alert" : undefined}
-      className={cn(notice({ tone }), className)}
-    >
-      {lead ? <strong className="font-semibold text-clay">{lead} </strong> : null}
+    <div role={tone === "error" ? "alert" : undefined} className={cn(notice({ tone }), className)}>
+      {lead ? <strong className="text-clay font-semibold">{lead} </strong> : null}
       {children}
     </div>
   );
@@ -42,16 +39,10 @@ export type ToastProps = {
  */
 export function Toast({ children, meta, className }: ToastProps) {
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className={cn(notice({ tone: "toast" }), className)}
-    >
+    <div role="status" aria-live="polite" className={cn(notice({ tone: "toast" }), className)}>
       <span>{children}</span>
       {meta ? (
-        <span className="font-mono text-10.5 tracking-eyebrow text-muted uppercase">
-          {meta}
-        </span>
+        <span className="text-10.5 tracking-eyebrow text-muted font-mono uppercase">{meta}</span>
       ) : null}
     </div>
   );

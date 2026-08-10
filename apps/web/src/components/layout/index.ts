@@ -6,14 +6,7 @@
    about. See the comment block in ./page-shell.tsx.
    ========================================================================== */
 
-export {
-  DetailLayout,
-  PageHeader,
-  PageShell,
-  RailLayout,
-  Section,
-  Shell,
-} from "./page-shell";
+export { DetailLayout, PageHeader, PageShell, RailLayout, Section, Shell } from "./page-shell";
 
 export { Breadcrumbs, SiteHeader, StepIndicator } from "./site-header";
 export type { NavItem, SiteHeaderProps } from "./site-header";

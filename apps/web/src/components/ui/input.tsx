@@ -32,12 +32,7 @@ export function Input({
   const resolved = error ? "error" : state;
 
   return (
-    <FieldFrame
-      label={label}
-      hint={hint}
-      error={error}
-      className={fieldClassName}
-    >
+    <FieldFrame label={label} hint={hint} error={error} className={fieldClassName}>
       {({ id, describedBy }) => (
         <input
           id={id}
@@ -68,12 +63,7 @@ export function Textarea({
   const resolved = error ? "error" : state;
 
   return (
-    <FieldFrame
-      label={label}
-      hint={hint}
-      error={error}
-      className={fieldClassName}
-    >
+    <FieldFrame label={label} hint={hint} error={error} className={fieldClassName}>
       {({ id, describedBy }) => (
         <textarea
           id={id}

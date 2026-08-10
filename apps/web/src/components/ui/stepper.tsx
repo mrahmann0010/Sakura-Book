@@ -31,11 +31,7 @@ export function Stepper({
   const step = (next: number) => () => onChange?.(next);
 
   return (
-    <span
-      role="group"
-      aria-label={label}
-      className={cn(stepper({ engaged }), className)}
-    >
+    <span role="group" aria-label={label} className={cn(stepper({ engaged }), className)}>
       <button
         type="button"
         className={stepperButton}
@@ -45,7 +41,7 @@ export function Stepper({
       >
         −
       </button>
-      <span aria-live="polite" className="min-w-count text-center text-13.5 text-ink">
+      <span aria-live="polite" className="min-w-count text-13.5 text-ink text-center">
         {value}
       </span>
       <button

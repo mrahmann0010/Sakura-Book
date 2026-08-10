@@ -9,5 +9,64 @@
   },
   "language": {
     "label": "言語"
+  },
+  "home": {
+    "hero": {
+      "title": "私たちが実際に読んだ本",
+      "subhead": "ブリストルから届ける、手で選んだ小さな目録です。売り切れた本は追加で仕入れず、棚から下ろします。",
+      "count": "在庫{{count}}点"
+    },
+    "recent": {
+      "title": "新着",
+      "seeMore": "目録をすべて見る"
+    },
+    "second": {
+      "eyebrow": "二番目の棚",
+      "title": "スタッフの選書",
+      "description": "次に何を読もうか迷う人に、いつもすすめている三冊です。",
+      "action": "選書をすべて見る"
+    },
+    "quickView": "{{title}}を見る"
+  },
+  "catalog": {
+    "title": "棚のすべての本",
+    "count_other": "{{count}}点",
+    "search": {
+      "label": "目録を検索",
+      "placeholder": "書名または著者名で検索"
+    },
+    "genres": {
+      "fiction": "小説",
+      "essays": "随筆",
+      "poetry": "詩",
+      "translated": "翻訳",
+      "nature": "自然"
+    },
+    "sort": {
+      "recent": "新着順",
+      "title": "書名順",
+      "price-asc": "価格の安い順",
+      "rating": "評価の高い順"
+    },
+    "filters": {
+      "genre": "ジャンル",
+      "genreLabel": "ジャンルで絞り込む",
+      "genreCount": "ジャンル（{{count}}）",
+      "sort": "並べ替え",
+      "applied": "適用中",
+      "removeSearch": "「{{q}}」✕",
+      "clear": "すべて解除",
+      "done": "完了"
+    },
+    "pagination": {
+      "label": "目録のページ",
+      "page": "{{totalPages}}ページ中{{page}}ページ目"
+    },
+    "empty": {
+      "eyebrow": "該当なし",
+      "title": "その条件に合う本はありません",
+      "description": "短い言葉で検索するか、ジャンルを一つ外して範囲を広げてください。",
+      "action": "絞り込みを解除"
+    }
   }
 }

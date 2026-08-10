@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 /**
  * Every environment variable the API depends on, validated once at boot.
@@ -6,15 +6,13 @@ import { z } from 'zod';
  * mystery `undefined` deep in a request handler.
  */
 export const envSchema = z.object({
-  NODE_ENV: z
-    .enum(['development', 'test', 'production'])
-    .default('development'),
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
 
   DATABASE_URL: z.string().url(),
 
   /** Origin allowed to call this API from the browser (the Next.js app). */
-  WEB_ORIGIN: z.string().url().default('http://localhost:3000'),
+  WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -24,8 +22,8 @@ export function validateEnv(raw: Record<string, unknown>): Env {
 
   if (!parsed.success) {
     const issues = parsed.error.issues
-      .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
-      .join('\n');
+      .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
+      .join("\n");
     throw new Error(`Invalid environment variables:\n${issues}`);
   }
 

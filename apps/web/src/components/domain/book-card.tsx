@@ -42,8 +42,22 @@ export type BookCardProps = Variants<VariantProps<typeof cardTitle>> & {
    * as the curated shelf sets it.
    */
   inlineMeta?: boolean;
+  /**
+   * The catalog card's bottom row: rating on the left, price on the right,
+   * on one baseline. Falls back to the stacked price when a book has no
+   * rating, so a row never renders half-empty.
+   */
+  splitMeta?: boolean;
   /** A control above the card: quick view, save, remove from a list. */
   action?: ReactNode;
+  /**
+   * `bare` is the reference card — a cover on cream, ink outline on hover
+   * (§10.7). `panel` is the landing shelf card the wireframe draws: the same
+   * content seated on a tint block, with the badge and action sharing a row
+   * above an inset cover. Panel cards must not sit inside a tinted section,
+   * per §10.4.
+   */
+  variant?: "bare" | "panel";
   className?: string;
 };
 
@@ -54,7 +68,9 @@ export function BookCard({
   showFlag = true,
   showPrice = true,
   inlineMeta = false,
+  splitMeta = false,
   action,
+  variant = "bare",
   className,
 }: BookCardProps) {
   const flag = showFlag ? book.flag : undefined;
@@ -70,21 +86,36 @@ export function BookCard({
     book.title
   );
 
-  const meta = inlineMeta ? (
-    <p className="mt-1.5 text-13 text-secondary">
+  const meta = splitMeta && book.rating != null ? (
+    <>
+      <p className="text-caption text-secondary mt-1.5">{book.author}</p>
+      <p className="mt-3 flex items-baseline justify-between gap-3">
+        <span className="text-12 text-muted">
+          {book.rating.toFixed(1)}
+          {book.ratingCount != null ? ` · ${book.ratingCount}` : null}
+        </span>
+        {showPrice ? (
+          <span
+            className={cn(
+              "text-caption font-semibold",
+              book.soldOut ? "text-secondary" : "text-ink",
+            )}
+          >
+            {priceLine}
+          </span>
+        ) : null}
+      </p>
+    </>
+  ) : inlineMeta ? (
+    <p className="text-13 text-secondary mt-1.5">
       {book.author}
       {showPrice ? ` · ${priceLine}` : null}
     </p>
   ) : (
     <>
-      <p className="mt-1.5 text-caption text-secondary">{book.author}</p>
+      <p className="text-caption text-secondary mt-1.5">{book.author}</p>
       {showPrice ? (
-        <p
-          className={cn(
-            "mt-1.5 text-caption",
-            book.soldOut ? "text-secondary" : "text-body",
-          )}
-        >
+        <p className={cn("text-caption mt-1.5", book.soldOut ? "text-secondary" : "text-body")}>
           {priceLine}
         </p>
       ) : null}
@@ -95,7 +126,7 @@ export function BookCard({
     return (
       <article
         className={cn(
-          "group relative grid-line-sm items-center gap-3.5",
+          "group grid-line-sm relative items-center gap-3.5",
           "hairline pt-4",
           "outline-1 outline-offset-6 outline-transparent transition-[outline-color] duration-150",
           "hover:outline-ink has-[a:focus-visible]:outline-ink",
@@ -103,19 +134,52 @@ export function BookCard({
           className,
         )}
       >
-        <BookCover
-          src={book.coverUrl}
-          title={book.title}
-          author={book.author}
-          radius="xs"
-        />
+        <BookCover src={book.coverUrl} title={book.title} author={book.author} radius="xs" />
         <div className="min-w-0">
           <h3 className={cardTitle({ size: "sm" })}>{title}</h3>
-          <p className="mt-1 text-12 text-secondary">{book.author}</p>
+          <p className="text-12 text-secondary mt-1">{book.author}</p>
         </div>
-        {showPrice ? (
-          <p className="text-caption text-body">{priceLine}</p>
-        ) : null}
+        {showPrice ? <p className="text-caption text-body">{priceLine}</p> : null}
+      </article>
+    );
+  }
+
+  if (variant === "panel") {
+    const badge = flag ? (
+      <Badge tone={flag === "editors-pick" ? "accent" : "neutral"}>{flagLabels[flag]}</Badge>
+    ) : null;
+
+    return (
+      <article
+        className={cn(
+          "group bg-tint rounded-control relative flex flex-col p-5",
+          /* Offset 2 rather than the bare card's 6: the panel already has an
+             edge, so the ring sits just off it instead of floating. */
+          "outline-1 outline-offset-2 outline-transparent transition-[outline-color] duration-150",
+          "hover:outline-ink has-[a:focus-visible]:outline-ink",
+          book.soldOut && "opacity-55",
+          className,
+        )}
+      >
+        {/* Reserved even when empty, so covers align across a row. */}
+        <div className="relative z-10 flex min-h-8 items-start justify-between gap-3">
+          {badge}
+          {action ? <div className="ml-auto">{action}</div> : null}
+        </div>
+
+        <div className="mx-auto mt-4.5 w-[56%]">
+          <BookCover
+            src={book.coverUrl}
+            title={book.title}
+            author={book.author}
+            fallback={book.coverUrl ? "hatch" : "wordmark"}
+          />
+        </div>
+
+        <div className="hairline mt-5 pt-4">
+          <h3 className={cardTitle({ size })}>{title}</h3>
+          {meta}
+        </div>
       </article>
     );
   }
@@ -130,9 +194,7 @@ export function BookCard({
         className,
       )}
     >
-      {action ? (
-        <div className="relative z-10 mb-3 flex justify-end">{action}</div>
-      ) : null}
+      {action ? <div className="relative z-10 mb-3 flex justify-end">{action}</div> : null}
 
       <BookCover
         src={book.coverUrl}
@@ -143,15 +205,11 @@ export function BookCard({
 
       {flag ? (
         <p className="mt-4">
-          <Badge tone={flag === "editors-pick" ? "accent" : "neutral"}>
-            {flagLabels[flag]}
-          </Badge>
+          <Badge tone={flag === "editors-pick" ? "accent" : "neutral"}>{flagLabels[flag]}</Badge>
         </p>
       ) : null}
 
-      <h3 className={cn(cardTitle({ size }), flag ? "mt-3" : "mt-4.5")}>
-        {title}
-      </h3>
+      <h3 className={cn(cardTitle({ size }), flag ? "mt-3" : "mt-4.5")}>{title}</h3>
       {meta}
     </article>
   );

@@ -38,12 +38,7 @@ export function Select({
   const resolved = error ? "error" : state;
 
   return (
-    <FieldFrame
-      label={label}
-      hint={hint}
-      error={error}
-      className={fieldClassName}
-    >
+    <FieldFrame label={label} hint={hint} error={error} className={fieldClassName}>
       {({ id, describedBy }) => (
         <span className="relative block">
           <select
@@ -55,11 +50,7 @@ export function Select({
           >
             {options
               ? options.map((option) => (
-                  <option
-                    key={option.value}
-                    value={option.value}
-                    disabled={option.disabled}
-                  >
+                  <option key={option.value} value={option.value} disabled={option.disabled}>
                     {typeof option.label === "string" ? option.label : option.value}
                   </option>
                 ))
@@ -68,7 +59,7 @@ export function Select({
           <svg
             viewBox="0 0 20 20"
             aria-hidden
-            className="pointer-events-none absolute top-1/2 right-field-x size-5 -translate-y-1/2 text-muted"
+            className="right-field-x text-muted pointer-events-none absolute top-1/2 size-5 -translate-y-1/2"
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
@@ -96,13 +87,7 @@ export type OptionListProps = {
   label?: string;
 };
 
-export function OptionList({
-  options,
-  value,
-  onSelect,
-  label,
-  className,
-}: OptionListProps) {
+export function OptionList({ options, value, onSelect, label, className }: OptionListProps) {
   return (
     <ul role="listbox" aria-label={label} className={cn(optionList, className)}>
       {options.map((option) => (

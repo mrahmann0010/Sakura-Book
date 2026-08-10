@@ -46,12 +46,7 @@ export type StatusPillProps = Variants<StatusPillVariants> & {
   className?: string;
 };
 
-export function StatusPill({
-  status = "pending",
-  onTint,
-  children,
-  className,
-}: StatusPillProps) {
+export function StatusPill({ status = "pending", onTint, children, className }: StatusPillProps) {
   return (
     <span className={cn(statusPill({ status, onTint }), className)}>
       {children ?? statusLabels[status]}
@@ -72,13 +67,7 @@ export type ChipProps = Variants<ChipVariants> & {
   className?: string;
 };
 
-export function Chip({
-  active = false,
-  as = "button",
-  onClick,
-  children,
-  className,
-}: ChipProps) {
+export function Chip({ active = false, as = "button", onClick, children, className }: ChipProps) {
   if (as === "span") {
     return <span className={cn(chip({ active }), className)}>{children}</span>;
   }
@@ -111,9 +100,5 @@ export function CountBadge({
 }) {
   if (count <= 0) return null;
 
-  return (
-    <span className={cn(countBadge, className)}>
-      {count > max ? `${max}+` : count}
-    </span>
-  );
+  return <span className={cn(countBadge, className)}>{count > max ? `${max}+` : count}</span>;
 }

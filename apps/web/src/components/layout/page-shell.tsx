@@ -30,7 +30,7 @@ export function PageShell({
   className?: string;
 }) {
   return (
-    <div className={cn("flex min-h-dvh flex-col bg-page", className)}>
+    <div className={cn("bg-page flex min-h-dvh flex-col", className)}>
       {header}
       <main className="flex-1">{children}</main>
       {footer}
@@ -71,9 +71,7 @@ export function RailLayout({
   return (
     <div className={cn("rail", className)}>
       <div className="min-w-0">{children}</div>
-      <aside className={cn("min-w-0", stickyRail && "lg:sticky lg:top-6")}>
-        {rail}
-      </aside>
+      <aside className={cn("min-w-0", stickyRail && "lg:sticky lg:top-6")}>{rail}</aside>
     </div>
   );
 }
@@ -109,6 +107,7 @@ export function DetailLayout({
 export function Section({
   eyebrow,
   title,
+  description,
   action,
   tint = false,
   children,
@@ -117,6 +116,8 @@ export function Section({
 }: {
   eyebrow?: ReactNode;
   title?: ReactNode;
+  /** One line under the title, as the landing shelves are drawn. */
+  description?: ReactNode;
   /** "All 41 →" — the way through to the full list. */
   action?: ReactNode;
   tint?: boolean;
@@ -124,12 +125,10 @@ export function Section({
   className?: string;
   titleAs?: ElementType;
 }) {
-  const hasHead = Boolean(eyebrow || title || action);
+  const hasHead = Boolean(eyebrow || title || description || action);
 
   return (
-    <section
-      className={cn(tint && "rounded-container bg-tint p-8 sm:p-10", className)}
-    >
+    <section className={cn(tint && "rounded-container bg-tint p-8 sm:p-10", className)}>
       {hasHead ? (
         <div className="flex flex-wrap items-baseline justify-between gap-5">
           <div>
@@ -137,12 +136,15 @@ export function Section({
             {title ? (
               <TitleTag
                 className={cn(
-                  "font-serif text-28 leading-tight text-ink lg:text-32",
+                  "text-28 text-ink lg:text-32 font-serif leading-tight",
                   eyebrow && "mt-3",
                 )}
               >
                 {title}
               </TitleTag>
+            ) : null}
+            {description ? (
+              <p className="max-w-measure-lede text-caption text-secondary mt-3">{description}</p>
             ) : null}
           </div>
           {action ? <div className="text-13 text-secondary">{action}</div> : null}
@@ -181,28 +183,15 @@ export function PageHeader({
   } as const;
 
   return (
-    <div
-      className={cn(
-        "flex flex-wrap items-end justify-between gap-x-gutter gap-y-8",
-        className,
-      )}
-    >
+    <div className={cn("gap-x-gutter flex flex-wrap items-end justify-between gap-y-8", className)}>
       <div className="min-w-0">
         {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
-        <h1
-          className={cn(
-            "font-serif leading-[1.06] text-ink",
-            sizes[size],
-            eyebrow && "mt-4",
-          )}
-        >
+        <h1 className={cn("text-ink font-serif leading-[1.06]", sizes[size], eyebrow && "mt-4")}>
           {title}
         </h1>
         {description ? (
           // Colour comes from the body default; `text-body` here is the size.
-          <p className="mt-5 max-w-measure-lede text-body">
-            {description}
-          </p>
+          <p className="max-w-measure-lede text-body mt-5">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-3">{actions}</div> : null}

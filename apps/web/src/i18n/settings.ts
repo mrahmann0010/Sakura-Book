@@ -16,7 +16,10 @@ export function isLocale(value: string): value is Locale {
   return (locales as readonly string[]).includes(value);
 }
 
-export function getOptions(locale: Locale = defaultLocale, ns: string | string[] = defaultNamespace) {
+export function getOptions(
+  locale: Locale = defaultLocale,
+  ns: string | string[] = defaultNamespace,
+) {
   return {
     supportedLngs: locales,
     fallbackLng: defaultLocale,

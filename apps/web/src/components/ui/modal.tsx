@@ -61,7 +61,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-page-mobile"
+      className="bg-overlay p-page-mobile fixed inset-0 z-50 flex items-center justify-center"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -79,18 +79,16 @@ export function Modal({
           className,
         )}
       >
-        <h2 className="font-serif text-24 leading-tight text-ink">{title}</h2>
+        <h2 className="text-24 text-ink font-serif leading-tight">{title}</h2>
 
         {description ? (
-          <p className="mt-3.5 text-13.5 leading-relaxed text-body">{description}</p>
+          <p className="text-13.5 text-body mt-3.5 leading-relaxed">{description}</p>
         ) : null}
 
         {children ? <div className="mt-5">{children}</div> : null}
 
         {actions ? (
-          <div className="mt-card-roomy flex flex-wrap items-center gap-3">
-            {actions}
-          </div>
+          <div className="mt-card-roomy flex flex-wrap items-center gap-3">{actions}</div>
         ) : null}
       </div>
     </div>

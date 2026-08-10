@@ -27,9 +27,7 @@ const cartSlice = createSlice({
       }
     },
     removeItem(state, action: PayloadAction<{ bookId: string }>) {
-      state.items = state.items.filter(
-        (item) => item.bookId !== action.payload.bookId,
-      );
+      state.items = state.items.filter((item) => item.bookId !== action.payload.bookId);
     },
     setQuantity(state, action: PayloadAction<{ bookId: string; quantity: number }>) {
       const item = state.items.find((item) => item.bookId === action.payload.bookId);

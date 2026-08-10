@@ -22,12 +22,12 @@ export function LanguageSwitcher({ className }: { className?: string }) {
   }
 
   return (
-    <label className={cn("inline-flex items-center gap-2 text-caption text-secondary", className)}>
+    <label className={cn("text-caption text-secondary inline-flex items-center gap-2", className)}>
       <span className="sr-only">{t("language.label")}</span>
       <select
         value={current}
         onChange={(event) => switchTo(event.target.value as Locale)}
-        className="rounded-full border border-hairline bg-transparent px-3 py-1 text-caption text-ink"
+        className="border-hairline text-caption text-ink rounded-full border bg-transparent px-3 py-1"
       >
         {locales.map((locale) => (
           <option key={locale} value={locale}>

@@ -46,18 +46,14 @@ export function CartItem({
     return (
       <div
         className={cn(
-          "grid-line-lg items-center gap-6 border-b border-rule py-card opacity-50",
+          "grid-line-lg border-rule py-card items-center gap-6 border-b opacity-50",
           className,
         )}
       >
         <span aria-hidden className="cover rounded-md" />
         <p aria-live="polite" className="text-13 text-secondary">
           Removing “{book.title}”…{" "}
-          <button
-            type="button"
-            onClick={onUndoRemove}
-            className="font-semibold text-clay"
-          >
+          <button type="button" onClick={onUndoRemove} className="text-clay font-semibold">
             Undo
           </button>
         </p>
@@ -67,22 +63,12 @@ export function CartItem({
   }
 
   return (
-    <div
-      className={cn(
-        "grid-line-lg items-start gap-6 border-b border-rule py-card",
-        className,
-      )}
-    >
-      <BookCover
-        src={book.coverUrl}
-        title={book.title}
-        author={book.author}
-        radius="md"
-      />
+    <div className={cn("grid-line-lg border-rule py-card items-start gap-6 border-b", className)}>
+      <BookCover src={book.coverUrl} title={book.title} author={book.author} radius="md" />
 
       <div className="min-w-0">
-        <h3 className="font-serif text-19 leading-[1.25] text-ink">{book.title}</h3>
-        <p className="mt-1.5 text-caption text-secondary">
+        <h3 className="text-19 text-ink font-serif leading-[1.25]">{book.title}</h3>
+        <p className="text-caption text-secondary mt-1.5">
           {book.author}
           {book.format ? <> · {book.format}</> : null}
         </p>

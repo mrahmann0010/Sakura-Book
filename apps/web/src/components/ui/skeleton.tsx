@@ -42,11 +42,7 @@ export function SkeletonText({
         <Skeleton
           key={line}
           index={index}
-          className={cn(
-            "h-3.5",
-            line > 0 && "mt-2.5",
-            line === lines - 1 && lines > 1 && "w-3/5",
-          )}
+          className={cn("h-3.5", line > 0 && "mt-2.5", line === lines - 1 && lines > 1 && "w-3/5")}
         />
       ))}
     </span>

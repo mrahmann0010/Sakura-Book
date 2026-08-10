@@ -19,13 +19,7 @@ import {
   SummaryRow,
   type OrderStep,
 } from "@/components/domain";
-import {
-  Breadcrumbs,
-  PageHeader,
-  RailLayout,
-  Section,
-  Shell,
-} from "@/components/layout";
+import { Breadcrumbs, PageHeader, RailLayout, Section, Shell } from "@/components/layout";
 import {
   Badge,
   Button,
@@ -65,13 +59,7 @@ import { recentlyAdded, staffPicks } from "@/lib/books";
    anything ships.
    ========================================================================== */
 
-function Row({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid gap-5 lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-14">
       <Eyebrow className="lg:pt-1">{label}</Eyebrow>
@@ -91,7 +79,7 @@ export default function Playground() {
   const [first, second, third] = recentlyAdded;
 
   return (
-    <Shell className="flex flex-col gap-section py-20">
+    <Shell className="gap-section flex flex-col py-20">
       <PageHeader
         eyebrow="Internal"
         title="Component playground"
@@ -182,9 +170,7 @@ export default function Playground() {
         <Row label="Choice · Status">
           <div className="grid gap-14 sm:grid-cols-2">
             <div className="flex flex-col gap-4">
-              <Checkbox defaultChecked={false}>
-                Billing address same as delivery
-              </Checkbox>
+              <Checkbox defaultChecked={false}>Billing address same as delivery</Checkbox>
               <Checkbox defaultChecked>Email me shipping updates</Checkbox>
               <Checkbox disabled>Gift wrap (unavailable)</Checkbox>
               <RadioGroup name="playground-delivery" label="Delivery">
@@ -243,18 +229,17 @@ export default function Playground() {
             <div className="flex flex-col gap-5">
               <Card>
                 <CardTitle>Order MG-40718</CardTitle>
-                <p className="mt-2.5 text-13 text-secondary">Placed 3 August 2026</p>
+                <p className="text-13 text-secondary mt-2.5">Placed 3 August 2026</p>
                 <CardDivider />
-                <div className="flex justify-between text-13.5">
+                <div className="text-13.5 flex justify-between">
                   <span className="text-secondary">Total</span>
                   <span className="text-ink">£38.50</span>
                 </div>
               </Card>
               <Card variant="tint">
                 <Eyebrow>Tinted variant</Eyebrow>
-                <p className="mt-3 text-13.5 leading-relaxed text-body">
-                  Used for sections and summaries, never stacked inside another
-                  tinted block.
+                <p className="text-13.5 text-body mt-3 leading-relaxed">
+                  Used for sections and summaries, never stacked inside another tinted block.
                 </p>
               </Card>
             </div>
@@ -273,11 +258,7 @@ export default function Playground() {
                     <Button size="sm" onClick={() => setModalOpen(false)}>
                       Remove
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setModalOpen(false)}
-                    >
+                    <Button size="sm" variant="ghost" onClick={() => setModalOpen(false)}>
                       Keep it
                     </Button>
                   </>
@@ -297,8 +278,7 @@ export default function Playground() {
             <div className="flex flex-col gap-4">
               <Toast meta="Cart 3">Added to cart</Toast>
               <Notice>
-                Card payments are handled by our gateway. We never store card
-                details.
+                Card payments are handled by our gateway. We never store card details.
               </Notice>
               <Notice tone="error" lead="Payment declined.">
                 Check the card number and try again.
@@ -364,9 +344,8 @@ export default function Playground() {
                     <Button block className="mt-6">
                       Checkout
                     </Button>
-                    <p className="mt-4 text-caption leading-relaxed text-secondary">
-                      Payment is taken by our gateway. Card details never touch our
-                      servers.
+                    <p className="text-caption text-secondary mt-4 leading-relaxed">
+                      Payment is taken by our gateway. Card details never touch our servers.
                     </p>
                   </>
                 }
@@ -379,11 +358,7 @@ export default function Playground() {
             }
           >
             <CartItemList>
-              <CartItem
-                book={{ ...first, format: "Paperback" }}
-                quantity={1}
-                lineTotal="£14.00"
-              />
+              <CartItem book={{ ...first, format: "Paperback" }} quantity={1} lineTotal="£14.00" />
               <CartItem
                 book={{ ...second, format: "Paperback" }}
                 quantity={quantity}
@@ -420,11 +395,7 @@ export default function Playground() {
           <div className="flex flex-col gap-10">
             <CatalogToolbar>
               {(["pending", "paid", "shipped", "delivered"] as const).map((step) => (
-                <Chip
-                  key={step}
-                  active={status === step}
-                  onClick={() => setStatus(step)}
-                >
+                <Chip key={step} active={status === step} onClick={() => setStatus(step)}>
                   {step}
                 </Chip>
               ))}
@@ -498,21 +469,14 @@ export default function Playground() {
             actions={
               <CatalogToolbar>
                 <Input placeholder="Search title or author" className="sm:w-64" />
-                <Select
-                  aria-label="Sort"
-                  options={[{ value: "new", label: "Recently added" }]}
-                />
+                <Select aria-label="Sort" options={[{ value: "new", label: "Recently added" }]} />
               </CatalogToolbar>
             }
           />
         </Row>
 
         <Row label="Section · tint">
-          <Section
-            tint
-            title="This month's shelf"
-            action={<a href="#playground">All 41 →</a>}
-          >
+          <Section tint title="This month's shelf" action={<a href="#playground">All 41 →</a>}>
             <BookGrid>
               <BookCard book={first} showFlag={false} />
               <BookCard book={second} showFlag={false} />

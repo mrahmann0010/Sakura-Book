@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import { HealthIndicatorResult, HealthIndicatorService } from '@nestjs/terminus';
-import { PrismaService } from '../prisma/prisma.service';
+import { Injectable } from "@nestjs/common";
+import { HealthIndicatorResult, HealthIndicatorService } from "@nestjs/terminus";
+import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class PrismaHealthIndicator {
@@ -17,7 +17,7 @@ export class PrismaHealthIndicator {
       return indicator.up();
     } catch (error) {
       return indicator.down({
-        message: error instanceof Error ? error.message : 'Database unreachable',
+        message: error instanceof Error ? error.message : "Database unreachable",
       });
     }
   }

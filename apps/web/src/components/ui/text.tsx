@@ -40,16 +40,8 @@ export function Divider({ className }: { className?: string }) {
  * Mono order ID at display size, 0.08em tracking. Used on the confirmation
  * headline block and anywhere an ID has to be read aloud or copied.
  */
-export function OrderId({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
+export function OrderId({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <span className={cn("font-mono text-20 tracking-orderid text-ink", className)}>
-      {children}
-    </span>
+    <span className={cn("text-20 tracking-orderid text-ink font-mono", className)}>{children}</span>
   );
 }

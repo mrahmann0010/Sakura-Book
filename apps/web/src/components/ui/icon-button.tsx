@@ -3,10 +3,7 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { iconButton, type IconButtonVariants } from "@/lib/variants";
 import { cn, type Variants } from "@/lib/utils";
 
-export type IconButtonProps = Omit<
-  ComponentPropsWithoutRef<"button">,
-  "children"
-> &
+export type IconButtonProps = Omit<ComponentPropsWithoutRef<"button">, "children"> &
   Variants<IconButtonVariants> & {
     /** A 20px icon. Stroke 1.5, square caps — see §8. */
     children: ReactNode;

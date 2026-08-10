@@ -7,13 +7,17 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run dev",
+    "dev": "turbo run dev --filter @sakura/web",
+    "dev:all": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "clean": "turbo run clean && rm -rf node_modules",
     "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down",
+    "docker:up:all": "docker compose --profile backend up -d",
+    "docker:down": "docker compose --profile backend down",
     "docker:logs": "docker compose logs -f"
   },
   "devDependencies": {

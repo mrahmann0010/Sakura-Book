@@ -34,13 +34,11 @@ export function SiteFooter({
 }: SiteFooterProps) {
   return (
     <footer className={cn("shell pb-14", className)}>
-      <div className="grid gap-gutter rounded-container bg-tint p-8 sm:grid-cols-2 sm:p-12 lg:grid-cols-[2fr_1fr_1fr_1fr] lg:p-14">
+      <div className="gap-gutter rounded-container bg-tint grid p-8 sm:grid-cols-2 sm:p-12 lg:grid-cols-[2fr_1fr_1fr_1fr] lg:p-14">
         <div>
           <Wordmark as="p">{brand}</Wordmark>
           {blurb ? (
-            <p className="mt-4 max-w-measure-blurb text-caption text-secondary">
-              {blurb}
-            </p>
+            <p className="max-w-measure-blurb text-caption text-secondary mt-4">{blurb}</p>
           ) : null}
         </div>
 
@@ -50,10 +48,7 @@ export function SiteFooter({
             <ul className="mt-4 flex flex-col gap-2.5">
               {column.links.map((link) => (
                 <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-13.5 text-secondary hover:text-clay"
-                  >
+                  <Link href={link.href} className="text-13.5 text-secondary hover:text-clay">
                     {link.label}
                   </Link>
                 </li>

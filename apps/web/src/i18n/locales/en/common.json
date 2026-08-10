@@ -9,5 +9,65 @@
   },
   "language": {
     "label": "Language"
+  },
+  "home": {
+    "hero": {
+      "title": "Books we have actually read",
+      "subhead": "A small catalogue, chosen by hand and posted from Bristol. When a title sells out we take it down rather than order more.",
+      "count": "{{count}} titles in stock"
+    },
+    "recent": {
+      "title": "Recently added",
+      "seeMore": "See the whole catalogue"
+    },
+    "second": {
+      "eyebrow": "Second shelf",
+      "title": "Staff picks",
+      "description": "Three we keep pressing on people who ask what to read next.",
+      "action": "All staff picks"
+    },
+    "quickView": "View {{title}}"
+  },
+  "catalog": {
+    "title": "Every book on the shelves",
+    "count_one": "{{count}} title",
+    "count_other": "{{count}} titles",
+    "search": {
+      "label": "Search the catalogue",
+      "placeholder": "Search by title or author"
+    },
+    "genres": {
+      "fiction": "Fiction",
+      "essays": "Essays",
+      "poetry": "Poetry",
+      "translated": "Translated",
+      "nature": "Nature"
+    },
+    "sort": {
+      "recent": "Recently added",
+      "title": "Title A–Z",
+      "price-asc": "Price, low to high",
+      "rating": "Best rated"
+    },
+    "filters": {
+      "genre": "Genre",
+      "genreLabel": "Filter by genre",
+      "genreCount": "Genre ({{count}})",
+      "sort": "Sort",
+      "applied": "Applied",
+      "removeSearch": "“{{q}}” ✕",
+      "clear": "Clear all",
+      "done": "Done"
+    },
+    "pagination": {
+      "label": "Catalogue pages",
+      "page": "Page {{page}} of {{totalPages}}"
+    },
+    "empty": {
+      "eyebrow": "No matches",
+      "title": "Nothing on the shelf fits that",
+      "description": "Try a shorter search, or drop a genre to widen the results.",
+      "action": "Clear the filters"
+    }
   }
 }

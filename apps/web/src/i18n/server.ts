@@ -10,18 +10,14 @@ async function initI18next(locale: Locale, ns: string | string[]): Promise<i18n>
     .use(initReactI18next)
     .use(
       resourcesToBackend(
-        (language: string, namespace: string) =>
-          import(`./locales/${language}/${namespace}.json`),
+        (language: string, namespace: string) => import(`./locales/${language}/${namespace}.json`),
       ),
     )
     .init(getOptions(locale, ns));
   return instance;
 }
 
-export async function getTranslation(
-  locale: Locale,
-  ns: string | string[] = defaultNamespace,
-) {
+export async function getTranslation(locale: Locale, ns: string | string[] = defaultNamespace) {
   const instance = await initI18next(locale, ns);
   return {
     t: instance.getFixedT(locale, Array.isArray(ns) ? ns[0] : ns),

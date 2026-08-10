@@ -24,13 +24,7 @@ export type FieldFrameProps = {
  * Label · control · helper. The one place field chrome is composed, so Input,
  * Select, Textarea and any bespoke control share identical spacing and states.
  */
-export function FieldFrame({
-  label,
-  hint,
-  error,
-  className,
-  children,
-}: FieldFrameProps) {
+export function FieldFrame({ label, hint, error, className, children }: FieldFrameProps) {
   const id = useId();
   const messageId = `${id}-message`;
   const message = error ?? hint;
@@ -46,10 +40,7 @@ export function FieldFrame({
       {children({ id, describedBy: message ? messageId : undefined })}
 
       {message ? (
-        <p
-          id={messageId}
-          className={fieldHint({ tone: error ? "error" : "neutral" })}
-        >
+        <p id={messageId} className={fieldHint({ tone: error ? "error" : "neutral" })}>
           {message}
         </p>
       ) : null}
@@ -70,10 +61,8 @@ export function Field({ label, hint, error, className, children }: FieldProps) {
     <div className={cn("w-full", className)}>
       {label ? <p className={fieldLabel}>{label}</p> : null}
       {children}
-      {error ?? hint ? (
-        <p className={fieldHint({ tone: error ? "error" : "neutral" })}>
-          {error ?? hint}
-        </p>
+      {(error ?? hint) ? (
+        <p className={fieldHint({ tone: error ? "error" : "neutral" })}>{error ?? hint}</p>
       ) : null}
     </div>
   );

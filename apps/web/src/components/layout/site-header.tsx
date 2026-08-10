@@ -65,7 +65,7 @@ export function SiteHeader({
   return (
     <header
       className={cn(
-        "sticky top-0 z-40 border-b bg-page/95 backdrop-blur-[2px]",
+        "bg-page/95 sticky top-0 z-40 border-b backdrop-blur-[2px]",
         "transition-colors duration-150",
         scrolled ? "border-ink" : "border-rule",
         className,
@@ -101,7 +101,7 @@ export function SiteHeader({
               </Link>
             ) : null}
 
-            <Link href={cartHref} className="flex items-center gap-2 text-13.5 text-ink">
+            <Link href={cartHref} className="text-13.5 text-ink flex items-center gap-2">
               Cart
               <CountBadge count={cartCount} />
             </Link>
@@ -133,7 +133,7 @@ export function SiteHeader({
                 onClick={() => setMenuOpen(false)}
                 className={cn(
                   navLink({ active: item.href === activeHref }),
-                  "border-b border-rule py-3.5 last:border-0",
+                  "border-rule border-b py-3.5 last:border-0",
                 )}
               >
                 {item.label}
@@ -184,7 +184,10 @@ export function Breadcrumbs({
                   {item.label}
                 </Link>
               ) : (
-                <span className={isLast ? "text-ink" : undefined} aria-current={isLast ? "page" : undefined}>
+                <span
+                  className={isLast ? "text-ink" : undefined}
+                  aria-current={isLast ? "page" : undefined}
+                >
                   {item.label}
                 </span>
               )}

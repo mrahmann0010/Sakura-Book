@@ -44,10 +44,7 @@ export function Button({
       {...props}
     >
       {loading ? (
-        <Spinner
-          size="inline"
-          tone={variant === "primary" ? "onAccent" : "default"}
-        />
+        <Spinner size="inline" tone={variant === "primary" ? "onAccent" : "default"} />
       ) : (
         leading
       )}

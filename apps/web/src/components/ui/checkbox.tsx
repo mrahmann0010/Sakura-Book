@@ -3,10 +3,7 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { checkbox, choiceRow } from "@/lib/variants";
 import { cn } from "@/lib/utils";
 
-export type CheckboxProps = Omit<
-  ComponentPropsWithoutRef<"input">,
-  "type" | "children"
-> & {
+export type CheckboxProps = Omit<ComponentPropsWithoutRef<"input">, "type" | "children"> & {
   /** Label sits to the right of the box, 12px away. */
   children?: ReactNode;
   /** Secondary line under the label — delivery prices, caveats. */
@@ -19,20 +16,14 @@ export type CheckboxProps = Omit<
  * submission all keep working — and is visually replaced by the drawn box,
  * which follows it via `peer-checked`.
  */
-export function Checkbox({
-  disabled,
-  children,
-  description,
-  className,
-  ...props
-}: CheckboxProps) {
+export function Checkbox({ disabled, children, description, className, ...props }: CheckboxProps) {
   return (
     <label className={cn(choiceRow({ disabled }), className)}>
       <span className="relative inline-flex">
         <input
           type="checkbox"
           disabled={disabled}
-          className="peer absolute inset-0 size-full cursor-inherit opacity-0"
+          className="peer cursor-inherit absolute inset-0 size-full opacity-0"
           {...props}
         />
         <span aria-hidden className={checkbox}>
@@ -53,7 +44,7 @@ export function Checkbox({
         <span>
           {children}
           {description ? (
-            <span className="block text-caption text-secondary">{description}</span>
+            <span className="text-caption text-secondary block">{description}</span>
           ) : null}
         </span>
       ) : null}

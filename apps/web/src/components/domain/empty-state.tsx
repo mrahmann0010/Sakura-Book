@@ -23,26 +23,13 @@ export type EmptyStateProps = {
  * that. Serves empty, no-results and not-found alike; the difference between
  * them is entirely copy, which is the point.
  */
-export function EmptyState({
-  eyebrow,
-  title,
-  description,
-  action,
-  className,
-}: EmptyStateProps) {
+export function EmptyState({ eyebrow, title, description, action, className }: EmptyStateProps) {
   return (
-    <Card
-      variant="tint"
-      padding="none"
-      as="section"
-      className={cn("px-8 py-10", className)}
-    >
+    <Card variant="tint" padding="none" as="section" className={cn("px-8 py-10", className)}>
       {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
-      <h2 className="mt-4.5 font-serif text-26 leading-tight text-ink">{title}</h2>
+      <h2 className="text-26 text-ink mt-4.5 font-serif leading-tight">{title}</h2>
       {description ? (
-        <p className="mt-3 max-w-measure-lede text-13.5 leading-relaxed text-body">
-          {description}
-        </p>
+        <p className="max-w-measure-lede text-13.5 text-body mt-3 leading-relaxed">{description}</p>
       ) : null}
       {action ? <div className="mt-6.5">{action}</div> : null}
     </Card>

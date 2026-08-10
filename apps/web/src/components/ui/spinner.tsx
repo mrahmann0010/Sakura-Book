@@ -37,7 +37,7 @@ export function LoadingLine({
   className?: string;
 }) {
   return (
-    <p className={cn("flex items-center gap-5 text-13 text-secondary", className)}>
+    <p className={cn("text-13 text-secondary flex items-center gap-5", className)}>
       <Spinner label={null} />
       {children}
     </p>

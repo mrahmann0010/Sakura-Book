@@ -15,11 +15,7 @@ export function CatalogToolbar({
   children: ReactNode;
   className?: string;
 }) {
-  return (
-    <div className={cn("flex flex-wrap items-center gap-3", className)}>
-      {children}
-    </div>
-  );
+  return <div className={cn("flex flex-wrap items-center gap-3", className)}>{children}</div>;
 }
 
 export type Facet = {
@@ -29,8 +25,11 @@ export type Facet = {
 
 export type FilterChipsProps = {
   facets: Facet[];
-  /** The active facet. Single-select, as the catalog draws it. */
+  /** The active facet, for a single-select row. */
   value?: string;
+  /** The active facets, for a multi-select row — what the catalog genre bar
+      is. Takes precedence over `value` when both are passed. */
+  values?: string[];
   onChange?: (value: string) => void;
   /** Names the row for assistive tech — "Filter by category". */
   label: string;
@@ -41,22 +40,18 @@ export type FilterChipsProps = {
 export function FilterChips({
   facets,
   value,
+  values,
   onChange,
   label,
   className,
 }: FilterChipsProps) {
+  const isActive = (facet: Facet) =>
+    values ? values.includes(facet.value) : facet.value === value;
+
   return (
-    <div
-      role="group"
-      aria-label={label}
-      className={cn("flex flex-wrap gap-2.5", className)}
-    >
+    <div role="group" aria-label={label} className={cn("flex flex-wrap gap-2.5", className)}>
       {facets.map((facet) => (
-        <Chip
-          key={facet.value}
-          active={facet.value === value}
-          onClick={() => onChange?.(facet.value)}
-        >
+        <Chip key={facet.value} active={isActive(facet)} onClick={() => onChange?.(facet.value)}>
           {facet.label}
         </Chip>
       ))}
@@ -78,7 +73,7 @@ export function BookMeta({ items, className }: BookMetaProps) {
   return (
     <ul
       className={cn(
-        "grid grid-cols-1 justify-start gap-x-12 gap-y-3.5 text-13 text-secondary sm:grid-cols-2",
+        "text-13 text-secondary grid grid-cols-1 justify-start gap-x-12 gap-y-3.5 sm:grid-cols-2",
         className,
       )}
     >

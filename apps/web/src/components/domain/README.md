@@ -38,7 +38,7 @@ is the only thing that actually differs between a catalog cell and the feature
 slot of a curated shelf. A separate `<FeatureCard>` would have been the same
 markup with one number changed.
 
-**What is deliberately *not* a BookCard variant:** cart lines and order summary
+**What is deliberately _not_ a BookCard variant:** cart lines and order summary
 lines. They look adjacent but carry quantity, line totals and remove actions —
 different data, different interaction, different component (`CartItem`,
 `OrderLine`). Forcing them into BookCard would mean a `mode` prop that switches

@@ -3,29 +3,20 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { choiceRow, radio } from "@/lib/variants";
 import { cn } from "@/lib/utils";
 
-export type RadioProps = Omit<
-  ComponentPropsWithoutRef<"input">,
-  "type" | "children"
-> & {
+export type RadioProps = Omit<ComponentPropsWithoutRef<"input">, "type" | "children"> & {
   children?: ReactNode;
   description?: ReactNode;
   className?: string;
 };
 
-export function Radio({
-  disabled,
-  children,
-  description,
-  className,
-  ...props
-}: RadioProps) {
+export function Radio({ disabled, children, description, className, ...props }: RadioProps) {
   return (
     <label className={cn(choiceRow({ disabled }), className)}>
       <span className="relative inline-flex">
         <input
           type="radio"
           disabled={disabled}
-          className="peer absolute inset-0 size-full cursor-inherit opacity-0"
+          className="peer cursor-inherit absolute inset-0 size-full opacity-0"
           {...props}
         />
         <span aria-hidden className={radio} />
@@ -35,7 +26,7 @@ export function Radio({
         <span>
           {children}
           {description ? (
-            <span className="block text-caption text-secondary">{description}</span>
+            <span className="text-caption text-secondary block">{description}</span>
           ) : null}
         </span>
       ) : null}

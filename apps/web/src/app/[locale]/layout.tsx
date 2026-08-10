@@ -29,21 +29,14 @@ const publicSans = Public_Sans({
 
 export const metadata: Metadata = {
   title: "Marginalia",
-  description:
-    "A small catalog of books, chosen by hand and posted from Bristol.",
+  description: "A small catalog of books, chosen by hand and posted from Bristol.",
 };
 
-export default async function RootLayout({
-  children,
-  params,
-}: LayoutProps<"/[locale]">) {
+export default async function RootLayout({ children, params }: LayoutProps<"/[locale]">) {
   const { locale } = (await params) as { locale: Locale };
 
   return (
-    <html
-      lang={locale}
-      className={`${lora.variable} ${publicSans.variable} h-full antialiased`}
-    >
+    <html lang={locale} className={`${lora.variable} ${publicSans.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         <StoreProvider>
           <I18nProvider locale={locale}>{children}</I18nProvider>

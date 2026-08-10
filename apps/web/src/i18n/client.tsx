@@ -11,19 +11,12 @@ i18next
   .use(initReactI18next)
   .use(
     resourcesToBackend(
-      (language: string, namespace: string) =>
-        import(`./locales/${language}/${namespace}.json`),
+      (language: string, namespace: string) => import(`./locales/${language}/${namespace}.json`),
     ),
   )
   .init(getOptions());
 
-export function I18nProvider({
-  locale,
-  children,
-}: {
-  locale: Locale;
-  children: ReactNode;
-}) {
+export function I18nProvider({ locale, children }: { locale: Locale; children: ReactNode }) {
   const { i18n } = useTranslation();
 
   useEffect(() => {

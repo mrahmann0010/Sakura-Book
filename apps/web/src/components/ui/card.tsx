@@ -53,9 +53,7 @@ export function CardTitle({
   } as const;
 
   return (
-    <Tag
-      className={cn("font-serif leading-tight text-ink", sizes[size], className)}
-    >
+    <Tag className={cn("text-ink font-serif leading-tight", sizes[size], className)}>
       {children}
     </Tag>
   );

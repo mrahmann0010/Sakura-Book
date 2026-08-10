@@ -2,12 +2,12 @@
 
 Which tool owns a given piece of state depends on where it lives and how long it lasts.
 
-| State type | Tool |
-| --- | --- |
-| Books, orders, order status (server data) | React Query |
-| Cart (client, persisted) | Redux Toolkit + redux-persist |
-| Forms (shipping, payment, search) | React Hook Form + Zod |
-| UI-only (modals, drawers) | Local `useState` |
+| State type                                | Tool                          |
+| ----------------------------------------- | ----------------------------- |
+| Books, orders, order status (server data) | React Query                   |
+| Cart (client, persisted)                  | Redux Toolkit + redux-persist |
+| Forms (shipping, payment, search)         | React Hook Form + Zod         |
+| UI-only (modals, drawers)                 | Local `useState`              |
 
 ## Notes
 
