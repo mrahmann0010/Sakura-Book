@@ -1,4 +1,4 @@
-import type { ElementType, ReactNode } from "react";
+import type { ComponentPropsWithoutRef, ElementType, ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -43,12 +43,18 @@ export function Shell({
   children,
   as: Tag = "div",
   className,
-}: {
+  /* Rest props pass through: a loading Shell needs `aria-busy`, a landmark
+     needs `aria-label`, and neither is worth a prop of its own. */
+  ...props
+}: ComponentPropsWithoutRef<"div"> & {
   children: ReactNode;
   as?: ElementType;
-  className?: string;
 }) {
-  return <Tag className={cn("shell", className)}>{children}</Tag>;
+  return (
+    <Tag className={cn("shell", className)} {...props}>
+      {children}
+    </Tag>
+  );
 }
 
 /**

@@ -127,6 +127,18 @@ export const catalog: CatalogBook[] = [...recentlyAdded, ...staffPicks];
 /** Shown on the hero count line. */
 export const titlesInStock = 41;
 
+const byId = new Map(catalog.map((book) => [book.id, book]));
+
+/**
+ * Resolves a persisted cart id back to a book. Returns undefined for anything
+ * no longer on the shelves — the cart is stored in the browser and outlives
+ * the catalogue, so a miss is an expected state, not an error. This is the one
+ * function `buildCart` needs, and the one the API will replace.
+ */
+export function getBookById(id: string): CatalogBook | undefined {
+  return byId.get(id);
+}
+
 export const primaryNav = [
   { href: "/catalog", label: "Books" },
   { href: "/staff-picks", label: "Staff picks" },

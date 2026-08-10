@@ -5,7 +5,11 @@
     "cart": "カート"
   },
   "actions": {
-    "shopAll": "すべての本を見る"
+    "shopAll": "すべての本を見る",
+    "addToCart": "カートに入れる",
+    "inCart": "カート内 · {{count}}",
+    "soldOut": "在庫切れ",
+    "addToCartNamed": "もう1冊カートに入れる"
   },
   "language": {
     "label": "言語"
@@ -68,5 +72,97 @@
       "description": "短い言葉で検索するか、ジャンルを一つ外して範囲を広げてください。",
       "action": "絞り込みを解除"
     }
+  },
+  "cart": {
+    "eyebrow_one": "カート · {{count}}点",
+    "eyebrow_other": "カート · {{count}}点",
+    "title": "カート",
+    "items": "商品",
+    "continue": "買い物を続ける",
+    "summary": {
+      "title": "ご注文内容",
+      "subtotal_one": "小計 · {{count}}冊",
+      "subtotal_other": "小計 · {{count}}冊",
+      "delivery": "配送料",
+      "deliveryFree": "{{threshold}}以上で無料",
+      "total": "合計",
+      "checkout": "レジに進む",
+      "note": "配送料はレジで入力された住所に基づいて計算されます。"
+    },
+    "remove": {
+      "title": "この本を削除しますか？",
+      "description": "「{{title}}」をカートから外します。",
+      "confirm": "削除",
+      "cancel": "残す"
+    },
+    "removed": "「{{title}}」を削除しました。",
+    "undo": "元に戻す",
+    "empty": {
+      "eyebrow": "カート",
+      "title": "カートは空です",
+      "description": "棚には{{count}}冊が並んでいます。",
+      "action": "本を見る"
+    },
+    "loading": "カートを読み込み中…"
+  },
+  "checkout": {
+    "title": "ご注文手続き",
+    "steps": {
+      "label": "手続きの進行状況",
+      "cart": "カート",
+      "checkout": "情報と支払い",
+      "confirmation": "確認"
+    },
+    "headerNote": "安全なお支払い",
+    "shipping": {
+      "legend": "配送情報",
+      "fullName": "お名前",
+      "email": "メールアドレス",
+      "phone": "電話番号",
+      "address": "住所",
+      "addressHint": "番地、地区、目印になるものをご記入ください。",
+      "city": "市区町村",
+      "region": "地域",
+      "notes": "配送メモ",
+      "notesHint": "任意。配達員に伝えたいこと。"
+    },
+    "payment": {
+      "legend": "お支払い方法",
+      "cash-on-delivery": "代金引換",
+      "cash-on-deliveryMeta": "配達時にお支払い",
+      "manual-transfer": "bKash・銀行振込",
+      "manual-transferMeta": "手動振込",
+      "manual-transferHint": "合計額をお振込みのうえ、送金番号と取引IDをご記入ください。",
+      "card": "カード決済",
+      "cardMeta": "準備中",
+      "cardUnavailable": "カード決済はまだご利用いただけません。",
+      "senderNumber": "送金番号",
+      "transactionId": "取引ID"
+    },
+    "recap": {
+      "title": "ご注文内容",
+      "edit": "カートを編集",
+      "note": "閲覧のみ · 数量は ×n 表記",
+      "mobile_one": "{{count}}冊 · 注文内容を見る",
+      "mobile_other": "{{count}}冊 · 注文内容を見る"
+    },
+    "place": "注文を確定する",
+    "placing": "送信中",
+    "errorSummary": "下に示された項目をご確認のうえ、もう一度お試しください。",
+    "empty": {
+      "eyebrow": "ご注文手続き",
+      "title": "ご注文いただく商品がありません",
+      "description": "カートが空のため、まだ注文はありません。",
+      "action": "本を見る"
+    },
+    "placed": {
+      "eyebrow": "注文完了",
+      "title": "ありがとうございます — 注文を承りました",
+      "description": "{{email}} に確認メールをお送りしました。追跡には注文IDをお使いください。",
+      "orderId": "注文ID",
+      "action": "買い物を続ける",
+      "track": "注文を追跡する"
+    },
+    "reassurance": "オンラインでの決済はありません — 配達時または振込でお支払いください。"
   }
 }

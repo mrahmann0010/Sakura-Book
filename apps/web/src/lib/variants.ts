@@ -409,6 +409,67 @@ export const timelineLabel = cva("text-13.5", {
 export type TimelineStep = NonNullable<VariantProps<typeof timelineDot>["step"]>;
 
 /* --------------------------------------------------------------------------
+   Checkout progress — Cart & Checkout Wireframe (1d).
+   Cart → Checkout → Confirmation. Done is a filled ink dot, the current step is
+   an ink ring, ahead is a rule ring. The same three-state vocabulary as the
+   order timeline, at a smaller rung — but a separate recipe, because this one
+   tracks where the shopper is, not where the parcel is.
+   -------------------------------------------------------------------------- */
+
+export const progressDot = cva("inline-flex size-choice shrink-0 rounded-full border-[1.5px]", {
+  variants: {
+    step: {
+      done: "border-ink bg-ink",
+      current: "border-ink bg-transparent",
+      ahead: "border-rule bg-transparent",
+    },
+  },
+  defaultVariants: { step: "ahead" },
+});
+
+export const progressLabel = cva("text-caption whitespace-nowrap", {
+  variants: {
+    step: {
+      done: "text-secondary",
+      current: "text-ink font-semibold",
+      ahead: "text-muted",
+    },
+  },
+  defaultVariants: { step: "ahead" },
+});
+
+export type ProgressStep = NonNullable<VariantProps<typeof progressDot>["step"]>;
+
+/* --------------------------------------------------------------------------
+   Payment option — Cart & Checkout Wireframe (1d/1e).
+   A radio in a card. Selected takes the 1.5px ink border the wireframe draws;
+   an unavailable option keeps its shape and says so in words (principle 03)
+   rather than disappearing.
+   -------------------------------------------------------------------------- */
+
+export const paymentOption = cva(
+  [
+    "block rounded-control border bg-surface",
+    "px-card-compact py-4 transition-colors duration-150",
+  ],
+  {
+    variants: {
+      selected: {
+        true: "border-[1.5px] border-ink",
+        false: "border-rule",
+      },
+      disabled: {
+        true: "bg-page cursor-not-allowed",
+        false: "cursor-pointer hover:border-ink",
+      },
+    },
+    defaultVariants: { selected: false, disabled: false },
+  },
+);
+
+export type PaymentOptionVariants = VariantProps<typeof paymentOption>;
+
+/* --------------------------------------------------------------------------
    Nav link — Foundations · header. Active is ink at 600, never clay.
    -------------------------------------------------------------------------- */
 

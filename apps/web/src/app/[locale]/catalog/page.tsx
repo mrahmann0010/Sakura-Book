@@ -1,3 +1,4 @@
+import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { BookCard, BookGrid, CatalogControls, EmptyState, Pagination } from "@/components/domain";
 import {
   LanguageSwitcher,
@@ -59,7 +60,12 @@ export default async function Catalog({ params, searchParams }: PageProps<"/[loc
             <>
               <BookGrid columns={3}>
                 {books.map((book) => (
-                  <BookCard key={book.id} book={book} splitMeta />
+                  <BookCard
+                    key={book.id}
+                    book={book}
+                    splitMeta
+                    action={<AddToCartButton bookId={book.id} soldOut={book.soldOut} />}
+                  />
                 ))}
               </BookGrid>
 
@@ -69,7 +75,9 @@ export default async function Catalog({ params, searchParams }: PageProps<"/[loc
                 totalPages={totalPages}
                 label={t("catalog.pagination.label")}
                 statusFor={(value) => t("catalog.pagination.page", { page: value, totalPages })}
-                hrefFor={(value) => `/${locale}/catalog${toSearchParams({ ...query, page: value })}`}
+                hrefFor={(value) =>
+                  `/${locale}/catalog${toSearchParams({ ...query, page: value })}`
+                }
               />
             </>
           ) : (

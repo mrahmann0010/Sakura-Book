@@ -6,6 +6,13 @@
    about. See the comment block in ./page-shell.tsx.
    ========================================================================== */
 
+export { AppHeader } from "./app-header";
+
+export { CheckoutProgress } from "./checkout-progress";
+export type { CheckoutProgressProps, CheckoutStep } from "./checkout-progress";
+
+export { StickyBar } from "./sticky-bar";
+
 export { DetailLayout, PageHeader, PageShell, RailLayout, Section, Shell } from "./page-shell";
 
 export { Breadcrumbs, SiteHeader, StepIndicator } from "./site-header";

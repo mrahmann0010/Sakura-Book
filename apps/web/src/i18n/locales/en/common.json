@@ -5,7 +5,11 @@
     "cart": "Cart"
   },
   "actions": {
-    "shopAll": "Shop all books"
+    "shopAll": "Shop all books",
+    "addToCart": "Add to cart",
+    "inCart": "In cart · {{count}}",
+    "soldOut": "Out of stock",
+    "addToCartNamed": "Add another copy to the cart"
   },
   "language": {
     "label": "Language"
@@ -69,5 +73,97 @@
       "description": "Try a shorter search, or drop a genre to widen the results.",
       "action": "Clear the filters"
     }
+  },
+  "cart": {
+    "eyebrow_one": "Cart · {{count}} item",
+    "eyebrow_other": "Cart · {{count}} items",
+    "title": "Your cart",
+    "items": "Items",
+    "continue": "Continue shopping",
+    "summary": {
+      "title": "Summary",
+      "subtotal_one": "Subtotal · {{count}} book",
+      "subtotal_other": "Subtotal · {{count}} books",
+      "delivery": "Delivery",
+      "deliveryFree": "Free over {{threshold}}",
+      "total": "Total",
+      "checkout": "Proceed to checkout",
+      "note": "Postage is calculated from the address you give at checkout."
+    },
+    "remove": {
+      "title": "Remove this book?",
+      "description": "“{{title}}” will be taken out of your cart.",
+      "confirm": "Remove",
+      "cancel": "Keep it"
+    },
+    "removed": "Removed “{{title}}”.",
+    "undo": "Undo",
+    "empty": {
+      "eyebrow": "Cart",
+      "title": "Your cart is empty",
+      "description": "{{count}} titles are waiting on the shelf.",
+      "action": "Browse books"
+    },
+    "loading": "Reading your cart…"
+  },
+  "checkout": {
+    "title": "Checkout",
+    "steps": {
+      "label": "Checkout progress",
+      "cart": "Cart",
+      "checkout": "Details and payment",
+      "confirmation": "Confirmation"
+    },
+    "headerNote": "Secure checkout",
+    "shipping": {
+      "legend": "Shipping details",
+      "fullName": "Full name",
+      "email": "Email",
+      "phone": "Phone",
+      "address": "Address",
+      "addressHint": "House and road, area, any landmark.",
+      "city": "City",
+      "region": "Region",
+      "notes": "Delivery notes",
+      "notesHint": "Optional. Anything the courier should know."
+    },
+    "payment": {
+      "legend": "Payment",
+      "cash-on-delivery": "Cash on delivery",
+      "cash-on-deliveryMeta": "pay the courier",
+      "manual-transfer": "bKash or bank transfer",
+      "manual-transferMeta": "manual transfer",
+      "manual-transferHint": "Send the total, then give us the sender number and transaction ID.",
+      "card": "Card payment",
+      "cardMeta": "coming later",
+      "cardUnavailable": "Card payments are not switched on yet.",
+      "senderNumber": "Sender number",
+      "transactionId": "Transaction ID"
+    },
+    "recap": {
+      "title": "Your order",
+      "edit": "Edit cart",
+      "note": "read-only · quantity shown as ×n",
+      "mobile_one": "{{count}} book · show order",
+      "mobile_other": "{{count}} books · show order"
+    },
+    "place": "Place order",
+    "placing": "Placing order",
+    "errorSummary": "Check the fields marked below, then place the order again.",
+    "empty": {
+      "eyebrow": "Checkout",
+      "title": "There is nothing to check out",
+      "description": "Your cart is empty, so there is no order to place yet.",
+      "action": "Browse books"
+    },
+    "placed": {
+      "eyebrow": "Order placed",
+      "title": "Thank you — your order is in",
+      "description": "We have emailed a confirmation to {{email}}. Keep the order ID for tracking.",
+      "orderId": "Order ID",
+      "action": "Continue shopping",
+      "track": "Track this order"
+    },
+    "reassurance": "Nothing is charged online — you settle up with the courier or by transfer."
   }
 }
