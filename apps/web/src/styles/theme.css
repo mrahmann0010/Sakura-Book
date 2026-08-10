@@ -41,6 +41,12 @@
   --overlay: rgb(20 20 19 / 0.28);
   --clay-ring: rgb(201 100 66 / 0.18);
 
+  /* The floating nav's frosted bar. --page at 72% rather than a new colour, so
+     the frost reads as the page showing through, not a second surface. Paired
+     with backdrop-blur + saturate so colourful content underneath keeps its
+     colour instead of going grey. */
+  --frost: rgb(250 249 245 / 0.72);
+
   /* Cover placeholder hatch. Not a UI surface — it only ever appears inside the
      repeating gradient of a missing cover. */
   --hatch: #e8e3d7;
@@ -52,14 +58,65 @@
 
   /* Motion budget (principle 04) */
   --duration-press: 150ms;
+  --duration-slide: 240ms;
   --duration-spin: 700ms;
   --duration-shimmer: 1400ms;
 }
 
-/* No dark mode is defined in the reference pages. When one is specified, add:
-   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { … } }
-   :root[data-theme="dark"] { … }
-   redefining only the variables above. */
+/* --------------------------------------------------------------------------
+   Dark palette
+
+   Follows the recipe this file already prescribed: redefine layer-1 variables
+   only, never a utility. Two blocks so an explicit choice always wins over the
+   OS — `[data-theme]` on <html> is the class strategy, and its absence falls
+   back to prefers-color-scheme.
+
+   The ramp is inverted, not merely darkened: --page becomes the darkest value
+   and the text ramp runs light. Clay is lifted slightly because the reference
+   accent is too dense to read as an accent on a dark ground.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --clay: #e08260;
+    --clay-deep: #c96442;
+
+    --page: #171614;
+    --surface: #201f1c;
+    --tint: #2a2825;
+    --rule: #37342f;
+
+    --ink: #f7f6f2;
+    --body: #ddd9d0;
+    --secondary: #a8a297;
+    --muted: #7d786e;
+
+    --overlay: rgb(0 0 0 / 0.5);
+    --clay-ring: rgb(224 130 96 / 0.22);
+    --frost: rgb(23 22 20 / 0.72);
+    --hatch: #2f2c28;
+  }
+}
+
+:root[data-theme="dark"] {
+  --clay: #e08260;
+  --clay-deep: #c96442;
+
+  --page: #171614;
+  --surface: #201f1c;
+  --tint: #2a2825;
+  --rule: #37342f;
+
+  --ink: #f7f6f2;
+  --body: #ddd9d0;
+  --secondary: #a8a297;
+  --muted: #7d786e;
+
+  --overlay: rgb(0 0 0 / 0.5);
+  --clay-ring: rgb(224 130 96 / 0.22);
+  --frost: rgb(23 22 20 / 0.72);
+  --hatch: #2f2c28;
+}
 
 /* --------------------------------------------------------------------------
    2. Tailwind theme
@@ -87,6 +144,7 @@
   --color-info-fg: var(--info-fg);
 
   --color-overlay: var(--overlay);
+  --color-frost: var(--frost);
 
   /* --- Type families -------------------------------------------------- */
   --font-serif: var(--font-lora), Georgia, serif;

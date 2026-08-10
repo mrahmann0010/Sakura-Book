@@ -1,18 +1,11 @@
 import Link from "next/link";
 
 import { BookCard, BookGrid, BookScroller } from "@/components/domain";
-import {
-  LanguageSwitcher,
-  PageShell,
-  Section,
-  Shell,
-  SiteFooter,
-  SiteHeader,
-} from "@/components/layout";
+import { AppNav, PageShell, Section, Shell, SiteFooter } from "@/components/layout";
 import { LinkButton } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
-import { footerColumns, primaryNav, recentlyAdded, staffPicks, titlesInStock } from "@/lib/books";
+import { footerColumns, recentlyAdded, staffPicks, titlesInStock } from "@/lib/books";
 import { iconButton } from "@/lib/variants";
 import type { BookSummary } from "@/components/domain";
 
@@ -53,12 +46,7 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
   return (
     <PageShell
       header={
-        <SiteHeader
-          nav={primaryNav}
-          activeHref="/"
-          searchHref="/search"
-          actions={<LanguageSwitcher />}
-        />
+<AppNav />
       }
       footer={
         <SiteFooter

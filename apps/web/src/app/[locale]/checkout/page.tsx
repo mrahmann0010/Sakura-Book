@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 
 import { CheckoutView } from "@/components/checkout/checkout-view";
-import { AppHeader, PageShell } from "@/components/layout";
-import { getTranslation } from "@/i18n/server";
+import { AppNav, PageShell } from "@/components/layout";
 import type { Locale } from "@/i18n/settings";
 import { routes } from "@/lib/routes";
 
@@ -21,11 +20,10 @@ export const metadata: Metadata = {
 
 export default async function CheckoutPage({ params }: PageProps<"/[locale]/checkout">) {
   const { locale } = (await params) as { locale: Locale };
-  const { t } = await getTranslation(locale);
   const path = routes(locale);
 
   return (
-    <PageShell header={<AppHeader brandHref={path.home} step={t("checkout.headerNote")} />}>
+    <PageShell header={<AppNav brandHref={path.home} />}>
       <CheckoutView locale={locale} />
     </PageShell>
   );

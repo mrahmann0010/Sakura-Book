@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 
 import { CartView } from "@/components/cart/cart-view";
-import { AppHeader, LanguageSwitcher, PageShell, SiteFooter } from "@/components/layout";
+import { AppNav, PageShell, SiteFooter } from "@/components/layout";
 import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
-import { footerColumns, primaryNav } from "@/lib/books";
+import { footerColumns } from "@/lib/books";
 import { localizeLinks, routes } from "@/lib/routes";
 
 /* Cart — Cart & Checkout Wireframe (1a/1b/1c).
@@ -26,13 +26,7 @@ export default async function CartPage({ params }: PageProps<"/[locale]/cart">) 
   return (
     <PageShell
       header={
-        <AppHeader
-          brandHref={path.home}
-          nav={localizeLinks(primaryNav, locale)}
-          cartHref={path.cart}
-          searchHref={`${path.catalog}?focus=search`}
-          actions={<LanguageSwitcher />}
-        />
+<AppNav brandHref={path.home} />
       }
       footer={
         <SiteFooter

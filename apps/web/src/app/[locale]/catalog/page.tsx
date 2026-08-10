@@ -1,17 +1,10 @@
 import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { BookCard, BookGrid, CatalogControls, EmptyState, Pagination } from "@/components/domain";
-import {
-  LanguageSwitcher,
-  PageHeader,
-  PageShell,
-  Shell,
-  SiteFooter,
-  SiteHeader,
-} from "@/components/layout";
+import { AppNav, PageHeader, PageShell, Shell, SiteFooter } from "@/components/layout";
 import { LinkButton } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
-import { footerColumns, primaryNav } from "@/lib/books";
+import { footerColumns } from "@/lib/books";
 import { parseSearchParams, queryCatalog, toSearchParams } from "@/lib/catalog";
 
 /* Catalog, per the Catalog Wireframe (option 1a/1b/1c): page title and count,
@@ -31,12 +24,7 @@ export default async function Catalog({ params, searchParams }: PageProps<"/[loc
   return (
     <PageShell
       header={
-        <SiteHeader
-          nav={primaryNav}
-          activeHref="/catalog"
-          searchHref="/search"
-          actions={<LanguageSwitcher />}
-        />
+<AppNav />
       }
       footer={
         <SiteFooter
