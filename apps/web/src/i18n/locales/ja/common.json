@@ -1,0 +1,13 @@
+{
+  "nav": {
+    "home": "ホーム",
+    "search": "検索",
+    "cart": "カート"
+  },
+  "actions": {
+    "shopAll": "すべての本を見る"
+  },
+  "language": {
+    "label": "言語"
+  }
+}

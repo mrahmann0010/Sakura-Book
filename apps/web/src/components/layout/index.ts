@@ -20,3 +20,5 @@ export type { NavItem, SiteHeaderProps } from "./site-header";
 
 export { SiteFooter } from "./site-footer";
 export type { FooterColumn, SiteFooterProps } from "./site-footer";
+
+export { LanguageSwitcher } from "./language-switcher";

@@ -1,0 +1,13 @@
+{
+  "nav": {
+    "home": "Home",
+    "search": "Search",
+    "cart": "Cart"
+  },
+  "actions": {
+    "shopAll": "Shop all books"
+  },
+  "language": {
+    "label": "Language"
+  }
+}

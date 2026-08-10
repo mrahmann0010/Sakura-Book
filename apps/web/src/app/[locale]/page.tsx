@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { BookCard, BookGrid, BookScroller } from "@/components/domain";
 import {
+  LanguageSwitcher,
   PageShell,
   Section,
   Shell,
@@ -24,7 +25,12 @@ export default function Home() {
   return (
     <PageShell
       header={
-        <SiteHeader nav={primaryNav} activeHref="/" searchHref="/search" />
+        <SiteHeader
+          nav={primaryNav}
+          activeHref="/"
+          searchHref="/search"
+          actions={<LanguageSwitcher />}
+        />
       }
       footer={
         <SiteFooter

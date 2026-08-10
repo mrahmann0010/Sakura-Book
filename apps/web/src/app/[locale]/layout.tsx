@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
 import { Lora, Public_Sans } from "next/font/google";
-import "./globals.css";
+import "../globals.css";
+
+import { I18nProvider } from "@/i18n/client";
+import { locales, type Locale } from "@/i18n/settings";
+import { StoreProvider } from "@/store/provider";
+
+export function generateStaticParams() {
+  return locales.map((locale) => ({ locale }));
+}
 
 /* Lora for titles and book names, italic for authors. */
 const lora = Lora({
@@ -25,13 +33,22 @@ export const metadata: Metadata = {
     "A small catalog of books, chosen by hand and posted from Bristol.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({
+  children,
+  params,
+}: LayoutProps<"/[locale]">) {
+  const { locale } = (await params) as { locale: Locale };
+
   return (
     <html
-      lang="en"
+      lang={locale}
       className={`${lora.variable} ${publicSans.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        <StoreProvider>
+          <I18nProvider locale={locale}>{children}</I18nProvider>
+        </StoreProvider>
+      </body>
     </html>
   );
 }
