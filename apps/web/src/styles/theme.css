@@ -210,6 +210,10 @@
   --text-56: 3.5rem;
   --text-64: 4rem;
   --text-68: 4.25rem;
+  /* Above the doc's ramp: the 404 numeral only. It is a graphic, not a
+     heading, and the wireframe sizes it 120 desktop / 72 mobile. */
+  --text-72: 4.5rem;
+  --text-120: 7.5rem;
 
   /* --- Tracking -------------------------------------------------------- */
   --tracking-eyebrow: 0.1em;
