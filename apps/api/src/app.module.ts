@@ -2,8 +2,9 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { join } from "node:path";
 import { validateEnv } from "./config/env.schema";
+import { CouponsModule } from "./coupons/coupons.module";
+import { DbModule } from "./db/db.module";
 import { HealthModule } from "./health/health.module";
-import { PrismaModule } from "./prisma/prisma.module";
 
 @Module({
   imports: [
@@ -13,7 +14,8 @@ import { PrismaModule } from "./prisma/prisma.module";
       envFilePath: [join(__dirname, "..", "..", "..", ".env")],
       validate: validateEnv,
     }),
-    PrismaModule,
+    DbModule,
+    CouponsModule,
     HealthModule,
   ],
 })
