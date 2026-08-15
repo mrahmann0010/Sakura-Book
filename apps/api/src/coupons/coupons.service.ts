@@ -1,8 +1,9 @@
-import { ConflictException, Injectable } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { DbService } from "../db/db.service";
 import type { Executor } from "../db/db.types";
 import { coupons } from "../db/schema";
+import { CouponUnavailableError } from "./coupon.errors";
 import { CouponRejection, type Coupon, type CouponEvaluation } from "./coupon.types";
 
 @Injectable()
@@ -116,7 +117,7 @@ export class CouponsService {
       // Either the coupon was exhausted or deactivated between evaluate() and
       // here. Throwing rolls back the enclosing transaction, so the order is
       // never created with a discount that was not actually granted.
-      throw new ConflictException("This coupon is no longer available.");
+      throw new CouponUnavailableError(couponId);
     }
 
     return updated.timesUsed;
