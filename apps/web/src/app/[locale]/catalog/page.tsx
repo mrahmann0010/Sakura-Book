@@ -51,6 +51,7 @@ export default async function Catalog({ params, searchParams }: PageProps<"/[loc
                   <BookCard
                     key={book.id}
                     book={book}
+                    locale={locale}
                     splitMeta
                     action={<AddToCartButton bookId={book.id} soldOut={book.soldOut} />}
                   />

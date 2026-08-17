@@ -11,7 +11,7 @@ import { useCart } from "@/hooks/use-cart";
 import type { Locale } from "@/i18n/settings";
 import { titlesInStock } from "@/lib/books";
 import { FREE_DELIVERY_THRESHOLD, summaryLines } from "@/lib/cart";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 
 /* --------------------------------------------------------------------------
@@ -82,15 +82,23 @@ export function CartView({ locale }: { locale: Locale }) {
     );
   }
 
-  const rows = summaryLines(cart, {
-    subtotal: (count) => t("cart.summary.subtotal", { count }),
-    delivery: t("cart.summary.delivery"),
-    deliveryFree: t("cart.summary.deliveryFree", {
-      threshold: formatMoney(FREE_DELIVERY_THRESHOLD, locale === "en" ? "en-GB" : locale),
-    }),
-  });
+  /* One BCP 47 tag for every amount on the page. Derived once so a row
+     cannot end up formatted for a different locale than the total below it. */
+  const money = intlLocale(locale);
 
-  const total = formatMoney(cart.total);
+  const rows = summaryLines(
+    cart,
+    {
+      subtotal: (count) => t("cart.summary.subtotal", { count }),
+      delivery: t("cart.summary.delivery"),
+      deliveryFree: t("cart.summary.deliveryFree", {
+        threshold: formatMoney(FREE_DELIVERY_THRESHOLD, money),
+      }),
+    },
+    money,
+  );
+
+  const total = formatMoney(cart.total, money);
 
   /* One node, rendered into the rail on desktop and the docked bar on mobile —
      the same button, never two that can drift apart. */
@@ -138,7 +146,7 @@ export function CartView({ locale }: { locale: Locale }) {
                 key={line.book.id}
                 book={line.book}
                 quantity={line.quantity}
-                lineTotal={formatMoney(line.lineTotal)}
+                lineTotal={formatMoney(line.lineTotal, money)}
                 removing={pendingRemoval === line.book.id}
                 onQuantityChange={(quantity) => cart.setQuantity(line.book.id, quantity)}
                 onRemove={() => stageRemoval(line.book.id)}

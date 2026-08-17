@@ -79,6 +79,7 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
             <BookCard
               key={book.id}
               book={book}
+              locale={locale}
               variant="panel"
               inlineMeta
               action={<QuickView book={book} label={t("home.quickView", { title: book.title })} />}
@@ -107,6 +108,7 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
               <BookCard
                 key={book.id}
                 book={book}
+                locale={locale}
                 variant="panel"
                 showFlag={false}
                 inlineMeta

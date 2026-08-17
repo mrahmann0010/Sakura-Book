@@ -76,13 +76,6 @@ export function toSearchParams(query: Partial<CatalogQuery>): string {
   return search ? `?${search}` : "";
 }
 
-/** Price strings are display values ("£14.00"), so sorting reads the number
-    back out rather than trusting lexical order. */
-function priceOf(book: CatalogBook): number {
-  const amount = Number.parseFloat(book.price.replace(/[^0-9.]/g, ""));
-  return Number.isFinite(amount) ? amount : 0;
-}
-
 function matches(book: CatalogBook, q: string): boolean {
   if (!q) return true;
   const needle = q.toLowerCase();
@@ -95,7 +88,10 @@ const comparators: Record<SortValue, (a: CatalogBook, b: CatalogBook) => number>
   /* "Recently added" is the order the shelf is written in — no date field yet. */
   recent: () => 0,
   title: (a, b) => a.title.localeCompare(b.title),
-  "price-asc": (a, b) => priceOf(a) - priceOf(b),
+  /* Integer minor units, so this is an ordinary numeric compare. It used to
+     have to parse the digits back out of a "£14.00" display string, which is
+     the clearest evidence the string was the wrong shape to hold a price. */
+  "price-asc": (a, b) => a.priceCents - b.priceCents,
   rating: (a, b) => (b.rating ?? 0) - (a.rating ?? 0),
 };
 

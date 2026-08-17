@@ -9,8 +9,8 @@ import {
   availablePaymentMethods,
   methodNeedsTransferDetails,
   paymentMethods,
+  type AcceptedPaymentMethod,
   type CheckoutValues,
-  type PaymentMethod,
 } from "@/lib/checkout";
 
 /* --------------------------------------------------------------------------
@@ -31,8 +31,13 @@ export function PaymentSection({
 }: {
   register: UseFormRegister<CheckoutValues>;
   errors: FieldErrors<CheckoutValues>;
-  method: PaymentMethod;
-  onMethodChange: (method: PaymentMethod) => void;
+  /* AcceptedPaymentMethod, not PaymentMethod: the list below renders every
+     method the shop will ever offer, but only an accepted one can ever be the
+     form's value — the schema refuses `card`, on both sides of the wire. The
+     disabled attribute is now the presentation of that rule rather than the
+     only thing enforcing it. */
+  method: AcceptedPaymentMethod;
+  onMethodChange: (method: AcceptedPaymentMethod) => void;
 }) {
   const { t } = useTranslation();
 
@@ -51,7 +56,9 @@ export function PaymentSection({
               value={value}
               checked={method === value}
               disabled={disabled}
-              onSelect={(next) => onMethodChange(next as PaymentMethod)}
+              /* Safe: a disabled option cannot fire onSelect, so `next` is
+                 always one of availablePaymentMethods. */
+              onSelect={(next) => onMethodChange(next as AcceptedPaymentMethod)}
               label={t(`checkout.payment.${value}`)}
               meta={t(`checkout.payment.${value}Meta`)}
               description={

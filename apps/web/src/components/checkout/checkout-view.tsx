@@ -24,9 +24,9 @@ import {
   checkoutSchema,
   draftOrderId,
   type CheckoutValues,
-  type PaymentMethod,
+  type AcceptedPaymentMethod,
 } from "@/lib/checkout";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 
 import { PaymentSection } from "./payment-section";
@@ -64,7 +64,7 @@ export function CheckoutView({ locale }: { locale: Locale }) {
 
   /* useWatch rather than `watch()`: watch returns a fresh function each render,
      which opts the whole component out of the React Compiler's memoisation. */
-  const method = useWatch({ control, name: "method" }) as PaymentMethod;
+  const method = useWatch({ control, name: "method" }) as AcceptedPaymentMethod;
 
   async function placeOrder(values: CheckoutValues) {
     /* The seam the API takes over: POST the validated values plus the cart
@@ -123,20 +123,28 @@ export function CheckoutView({ locale }: { locale: Locale }) {
     );
   }
 
-  const rows = summaryLines(cart, {
-    subtotal: (count) => t("cart.summary.subtotal", { count }),
-    delivery: t("cart.summary.delivery"),
-    deliveryFree: t("cart.summary.deliveryFree", {
-      threshold: formatMoney(FREE_DELIVERY_THRESHOLD),
-    }),
-  });
+  /* One BCP 47 tag for every amount on the page. Derived once so a row
+     cannot end up formatted for a different locale than the total below it. */
+  const money = intlLocale(locale);
 
-  const total = formatMoney(cart.total);
+  const rows = summaryLines(
+    cart,
+    {
+      subtotal: (count) => t("cart.summary.subtotal", { count }),
+      delivery: t("cart.summary.delivery"),
+      deliveryFree: t("cart.summary.deliveryFree", {
+        threshold: formatMoney(FREE_DELIVERY_THRESHOLD, money),
+      }),
+    },
+    money,
+  );
+
+  const total = formatMoney(cart.total, money);
 
   const recapLines: RecapLine[] = cart.lines.map((line) => ({
     book: line.book,
     quantity: line.quantity,
-    amount: formatMoney(line.lineTotal),
+    amount: formatMoney(line.lineTotal, money),
   }));
 
   const editCart = (

@@ -8,6 +8,11 @@
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "dev": {
+      // @sakura/contracts compiles to dist/, which is gitignored — so a fresh
+      // clone running `npm run dev` would start Next against a package that
+      // does not exist yet. Building dependencies first makes that work
+      // without anyone having to know the package is there.
+      "dependsOn": ["^build"],
       "cache": false,
       "persistent": true
     },
