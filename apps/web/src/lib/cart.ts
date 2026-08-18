@@ -1,7 +1,7 @@
 import type { BookSummary } from "@/components/domain";
 
 import { getBookById } from "./books";
-import { formatCredit, formatMoney, parseMoney } from "./money";
+import { formatCredit, formatMoney } from "./money";
 
 /* --------------------------------------------------------------------------
    Cart pricing
@@ -16,10 +16,28 @@ import { formatCredit, formatMoney, parseMoney } from "./money";
    "read-only" if it is reading the same numbers.
    -------------------------------------------------------------------------- */
 
-/** Free delivery over this much. Shop policy, so it lives beside the maths. */
+/* --------------------------------------------------------------------------
+   Delivery policy — no longer authoritative.
+
+   These two numbers decide what a customer is charged, which makes them shop
+   policy, which makes a browser bundle the wrong place for them: anyone can
+   edit a constant in devtools and send us back the total it produced. They now
+   live server-side, in DELIVERY_FLAT_CENTS / FREE_DELIVERY_THRESHOLD_CENTS,
+   behind POST /v1/cart/quote, and checkout re-prices from them regardless of
+   what arrives in the request.
+
+   What is left here is a *presentation* fallback: the figures the cart page
+   renders before the first quote comes back, and the threshold the "spend X
+   more for free delivery" line quotes. The quote response carries
+   `freeDeliveryThresholdCents` and overrides them. When the cart page is wired
+   to the endpoint (it still reads the placeholder catalogue), these become the
+   loading state and nothing else.
+   -------------------------------------------------------------------------- */
+
+/** Presentation fallback. Authority: FREE_DELIVERY_THRESHOLD_CENTS on the API. */
 export const FREE_DELIVERY_THRESHOLD = 3000;
 
-/** Flat postage under the threshold. */
+/** Presentation fallback. Authority: DELIVERY_FLAT_CENTS on the API. */
 export const DELIVERY_FLAT = 350;
 
 export type CartEntry = {
@@ -76,7 +94,7 @@ export function buildCart(
     const book = lookup(entry.bookId);
     if (!book || entry.quantity < 1) continue;
 
-    const unitPrice = parseMoney(book.price);
+    const unitPrice = book.priceCents;
     lines.push({
       book,
       quantity: entry.quantity,

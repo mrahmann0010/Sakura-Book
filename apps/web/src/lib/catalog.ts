@@ -1,33 +1,44 @@
-import { catalog, genres, type CatalogBook, type GenreValue } from "./books";
+import { bookSortValues, CATALOG_PAGE_SIZE, type BookSort } from "@sakura/contracts";
 
 /* --------------------------------------------------------------------------
-   Catalog query — search, genre facets, sort and pagination.
+   Catalog query — the URL half.
 
-   All of it runs over the placeholder array in ./books.ts, and all of it is
-   driven by the URL, so the page stays a server component and a filtered view
-   is shareable. Everything here is pure: when apps/api lands, `queryCatalog`
-   is the one function that changes.
+   What used to be here as well was `queryCatalog`, which filtered, sorted and
+   paginated the hardcoded array in ./books.ts. That is now the API's job; see
+   lib/api/catalog.ts. What remains is the part that was always the frontend's:
+   reading the address bar into a query, and writing one back.
+
+   Filters live in the URL rather than in state, so the catalog page stays a
+   server component and every filtered view is a link someone can send.
    -------------------------------------------------------------------------- */
 
-/** Cards per page. Nine placeholder titles at 6 a page gives two pages, which
-    is enough to exercise the pagination the wireframe draws. Raise to 9+ once
-    the catalogue is real and the control should disappear on a single page. */
-export const PAGE_SIZE = 6;
+/** Cards per page. Not a second opinion — the API decides, this re-exports it. */
+export const PAGE_SIZE = CATALOG_PAGE_SIZE;
 
-export const sortOptions = [
-  { value: "recent", label: "Recently added" },
-  { value: "title", label: "Title A–Z" },
-  { value: "price-asc", label: "Price, low to high" },
-  { value: "rating", label: "Best rated" },
-] as const;
+/**
+ * Sort values come from the contract, so a value the API does not accept
+ * cannot be offered. Labels stay here because they are translated at render
+ * from `catalog.sort.<value>` — the server has no business shipping copy in
+ * one language to a trilingual app.
+ */
+export const sortOptions = bookSortValues.map((value) => ({ value }));
 
-export type SortValue = (typeof sortOptions)[number]["value"];
+export type SortValue = BookSort;
 
 const defaultSort: SortValue = "recent";
 
+const sortValues = new Set<string>(bookSortValues);
+
 export type CatalogQuery = {
   q: string;
-  genres: GenreValue[];
+  /**
+   * Category slugs. Open, not a closed union: the `categories` table owns the
+   * vocabulary and the rail is fetched from it, so baking today's values into
+   * a type here would mean a code change to add a category. A slug that no
+   * longer exists matches nothing, which is the same empty shelf a real
+   * category with no books gives — and is why this does not need validating.
+   */
+  genres: string[];
   sort: SortValue;
   page: number;
 };
@@ -39,13 +50,16 @@ function first(value: string | string[] | undefined): string {
   return (Array.isArray(value) ? value[0] : value)?.trim() ?? "";
 }
 
-const genreValues = new Set<string>(genres.map((genre) => genre.value));
-const sortValues = new Set<string>(sortOptions.map((option) => option.value));
-
 /**
- * Reads the URL into a query. Unknown genres, unknown sorts and junk page
- * numbers are dropped rather than errored — a hand-edited URL should degrade
- * to the default view, not a crash.
+ * Reads the URL into a query. Unknown sorts and junk page numbers are dropped
+ * rather than errored — a hand-edited URL should degrade to the default view,
+ * not a crash.
+ *
+ * This is the lenient parse the contract's pagination comment refers to. The
+ * API's own parse is strict and returns VALIDATION_FAILED for `?page=banana`;
+ * the difference is deliberate, and it only holds as long as this function
+ * never forwards its input verbatim. `listBooks` translates field by field for
+ * that reason.
  */
 export function parseSearchParams(params: RawSearchParams): CatalogQuery {
   const rawSort = first(params.sort);
@@ -56,7 +70,7 @@ export function parseSearchParams(params: RawSearchParams): CatalogQuery {
     genres: first(params.genre)
       .split(",")
       .map((value) => value.trim())
-      .filter((value): value is GenreValue => genreValues.has(value)),
+      .filter(Boolean),
     sort: sortValues.has(rawSort) ? (rawSort as SortValue) : defaultSort,
     page: Number.isFinite(page) && page > 0 ? page : 1,
   };
@@ -68,62 +82,14 @@ export function toSearchParams(query: Partial<CatalogQuery>): string {
   const params = new URLSearchParams();
 
   if (query.q) params.set("q", query.q);
+  /* Comma-joined in the address bar because that is what a person reads and
+     copies. The wire format is repeated `genre=` params, and lib/api/client.ts
+     owns that translation — the two do not have to agree and should not be
+     coupled. */
   if (query.genres?.length) params.set("genre", query.genres.join(","));
   if (query.sort && query.sort !== defaultSort) params.set("sort", query.sort);
   if (query.page && query.page > 1) params.set("page", String(query.page));
 
   const search = params.toString();
   return search ? `?${search}` : "";
-}
-
-/** Price strings are display values ("£14.00"), so sorting reads the number
-    back out rather than trusting lexical order. */
-function priceOf(book: CatalogBook): number {
-  const amount = Number.parseFloat(book.price.replace(/[^0-9.]/g, ""));
-  return Number.isFinite(amount) ? amount : 0;
-}
-
-function matches(book: CatalogBook, q: string): boolean {
-  if (!q) return true;
-  const needle = q.toLowerCase();
-  return (
-    book.title.toLowerCase().includes(needle) || book.author.toLowerCase().includes(needle)
-  );
-}
-
-const comparators: Record<SortValue, (a: CatalogBook, b: CatalogBook) => number> = {
-  /* "Recently added" is the order the shelf is written in — no date field yet. */
-  recent: () => 0,
-  title: (a, b) => a.title.localeCompare(b.title),
-  "price-asc": (a, b) => priceOf(a) - priceOf(b),
-  rating: (a, b) => (b.rating ?? 0) - (a.rating ?? 0),
-};
-
-export type CatalogResult = {
-  books: CatalogBook[];
-  /** Matches before pagination — what the count line reports. */
-  total: number;
-  page: number;
-  totalPages: number;
-};
-
-export function queryCatalog(query: CatalogQuery): CatalogResult {
-  const filtered = catalog
-    .filter((book) => matches(book, query.q))
-    .filter((book) => query.genres.length === 0 || query.genres.includes(book.genre));
-
-  const sorted = [...filtered].sort(comparators[query.sort]);
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  /* A filter that shrinks the results can strand the page number past the end;
-     clamp rather than showing an empty page that looks like no matches. */
-  const page = Math.min(query.page, totalPages);
-  const start = (page - 1) * PAGE_SIZE;
-
-  return {
-    books: sorted.slice(start, start + PAGE_SIZE),
-    total: sorted.length,
-    page,
-    totalPages,
-  };
 }

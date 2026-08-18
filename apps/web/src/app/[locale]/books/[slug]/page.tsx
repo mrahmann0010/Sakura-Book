@@ -1,0 +1,205 @@
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+
+import { AddToCartButton } from "@/components/cart/add-to-cart-button";
+import { BookCover, BookMeta } from "@/components/domain";
+import {
+  AppNav,
+  Breadcrumbs,
+  DetailLayout,
+  PageShell,
+  Shell,
+  SiteFooter,
+} from "@/components/layout";
+import { Badge, Card } from "@/components/ui";
+import { getTranslation } from "@/i18n/server";
+import type { Locale } from "@/i18n/settings";
+import { getBook } from "@/lib/api/catalog";
+import { ApiError } from "@/lib/api/client";
+import { footerColumns } from "@/lib/books";
+import { toBookSummary } from "@/lib/book-view";
+import { toSearchParams } from "@/lib/catalog";
+import { formatMoney, intlLocale } from "@/lib/money";
+import { routes } from "@/lib/routes";
+
+/* Book detail, per the Detail Wireframe: 320px cover · content · 300px buy
+   rail. The cards in the catalogue have always linked here; until now nothing
+   answered, because there was no endpoint behind it. GET /books/:slug is that
+   endpoint, and the slug in the URL is the same one the API keys on — the
+   primary key never leaves the database. */
+
+/**
+ * One fetch per render pass, shared by the page and its metadata.
+ *
+ * Next dedupes identical `fetch` calls within a render, so `generateMetadata`
+ * and the component below cost one request between them rather than two — but
+ * only because both go through the same URL and options. That is the reason
+ * this is a function both call rather than each assembling its own request.
+ */
+async function loadBook(slug: string) {
+  try {
+    return await getBook(slug);
+  } catch (error) {
+    /* A slug that is not on the shelf is a 404 page, not an error page: it is
+       an ordinary outcome of a stale link or a delisted title. Anything else —
+       the API down, a contract mismatch — rethrows to the error boundary,
+       because those are not "no such book" and must not be dressed up as one. */
+    if (error instanceof ApiError && error.isNotFound) notFound();
+    throw error;
+  }
+}
+
+export async function generateMetadata({
+  params,
+}: PageProps<"/[locale]/books/[slug]">): Promise<Metadata> {
+  const { slug } = await params;
+  const book = await loadBook(slug);
+
+  return {
+    title: book.title,
+    description: book.description.slice(0, 160),
+  };
+}
+
+export default async function BookDetail({ params }: PageProps<"/[locale]/books/[slug]">) {
+  const { locale, slug } = (await params) as { locale: Locale; slug: string };
+  const { t } = await getTranslation(locale);
+
+  const book = await loadBook(slug);
+  const view = toBookSummary(book, locale);
+  const money = (cents: number) => formatMoney(cents, intlLocale(locale));
+
+  /* Every fact the API sends and the shop actually knows, in the two-column
+     block the wireframe draws. Nulls drop out rather than rendering "—":
+     an unknown page count is not a fact about the book. */
+  const meta = [
+    book.publisher ? book.publisher.name : null,
+    book.pageCount ? t("book.meta.pages", { count: book.pageCount }) : null,
+    book.isbn13 ? t("book.meta.isbn", { isbn: book.isbn13 }) : null,
+    book.publishedDate
+      ? t("book.meta.published", {
+          date: new Intl.DateTimeFormat(intlLocale(locale), {
+            year: "numeric",
+            month: "long",
+          }).format(new Date(book.publishedDate)),
+        })
+      : null,
+    t("book.meta.language", { language: book.language }),
+  ].filter((item): item is string => item !== null);
+
+  return (
+    <PageShell
+      header={<AppNav />}
+      footer={
+        <SiteFooter
+          blurb="A small catalogue of books, chosen by hand and posted from Bristol."
+          columns={footerColumns}
+          note={`© ${new Date().getFullYear()} Marginalia Books`}
+        />
+      }
+    >
+      <Shell className="py-10 lg:py-14">
+        <Breadcrumbs
+          items={[
+            { href: routes(locale).catalog, label: t("nav.catalog", { defaultValue: "Books" }) },
+            /* The first category is the one the crumb trail uses. It links back
+               into the catalogue as a filter rather than to a category page,
+               because the filtered catalogue *is* the category page — one
+               view, one URL shape, one thing to keep working. */
+            ...(book.categories[0]
+              ? [
+                  {
+                    href: `${routes(locale).catalog}${toSearchParams({
+                      genres: [book.categories[0].slug],
+                    })}`,
+                    label: book.categories[0].name,
+                  },
+                ]
+              : []),
+            { label: book.title },
+          ]}
+        />
+
+        <DetailLayout
+          className="mt-8 lg:mt-10"
+          cover={
+            <BookCover
+              src={view.coverUrl}
+              title={book.title}
+              author={view.author}
+              fallback="wordmark"
+            />
+          }
+          rail={
+            <Card className="p-6">
+              <p className="flex items-baseline gap-3">
+                <span className="text-26 text-ink font-serif">{money(book.priceCents)}</span>
+                {/* Only ever shown when it is genuinely higher — a "was" price
+                    at or below the current one is a data error, and printing it
+                    would read as a price rise dressed as a discount. */}
+                {book.compareAtPriceCents && book.compareAtPriceCents > book.priceCents ? (
+                  <span className="text-13 text-muted line-through">
+                    {money(book.compareAtPriceCents)}
+                  </span>
+                ) : null}
+              </p>
+
+              <p className="text-13 text-secondary mt-3">
+                {book.stockQuantity === 0
+                  ? t("book.stock.out")
+                  : book.stockQuantity <= 5
+                    ? t("book.stock.low", { count: book.stockQuantity })
+                    : t("book.stock.in")}
+              </p>
+
+              <div className="mt-5">
+                <AddToCartButton bookId={book.id} soldOut={view.soldOut} size="md" />
+              </div>
+            </Card>
+          }
+        >
+          {view.flag ? (
+            <p className="mb-4">
+              <Badge tone={view.flag === "editors-pick" ? "accent" : "neutral"}>
+                {t(`book.flags.${view.flag}`)}
+              </Badge>
+            </p>
+          ) : null}
+
+          <h1 className="text-32 text-ink lg:text-40 font-serif leading-[1.08]">{book.title}</h1>
+          {book.subtitle ? (
+            <p className="text-18 text-secondary mt-3 font-serif italic">{book.subtitle}</p>
+          ) : null}
+
+          {view.author ? <p className="text-caption text-secondary mt-4">{view.author}</p> : null}
+
+          {/* Words, not stars — §1.03 wants the state stated, and the palette
+              has no colour to spend on a glyph scale. */}
+          {book.rating != null ? (
+            <p className="text-13 text-muted mt-2">
+              {t("book.rating", { rating: book.rating.toFixed(1), count: book.ratingCount ?? 0 })}
+            </p>
+          ) : (
+            <p className="text-13 text-muted mt-2">{t("book.noReviews")}</p>
+          )}
+
+          <div className="max-w-measure-lede text-body hairline mt-8 space-y-4 pt-8">
+            {book.description.split(/\n{2,}/).map((paragraph, index) => (
+              <p key={index}>{paragraph}</p>
+            ))}
+          </div>
+
+          <BookMeta className="hairline mt-8 pt-8" items={meta} />
+
+          {book.galleryImageUrls.length > 0 ? (
+            <div className="mt-8 grid grid-cols-3 gap-4">
+              {book.galleryImageUrls.map((url) => (
+                <BookCover key={url} src={url} title={book.title} radius="md" />
+              ))}
+            </div>
+          ) : null}
+        </DetailLayout>
+      </Shell>
+    </PageShell>
+  );
+}

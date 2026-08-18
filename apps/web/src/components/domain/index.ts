@@ -22,6 +22,7 @@ export { CartItem, CartItemList } from "./cart-item";
 export type { CartItemProps } from "./cart-item";
 
 export { CatalogControls } from "./catalog-controls";
+export type { CatalogControlsProps } from "./catalog-controls";
 
 export { BookMeta, CatalogToolbar, FilterChips } from "./catalog-toolbar";
 export type { BookMetaProps, Facet, FilterChipsProps } from "./catalog-toolbar";

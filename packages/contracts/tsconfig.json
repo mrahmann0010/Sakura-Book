@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    // CommonJS with .d.ts alongside: the Nest app is plain tsc/CJS and Next
+    // consumes CJS from node_modules without complaint, so one output serves
+    // both. An ESM build would be a second artifact for no current consumer.
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "incremental": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

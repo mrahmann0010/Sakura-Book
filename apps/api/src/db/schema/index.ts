@@ -12,8 +12,11 @@ export * from "./catalog/category";
 export * from "./catalog/book";
 export * from "./catalog/book-author";
 export * from "./catalog/book-category";
+export * from "./catalog/review";
 
 export * from "./marketing/coupon";
+
+export * from "./shipping/delivery-region";
 
 export * from "./orders/order";
 export * from "./orders/order-item";

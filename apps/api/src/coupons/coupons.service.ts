@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { DbService } from "../db/db.service";
-import type { Executor } from "../db/db.types";
+import type { Executor, Transaction } from "../db/db.types";
 import { coupons } from "../db/schema";
 import { CouponUnavailableError } from "./coupon.errors";
 import { CouponRejection, type Coupon, type CouponEvaluation } from "./coupon.types";
@@ -99,8 +99,12 @@ export class CouponsService {
    * and checked in JS: a read-then-write would let two concurrent checkouts both
    * observe timesUsed = maxUses - 1 and both succeed. Here the database
    * serialises them and the loser matches zero rows.
+   *
+   * `Transaction`, not `Executor`: the paragraph above is a correctness
+   * requirement, not advice, so it is enforced by the type rather than left to
+   * whoever reads the comment. Passing the root db does not compile.
    */
-  async redeem(couponId: string, tx: Executor): Promise<number> {
+  async redeem(couponId: string, tx: Transaction): Promise<number> {
     const [updated] = await tx
       .update(coupons)
       .set({ timesUsed: sql`${coupons.timesUsed} + 1` })

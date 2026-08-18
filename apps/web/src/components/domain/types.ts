@@ -14,14 +14,19 @@ export const flagLabels: Record<BookFlag, string> = {
  * that renders a card, a cart line and an order line — anything richer (blurb,
  * ISBN, page count) belongs to the detail page, not to a reusable card.
  *
- * `price` is a preformatted string: currency and locale are a data concern,
- * and no component should be guessing at either.
+ * `priceCents` is an integer of minor units, matching the API — never a
+ * formatted string. The string version was the older shape and it was wrong in
+ * a way that showed: `catalog.ts` had to parse the number back out of it to
+ * sort by price, which is what a display value being asked to do arithmetic
+ * always looks like. Formatting is the render step's job, and it needs the
+ * locale, which a data file does not have.
  */
 export type BookSummary = {
   id: string;
   title: string;
   author: string;
-  price: string;
+  /** Minor units (paisa), as the API sends them. Format with `formatMoney`. */
+  priceCents: number;
   /** Where the card links. Omit for a card that is not a link. */
   href?: string;
   coverUrl?: string;

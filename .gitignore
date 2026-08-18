@@ -20,3 +20,15 @@ npm-debug.log*
 coverage/
 .vscode/
 .idea/
+
+# Local editor history. These are timestamped snapshots of working files —
+# including .env, which means live database credentials in plaintext. Ignored
+# rather than curated: the directory is written automatically and anything in
+# it is a copy of something already tracked or already ignored.
+.history/
+
+# Per-machine agent settings, and vendored skill directories that are tooling
+# rather than product code.
+.claude/settings.local.json
+.claude/skills/
+.github/skills/

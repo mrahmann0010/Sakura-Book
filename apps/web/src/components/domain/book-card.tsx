@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Badge } from "@/components/ui";
+import { formatMoney, intlLocale } from "@/lib/money";
 import { cn, type Variants } from "@/lib/utils";
 
 import { BookCover } from "./book-cover";
@@ -48,6 +49,20 @@ export type BookCardProps = Variants<VariantProps<typeof cardTitle>> & {
    * rating, so a row never renders half-empty.
    */
   splitMeta?: boolean;
+  /**
+   * Which locale to format the price in.
+   *
+   * A prop rather than a hook, because this card renders in server components
+   * on the landing and catalog pages and must not pull in a client-side i18n
+   * context to print a number. Every call site sits under `app/[locale]/` and
+   * already has the segment in hand.
+   *
+   * The card formats rather than receiving a formatted string — unlike
+   * `CartItem`, which takes `lineTotal` preformatted. The difference is that a
+   * line total is arithmetic the caller owns, whereas a unit price is a field
+   * on the book the card was already given.
+   */
+  locale?: string;
   /** A control above the card: quick view, save, remove from a list. */
   action?: ReactNode;
   /**
@@ -69,12 +84,15 @@ export function BookCard({
   showPrice = true,
   inlineMeta = false,
   splitMeta = false,
+  locale = "en",
   action,
   variant = "bare",
   className,
 }: BookCardProps) {
   const flag = showFlag ? book.flag : undefined;
-  const priceLine = book.soldOut ? "Out of stock" : book.price;
+  const priceLine = book.soldOut
+    ? "Out of stock"
+    : formatMoney(book.priceCents, intlLocale(locale));
 
   const title = book.href ? (
     /* The title anchor stretches over the card, so the whole card is one

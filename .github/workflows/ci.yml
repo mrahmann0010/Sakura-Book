@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to a branch makes the previous run's answer irrelevant, so cancel
+# it rather than paying for two runs and reading the older one by accident.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, typecheck, test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # `npm ci` rather than `npm install`: it installs exactly the lockfile and
+      # fails if package.json and the lock have drifted, which is the one thing
+      # CI can check that a developer's machine silently papers over.
+      - run: npm ci
+
+      # The contracts package is consumed as built CJS + .d.ts by both apps, so
+      # it has to exist before anything typechecks against it.
+      - run: npm run build --workspace @sakura/contracts
+
+      - run: npm run lint
+      - run: npm run typecheck
+
+      # `npm run format:check` is deliberately not a step yet: the working tree
+      # currently has ~278 files Prettier would rewrite, so adding it would
+      # make every PR red for reasons unrelated to the PR. Run
+      # `npm run format` across the repo once, commit that on its own, and then
+      # add the check here — a formatting gate is only useful from a formatted
+      # baseline.
+
+      # Unit tests only — no services needed, and no database credentials.
+      # The suite is deliberately scoped to pure logic (see
+      # apps/api/vitest.config.mts).
+      #
+      # The database is Supabase in every environment, so when the e2e suite
+      # lands it will need a project to run against. Point it at a Supabase
+      # *branch* rather than the shared project — a suite that truncates tables
+      # between tests must never be able to reach real orders — and pass
+      # DIRECT_DATABASE_URL from secrets, not DATABASE_URL: the transaction
+      # pooler cannot serve migrations, and an e2e run has to migrate first.
+      - run: npm run test
+
+  # Migrations are checked, not applied — CI never connects to Supabase. The
+  # generated SQL is committed, so a schema edit without a matching
+  # `db:generate` is a drift that would only surface at deploy time; this job
+  # turns that into a failing PR. Applying migrations stays a deploy step
+  # against DIRECT_DATABASE_URL (§3.19), because two instances booting at once
+  # must not both try to migrate.
+  migrations:
+    name: Migrations are up to date
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generate and diff
+        working-directory: apps/api
+        # Written to apps/api/.env, which is where drizzle.config.ts loads from —
+        # each app owns its own env file; there is no root one.
+        #
+        # A placeholder, and it stays a placeholder: `generate` diffs the schema
+        # files against the committed snapshots and never opens a connection.
+        # This job must not be given real Supabase credentials — it runs on
+        # every pull request, including from forks.
+        env:
+          DATABASE_URL: postgres://unused:unused@localhost:5432/unused
+        run: |
+          echo "DATABASE_URL=$DATABASE_URL" > .env
+          npx drizzle-kit generate --name ci_drift_check
+          if [ -n "$(git status --porcelain drizzle)" ]; then
+            echo "::error::Schema and migrations have drifted. Run 'npm run db:generate' in apps/api and commit the result."
+            git status --porcelain drizzle
+            exit 1
+          fi

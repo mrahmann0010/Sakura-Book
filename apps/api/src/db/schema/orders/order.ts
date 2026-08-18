@@ -1,25 +1,51 @@
 import { relations } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
-import { orderStatusEnum } from "../enums";
+import { orderStatusEnum, paymentMethodEnum } from "../enums";
 import { coupons } from "../marketing/coupon";
 import { timestamps } from "../timestamps";
 import { orderItems } from "./order-item";
 import { orderStatusHistory } from "./order-status-history";
 import { payments } from "./payment";
 
+/**
+ * The address as the customer entered it, frozen.
+ *
+ * The fields are `shippingAddressSchema`'s in @sakura/contracts minus the three
+ * that are columns on this table (name, email, phone) — those are indexed and
+ * queried for order lookup, and a jsonb copy of an indexed column is a second
+ * value that can disagree with the first.
+ *
+ * Not the generic line1/postalCode/country shape this started as: the shop
+ * serves Bangladesh only, the form has no postcode field, and `region` is a
+ * slug from the regions table that postage will eventually be priced off. An
+ * international address model can be added the day there is an international
+ * order to store in it.
+ */
 export type ShippingAddress = {
-  line1: string;
-  line2?: string;
+  address: string;
   city: string;
-  postalCode: string;
-  country: string;
+  /** Region slug, as sent — validated against the regions table at checkout. */
+  region: string;
 };
 
 export const orders = pgTable(
   "orders",
   {
-    // Not sequential — this is the public lookup key.
+    // Not sequential, and never shown to a customer — see orderNumber.
     id: uuid("id").defaultRandom().primaryKey(),
+
+    /**
+     * The human-quotable id: eight characters, "MG-40718", exactly as the
+     * confirmation copy promises and the design system's `OrderId` renders.
+     *
+     * A separate column rather than a formatted view of `id`, because it has to
+     * be readable over the phone — and separate from a sequence, because a
+     * guessable order number plus an email is the entire authentication of
+     * /orders/lookup. Minted in application code with a uniqueness retry (see
+     * orders/order-number.ts); the unique index here is what makes that retry
+     * correct rather than hopeful.
+     */
+    orderNumber: text("order_number").notNull().unique(),
 
     customerName: text("customer_name").notNull(),
     customerEmail: text("customer_email").notNull(),
@@ -50,6 +76,11 @@ export const orders = pgTable(
     // since there's no account/order-history system to help a customer notice or
     // dispute a double charge.
     idempotencyKey: text("idempotency_key").unique(),
+
+    // What the customer chose at checkout. Recorded on the order because COD
+    // produces no payments row until delivery, so the payments table cannot
+    // answer "how is this order being paid for" for the most common method.
+    paymentMethod: paymentMethodEnum("payment_method").notNull(),
 
     // Denormalized "current status" for fast reads. The append-only log in
     // orderStatusHistory is the source of truth for how the order got here.
