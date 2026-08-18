@@ -3,6 +3,7 @@ import { ApiHeader, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { IDEMPOTENCY_KEY_HEADER, placeOrderRequestSchema, type Order } from "@sakura/contracts";
 import type { Response } from "express";
 import { createZodDto } from "nestjs-zod";
+import { StrictThrottle } from "../common/throttling/strict-throttle.decorator";
 import { z } from "zod";
 import { CheckoutService } from "./checkout.service";
 
@@ -41,6 +42,9 @@ export class OrdersController {
    * amount to enter the calculation (§3.8).
    */
   @Post()
+  // Order creation writes rows and holds stock. Idempotency already collapses
+  // a customer's own retries; this bounds everyone else's.
+  @StrictThrottle()
   @ApiOperation({ summary: "Place an order. Idempotent on the Idempotency-Key header." })
   @ApiHeader({
     name: IDEMPOTENCY_KEY_HEADER,

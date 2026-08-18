@@ -5,6 +5,7 @@ import {
   type CouponEvaluation as CouponEvaluationContract,
 } from "@sakura/contracts";
 import { createZodDto } from "nestjs-zod";
+import { StrictThrottle } from "../common/throttling/strict-throttle.decorator";
 import { CouponsService } from "./coupons.service";
 
 /**
@@ -38,6 +39,9 @@ export class CouponsController {
    */
   @Post("validate")
   @HttpCode(HttpStatus.OK)
+  // Answers "is this a real code?". Unlimited, it enumerates every discount
+  // the shop has ever issued.
+  @StrictThrottle()
   @ApiOperation({ summary: "Check a discount code against a subtotal" })
   async validate(@Body() body: CouponValidateDto): Promise<CouponEvaluationContract> {
     const result = await this.couponsService.evaluate(body.code, body.subtotalCents);

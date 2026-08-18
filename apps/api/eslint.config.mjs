@@ -10,6 +10,7 @@ import tseslint from "typescript-eslint";
 const FEATURE_MODULES = [
   "catalog",
   "pricing",
+  "shipping",
   "coupons",
   "inventory",
   "checkout",

@@ -5,7 +5,7 @@ import { CouponsService } from "../coupons";
 import { DbService } from "../db/db.service";
 import type { Executor } from "../db/db.types";
 import type { PricedCart, PricedLine } from "./priced-cart";
-import { ShippingPolicy } from "./shipping.policy";
+import { RegionsService, ShippingPolicy } from "../shipping";
 
 /**
  * The pricing authority.
@@ -28,6 +28,7 @@ export class PricingService {
     private readonly booksService: BooksService,
     private readonly couponsService: CouponsService,
     private readonly shippingPolicy: ShippingPolicy,
+    private readonly regionsService: RegionsService,
   ) {}
 
   /**
@@ -39,10 +40,13 @@ export class PricingService {
    * `rejected` with a reason. Checkout applies its own, stricter reading of
    * the same result — see CheckoutService.
    *
-   * `region` is accepted and currently unused. The regions table and its
-   * per-region overrides are Phase 1; the parameter exists now so that adding
-   * them is a change inside ShippingPolicy rather than a change to the request
-   * schema every client has already shipped.
+   * `region` selects the postage rate. An unknown or absent slug falls back to
+   * the flat national rate rather than erroring: the cart page quotes a total
+   * before the customer has reached the address step and therefore before any
+   * region is chosen, so "no region yet" is the normal case on the first quote,
+   * not a bad request. Checkout validates the slug properly — there it is a
+   * field the customer filled in, and a typo must not silently change what
+   * they are charged.
    */
   async priceCart(
     items: CartItem[],
@@ -78,7 +82,12 @@ export class PricingService {
        "free shipping" is explicitly not expressible in this coupon model, see
        CouponsService.computeDiscountCents. If that is ever the wrong call it is
        one argument on the next line, not a rewrite. */
-    const delivery = this.shippingPolicy.quote(subtotalCents - discountCents, lines.length);
+    const regionRateCents = await this.regionsService.deliveryRateFor(options.region, executor);
+    const delivery = this.shippingPolicy.quote(
+      subtotalCents - discountCents,
+      lines.length,
+      regionRateCents,
+    );
     const terms = this.shippingPolicy.terms;
 
     return {

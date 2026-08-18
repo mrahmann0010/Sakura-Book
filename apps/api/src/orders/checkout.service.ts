@@ -8,6 +8,7 @@ import type { Transaction } from "../db/db.types";
 import { orderItems, orders, orderStatusHistory } from "../db/schema";
 import { InventoryService } from "../inventory";
 import { PricingService, type PricedCart } from "../pricing";
+import { RegionsService } from "../shipping";
 import { generateOrderNumber, ORDER_NUMBER_ATTEMPTS } from "./order-number";
 import {
   CartNotOrderableError,
@@ -15,6 +16,7 @@ import {
   OrderNumberExhaustedError,
 } from "./order.errors";
 import { toOrderResponse, type OrderRow } from "./order.mapper";
+import { findOrder } from "./order.query";
 
 /**
  * Placing an order. The one write path a customer can reach.
@@ -38,6 +40,7 @@ export class CheckoutService {
     private readonly pricingService: PricingService,
     private readonly inventoryService: InventoryService,
     private readonly couponsService: CouponsService,
+    private readonly regionsService: RegionsService,
   ) {}
 
   /**
@@ -146,6 +149,15 @@ export class CheckoutService {
    * specific basket for a specific total.
    */
   private async repriceForOrder(request: PlaceOrderRequest, tx: Transaction): Promise<PricedCart> {
+    /* Strict region check, and it has to happen before pricing rather than
+       alongside it. PricingService treats an unrecognised region as "not
+       chosen yet" and quotes the flat rate, which is right for a cart page
+       that renders before the address step — but here the region is a field
+       the customer filled in, and quoting flat-rate postage to somewhere we do
+       not deliver would write an undeliverable order at a price we invented.
+       The throw rolls the transaction back like any other refusal. */
+    await this.regionsService.require(request.customer.region, tx);
+
     const priced = await this.pricingService.priceCart(
       request.items,
       { couponCode: request.couponCode, region: request.customer.region },
@@ -275,20 +287,13 @@ export class CheckoutService {
   }
 
   /**
-   * One query shape for reading a whole order, so creation and lookup cannot
-   * return differently-populated objects. Runs on the root db rather than
-   * inside the checkout transaction on purpose: it reads committed state, and
-   * reading it back through the writing transaction would show a row that does
-   * not exist yet from anyone else's point of view.
+   * Always the root db, never the checkout transaction — it reads committed
+   * state, and reading an order back through the transaction that is still
+   * writing it would show a row that does not exist yet from anyone else's
+   * point of view.
    */
   private async findOrder(where: SQL): Promise<OrderRow | undefined> {
-    return this.dbService.db.query.orders.findFirst({
-      where,
-      with: {
-        items: { with: { book: { columns: { slug: true, coverImageUrl: true } } } },
-        statusHistory: true,
-      },
-    });
+    return findOrder(this.dbService.db, where);
   }
 }
 

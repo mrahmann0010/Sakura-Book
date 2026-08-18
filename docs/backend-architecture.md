@@ -7,83 +7,100 @@ which covers the same question on the web side.
 
 ## 1. Current condition
 
-`apps/api` is a **foundation without a product surface**. The infrastructure is
-unusually well-developed for how little of the application exists.
+The storefront surface is complete. `apps/web` can be pointed at this API and
+drop `lib/books.ts` entirely; what remains unbuilt is payments and admin.
 
 ### What is built
 
-| Area          | State                                                                                                    |
-| ------------- | -------------------------------------------------------------------------------------------------------- |
-| Bootstrap     | Nest 11, helmet, CORS pinned to `WEB_ORIGIN`, global `api` prefix, Swagger at `/docs`, shutdown hooks      |
-| Config        | Zod env schema validated at boot (`config/env.schema.ts`), single root `.env` shared with docker compose   |
-| Database      | Drizzle + postgres-js, `DbService` in a `@Global()` module, `Executor` type for tx composition             |
-| Schema        | 12 tables across catalog / marketing / orders, one generated migration (`0000_initial_schema`)             |
-| Errors        | `DomainError` hierarchy, one dispatching global filter, Postgres constraint mapper, `ErrorResponseDto`     |
-| Coupons       | `CouponsService` — `evaluate()` (advisory, returns rejections as values) and `redeem()` (atomic, throws)   |
-| Health        | Terminus check with a DB ping indicator                                                                    |
+| Area          | State                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------- |
+| Bootstrap     | Nest 11, helmet, CORS pinned to `WEB_ORIGIN`, `/api/v1` via URI versioning, Swagger at `/docs`, pino logging |
+| Config        | Zod env schema validated at boot, `apps/api/.env` shared with docker compose                                |
+| Database      | Supabase (managed Postgres), Drizzle + postgres-js over Supavisor, `DbService` in a `@Global()` module, `Executor` for tx composition |
+| Schema        | 15 tables across catalog / marketing / shipping / orders, four migrations, `public` revoked from `anon`/`authenticated` |
+| Errors        | `DomainError` hierarchy, one dispatching global filter, Postgres constraint mapper, `ErrorResponseDto`       |
+| Validation    | `nestjs-zod` pipe registered as `APP_PIPE`, rethrowing raw `ZodError` so field paths survive                 |
+| Catalog       | Browse with trigram search / category facets / sort / pagination, book detail, category rail, author pages   |
+| Pricing       | `POST /cart/quote` — server-authoritative lines, discount, postage, total                                    |
+| Shipping      | Regions table with per-region postage overrides, `GET /shipping/regions`                                     |
+| Coupons       | `evaluate()` (advisory, rejections as values) and `redeem()` (atomic, throws), behind `/coupons/validate`     |
+| Orders        | Idempotent checkout in one transaction, guest lookup, status machine with `transition()` as the single write path |
+| Inventory     | Guarded stock decrement, plus an async `units_sold` rollup on `PAYMENT_CONFIRMED`                            |
+| Rate limiting | Global `ThrottlerGuard`, 300/min default, 10/min on the three enumerable endpoints, Redis-backed when configured |
+| Health        | `/health`, `/health/live` (process only), `/health/ready` (DB reachable)                                     |
+| Tests / CI    | Vitest unit suite over the pure money and lifecycle logic; GitHub Actions running lint, typecheck, test, migration-drift |
 
-The error layer is the strongest thing here and should be treated as settled:
-services throw domain errors, never `HttpException`; one filter owns the
-transport mapping; 4xx logs at debug, 5xx logs with a stack. Every module below
-inherits that rule.
+The error layer remains the strongest thing here and should be treated as
+settled: services throw domain errors, never `HttpException`; one filter owns
+the transport mapping; 4xx logs at debug, 5xx logs with a stack.
 
-`CouponsService` is also the reference implementation for two patterns worth
-copying verbatim — the guarded-update concurrency idiom (`UPDATE … WHERE
-still_available`, zero rows means you lost the race) and the
-`executor: Executor = this.dbService.db` parameter that lets a service run
-standalone or inside someone else's transaction.
+`CouponsService` is still the reference implementation for the guarded-update
+concurrency idiom (`UPDATE … WHERE still_available`, zero rows means you lost
+the race) and the `executor: Executor = this.dbService.db` parameter that lets a
+service run standalone or inside someone else's transaction.
+`InventoryService.decrement` and `OrdersService.transition` both follow it.
 
 ### What is not built
 
-**The entire product surface.** The only controller in the application is
-`HealthController`. There are no endpoints for books, categories, authors,
-cart pricing, checkout, orders, payments, or administration. `CouponsService`
-has no controller in front of it.
+**Payments and admin.** There is no `PaymentProvider` port, no
+cash-on-delivery or manual-transfer adapter, and no webhook route — the unique
+index those depend on (`payments (provider, provider_reference_id)`) is in place,
+so the handler can rely on the 23505 rather than a check-then-insert. There are
+no `admin_users`, no JWT, no roles guard, and no admin endpoints; `/api/v1/admin`
+is unclaimed.
 
-The frontend confirms the gap from the other side: `apps/web/src` makes zero
-network calls, `NEXT_PUBLIC_API_URL` is referenced nowhere, and the catalog is
-a hardcoded array in `lib/books.ts` with `queryCatalog` filtering it in-process.
+**An e2e suite.** The unit tests cover pure logic only. The concurrency and
+constraint behaviour — idempotency replay, out-of-stock at decrement, an
+exhausted coupon — needs supertest against a disposable Postgres (§3.18) and is
+the highest-value thing still missing from CI.
 
-### Concrete defects and traps
+**Review data, deliberately.** `book_reviews` exists and is empty. Every book's
+rating comes back null and the card renders its no-reviews state. PRODUCT.md
+forbids showing an invented average as real, so the seed does not write any.
 
-1. **No validation pipe.** Zod is installed and the global filter already
-   handles `ZodError`, but nothing is registered — no request body, query, or
-   param is validated today.
-2. **Logging is dead wiring.** `nestjs-pino` and `pino-http` are dependencies
-   but no `LoggerModule` is imported and `app.useLogger` is never called. The
-   filter's `requestIdOf()` reads `request.id`, which only pino-http sets, so
-   that branch is currently unreachable and every response gets a fresh
-   throwaway UUID that correlates with nothing.
-3. **No versioning.** `setGlobalPrefix("api")` only, while `ErrorResponseDto`
-   documents `/api/v1/coupons/validate`. Decide before the first endpoint ships.
-4. **No tests.** No runner, no test script, no e2e harness.
-5. **No CI.** `.github/workflows/` exists and is empty.
-6. **Redis is provisioned and unused** — in compose, no client in the app.
-7. **`paths: {"@/*": ["src/*"]}` is a trap.** Declared in tsconfig, used by
-   nothing. `nest build` emits plain tsc output, so the first `@/` import
-   compiles fine and fails at runtime. Either commit to it with
-   `tsconfig-paths` registered, or delete it.
-8. **`packages/` is empty** — no shared contract between web and api.
-9. **No seed script**, so a fresh database has schema and no data.
-10. **No pool configuration** on `postgres()` — no `max`, no idle timeout.
+### Defects since resolved
 
-### Schema gaps the frontend already assumes
+Each of these was listed here as a numbered trap and is now closed. The
+original numbering is kept so an old reference still resolves — 4 (no tests),
+5 (no CI) and 6 (Redis unused) are covered in the table above:
 
-The schemas are in place, but the UI renders several things the tables cannot
-answer. These need migrations, not just endpoints:
+1. **Validation pipe** — registered as `APP_PIPE` in `CommonModule`, built with
+   `createZodValidationPipe` rethrowing the raw `ZodError` (§3.4).
+2. **Logging** — `LoggerModule` is wired with a `genReqId` that reuses an
+   inbound `x-request-id`, and `app.useLogger` is called in `main.ts`. Verified
+   end to end: a request sent with `x-request-id: trace-me-12345` comes back with
+   that exact value in the error envelope's `requestId` and in the response
+   header, so the field now joins a response to its log lines.
+3. **Versioning** — `/api/v1` via `enableVersioning`, settled before the first
+   endpoint shipped.
+7. **`paths: {"@/*"}`** — deleted from `tsconfig.json`. `nest build` emits plain
+   tsc output, so the first `@/` import would have compiled and failed at runtime.
+8. **`packages/`** — `@sakura/contracts` is built and consumed by both apps.
+9. **Seed** — `npm run db:seed` loads reference data always; `--sample` adds the
+   placeholder catalog and refuses to run outside `NODE_ENV=development`.
+10. **Pool** — `max` and `idle_timeout` set from env, so the per-instance
+    connection budget is visible rather than an invisible default of 10.
 
-| Frontend expects                                    | Schema has                                            |
-| --------------------------------------------------- | ----------------------------------------------------- |
-| `rating` + `ratingCount` on every book card          | no reviews or ratings table at all                     |
-| 8-char human order id (`MG-40718`), promised in copy | `orders.id` is a UUID; no order number column          |
-| 5 Bangladesh delivery regions in a `<select>`        | hardcoded in `lib/checkout.ts`; no regions/zones table |
-| Payment method chosen at checkout (COD / transfer)   | `payments.provider` only; nothing on the order         |
-| Any admin at all                                     | no users, no roles, no auth tables                     |
-| Prices as `"£14.00"` strings                         | `price_cents` integers; currency undecided             |
+Redis is now used, for throttler storage, and remains optional.
 
-Also missing at the DB level: a unique index on
-`payments (provider, provider_reference_id)` — without it, a replayed gateway
-webhook writes a duplicate payment row.
+**One trap worth recording because it is silent.** Configuring a second *named*
+throttler ("strict") alongside the default does not scope it to the routes whose
+decorator names it — `ThrottlerGuard` applies every configured throttler to
+every route, so the catalog was rate-limited to 10 requests a minute. Caught by
+hitting `GET /books` thirteen times and getting three 429s. There is one global
+bucket, and `@StrictThrottle` narrows *it* per route.
+
+### Schema gaps: closed and remaining
+
+| Frontend expects                                    | State                                                     |
+| --------------------------------------------------- | --------------------------------------------------------- |
+| `rating` + `ratingCount` on every book card          | `book_reviews` table, aggregated at read time; empty       |
+| 8-char human order id (`MG-40718`)                   | `orders.order_number`, unique, minted with a retry         |
+| 5 Bangladesh delivery regions in a `<select>`        | `delivery_regions` table, seeded, with postage overrides   |
+| Payment method chosen at checkout (COD / transfer)   | `orders.payment_method` enum                               |
+| Replay-safe payment webhooks                         | unique index on `payments (provider, provider_reference_id)` |
+| Free-text catalog search                             | `pg_trgm` + GIN indexes on `books.title` and `authors.name` |
+| Any admin at all                                     | still nothing — no users, no roles, no auth tables         |
 
 ---
 
@@ -484,10 +501,84 @@ exhausted coupon — against a disposable Postgres with migrations applied.
 *Rejected:* mocking Drizzle. The interesting bugs here are concurrency and
 constraint bugs, and a mock cannot have a unique index.
 
+### 3.18a Supabase is the database host, and nothing more
+
+**DECIDED: Supabase**, in every environment including local development and CI.
+
+*Why this changes almost nothing:* Supabase **is** Postgres. The schema, the
+Drizzle query builder, the `Executor` convention, the guarded updates, the
+transaction ownership rules and all four migrations are unaffected — the engine
+under them is the same engine. What Supabase adds is a connection topology, a
+platform-level exposure to close, and one extension convention.
+
+*What it is explicitly not:* a backend. The web app talks to the Nest API and
+only to the Nest API. `supabase-js`, PostgREST, RLS-as-authorization and
+Supabase Auth are all unused, because the rules that matter here cannot be
+expressed as row policies — server-authoritative pricing, the checkout
+transaction, the guarded stock decrement and atomic coupon redemption are
+procedural invariants spanning several tables, not per-row read predicates.
+*Rejected:* letting the browser read the catalog directly through PostgREST. It
+would be faster to write and would put a second, unversioned read path next to
+the contract-typed one, with its own pagination and its own idea of what
+"active" means.
+
+**Three connection strings, two of them used.**
+
+| Connection          | Port   | Used by                          |
+| ------------------- | ------ | -------------------------------- |
+| Transaction pooler  | `6543` | the API (`DATABASE_URL`)         |
+| Session pooler      | `5432` | drizzle-kit, seed (`DIRECT_DATABASE_URL`) |
+| Direct              | `5432` | nothing — IPv6-only on newer projects, which fails on IPv4 CI runners |
+
+The split is a correctness requirement, not tuning. Transaction-mode pooling
+hands consecutive statements different backend connections, so anything relying
+on session state breaks: `drizzle-kit migrate` is such a client, and it fails
+*intermittently* under pooling rather than loudly. The same property forces
+`prepare: false` on the application connection — a statement prepared on one
+backend is absent from the next, surfacing as `prepared statement "sN" does not
+exist` under concurrency only. `main.ts` warns at boot if `DATABASE_PREPARE` is
+on against a `:6543` URL, because that is the one misconfiguration here that
+would otherwise be discovered in production, under load, hours after deploy.
+
+**The exposure, and why migration `0003` exists.**
+
+Supabase serves the `public` schema over PostgREST to anyone holding the anon
+key — which is published in browser bundles by design. It also grants `anon` and
+`authenticated` access to objects in `public` via `ALTER DEFAULT PRIVILEGES`,
+and tables created by a migration (rather than through the dashboard) have no
+RLS enabled. Composed: every table in this schema would be world-readable and
+world-writable over HTTP without touching the API. `orders` alone carries
+customer names, emails, phone numbers and addresses.
+
+`0003_lock_down_public_schema` revokes those grants, revokes `USAGE` on the
+schema so the roles cannot even enumerate it, revokes the *default* privileges
+so the next table added is not silently republished, and enables RLS on every
+table as a backstop. RLS with no policies is deny-all for those roles and a
+no-op for ours: the owning role bypasses RLS unless `FORCE ROW LEVEL SECURITY`
+is set, and it deliberately is not. The whole thing is guarded on the roles
+existing, so it also applies cleanly to a plain Postgres.
+
+**Extensions live in `extensions`, not `public`.** That is the Supabase
+convention, and `0002` follows it — which is why the trigram indexes name
+`extensions.gin_trgm_ops` rather than relying on `search_path`, a per-role
+setting that would make the migration succeed or fail depending on who ran it.
+Operator-class resolution happens once at `CREATE INDEX`; no query names it, so
+nothing at runtime depends on the schema being on the path.
+
+**What is lost by not running Postgres locally:** offline work, and a free
+throwaway database per test run. The e2e suite (§3.18) will need a Supabase
+branch rather than a container, and must never point at the shared project — a
+suite that truncates between tests must not be able to reach real orders.
+Redis stays in docker compose: it backs the rate limiter, holds nothing that
+must survive a restart, and is not worth a managed instance.
+
 ### 3.19 Migrations run as a deploy step, never at boot
 
-`drizzle-kit migrate` as its own command in the release pipeline. Two app
-instances booting simultaneously must not both try to migrate.
+`drizzle-kit migrate` as its own command in the release pipeline, over
+`DIRECT_DATABASE_URL` (the session pooler — see §3.18a). Two app instances
+booting simultaneously must not both try to migrate, and CI never holds
+credentials that could reach the database: the migration job diffs the schema
+against the committed snapshots and opens no connection.
 
 ---
 
@@ -510,7 +601,7 @@ apps/api/src/
     decorators/{roles,public}.ts
     pagination/{page-query,paginated}.ts
   db/
-    db.{module,service,types}.ts   EXISTS
+    db.{module,service,types}.ts   EXISTS — Supavisor-aware (ssl, prepare, pool)
     schema/                        EXISTS — plus new migrations (§1 gaps)
     seed/seed.ts                   NEW
   catalog/

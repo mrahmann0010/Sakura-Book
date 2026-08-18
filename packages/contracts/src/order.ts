@@ -29,6 +29,27 @@ export const orderLookupRequestSchema = z.object({
 });
 
 /**
+ * Cancelling an order.
+ *
+ * Authenticated exactly like lookup — order number plus a matching email — for
+ * the same reason and with the same NOT_FOUND-on-mismatch rule. The difference
+ * is that this one writes, so it is rate-limited harder still and refused
+ * outright once the parcel is with the courier: after that the only way back is
+ * a refund, which moves money and is not a customer self-service action.
+ */
+export const orderCancelRequestSchema = orderLookupRequestSchema.extend({
+  /**
+   * Optional, and free text the customer typed. Stored on the status history
+   * entry so the shop can read why orders are being dropped — which is the
+   * whole operational value of letting people cancel rather than refuse at the
+   * door. Capped because it lands in a note field, not a document store.
+   */
+  reason: z.string().trim().max(280).optional(),
+});
+
+export type OrderCancelRequest = z.infer<typeof orderCancelRequestSchema>;
+
+/**
  * A line as frozen onto the order.
  *
  * Title, authors and unit price are snapshots, not joins: a historical order

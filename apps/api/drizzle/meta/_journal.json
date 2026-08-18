@@ -15,6 +15,20 @@
       "when": 1786962486019,
       "tag": "0001_glamorous_the_leader",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787041158386,
+      "tag": "0002_catalog_reads",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787041174538,
+      "tag": "0003_lock_down_public_schema",
+      "breakpoints": true
     }
   ]
 }

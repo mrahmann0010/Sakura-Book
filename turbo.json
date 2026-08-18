@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": [".env"],
+  "globalDependencies": ["apps/web/.env", "apps/api/.env"],
   "globalEnv": ["NODE_ENV"],
   "tasks": {
     "build": {
@@ -20,6 +20,11 @@
       "dependsOn": ["^build"]
     },
     "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      // Same reason as typecheck: the suite imports src, and src imports
+      // @sakura/contracts from its built dist.
       "dependsOn": ["^build"]
     },
     "clean": {

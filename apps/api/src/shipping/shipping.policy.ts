@@ -25,12 +25,24 @@ export class ShippingPolicy {
   constructor(@Inject(SHIPPING_CONFIG) private readonly config: ShippingConfig) {}
 
   /**
+   * `regionRateCents` is the selected region's override, or null/undefined for
+   * the flat national rate — which is every region today. It is a parameter
+   * rather than a lookup inside this class because the policy must stay a pure
+   * function of numbers: it is the piece the unit tests pin the money rules to,
+   * and giving it a database dependency would mean the ladder could only be
+   * tested against a live table.
+   *
+   * The waiver is applied to the region rate too. A shop that charges more to
+   * post outside Dhaka still means "free delivery over ৳1,500" when it says so,
+   * and a threshold that silently only waived the cheap rate would be the kind
+   * of surprise a customer discovers at the last checkout step.
+   *
    * `lineCount` rather than a subtotal test for emptiness: a cart could in
    * principle total zero (a fully-discounted line) and still be a real order
    * that needs posting. Only "no lines at all" means no postage.
    */
-  quote(subtotalCents: number, lineCount: number): DeliveryQuote {
-    const baseCents = lineCount === 0 ? 0 : this.config.flatRateCents;
+  quote(subtotalCents: number, lineCount: number, regionRateCents?: number | null): DeliveryQuote {
+    const baseCents = lineCount === 0 ? 0 : (regionRateCents ?? this.config.flatRateCents);
     const waived = subtotalCents >= this.config.freeDeliveryThresholdCents;
 
     return {

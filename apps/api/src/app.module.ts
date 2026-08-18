@@ -9,14 +9,16 @@ import { DbModule } from "./db/db.module";
 import { HealthModule } from "./health/health.module";
 import { InventoryModule } from "./inventory";
 import { OrdersModule } from "./orders";
+import { PaymentsModule } from "./payments";
 import { PricingModule } from "./pricing";
+import { ShippingModule } from "./shipping";
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      // The monorepo keeps one .env at the repo root, shared with docker compose.
-      envFilePath: [join(__dirname, "..", "..", "..", ".env")],
+      // apps/api owns its own .env, separate from apps/web's.
+      envFilePath: [join(__dirname, "..", ".env")],
       validate: validateEnv,
     }),
     // Infrastructure first, then bounded contexts in dependency order. The
@@ -28,8 +30,10 @@ import { PricingModule } from "./pricing";
     CatalogModule,
     CouponsModule,
     InventoryModule,
+    ShippingModule,
     PricingModule,
     OrdersModule,
+    PaymentsModule,
 
     HealthModule,
   ],

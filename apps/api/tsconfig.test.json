@@ -1,0 +1,11 @@
+{
+  // The test suite is not part of the build — `nest build` uses tsconfig.json,
+  // whose `include` is src only, so tests never land in dist. They still have
+  // to typecheck, though: vitest transpiles with esbuild and checks nothing, so
+  // without this a test could reference a field that no longer exists and pass.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src/**/*", "test/**/*", "vitest.config.mts"]
+}

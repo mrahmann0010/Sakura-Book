@@ -24,7 +24,19 @@ export const bookQuerySchema = pageQuerySchema({ defaultPageSize: CATALOG_PAGE_S
    * into a shared contract would need a package release to add a sixth.
    * Unknown slugs match nothing rather than erroring.
    */
-  genre: z.array(z.string().trim().min(1)).optional(),
+  genre: z
+    .preprocess(
+      /* `?genre=fiction` and `?genre=fiction&genre=poetry` are the same
+         intent, but qs — which is what Express hands Nest — parses the first
+         as a string and the second as an array. Without this, filtering on
+         exactly one genre is a 400, which is both the most common case and the
+         one a hand-written test with two values never catches. Normalising
+         here rather than in the controller keeps the web app's serialiser free
+         to emit whichever form is tidier. */
+      (value) => (typeof value === "string" ? [value] : value),
+      z.array(z.string().trim().min(1)),
+    )
+    .optional(),
   category: z.string().trim().min(1).optional(),
 
   sort: z.enum(bookSortValues).default("recent"),
@@ -80,7 +92,9 @@ export const bookDetailSchema = bookSummarySchema.extend({
   language: z.string(),
   publishedDate: z.string().nullable(),
   publisher: z.object({ slug: z.string(), name: z.string() }).nullable(),
-  categories: z.array(z.object({ slug: z.string(), name: z.string(), group: z.string().nullable() })),
+  categories: z.array(
+    z.object({ slug: z.string(), name: z.string(), group: z.string().nullable() }),
+  ),
   galleryImageUrls: z.array(z.string()),
 });
 
@@ -89,6 +103,24 @@ export const bookListSchema = paginated(bookSummarySchema);
 export type BookSummary = z.infer<typeof bookSummarySchema>;
 export type BookDetail = z.infer<typeof bookDetailSchema>;
 export type BookList = z.infer<typeof bookListSchema>;
+
+/**
+ * An author, with the books credited to them.
+ *
+ * Shares `bookSummarySchema` with the browse list rather than defining a
+ * slimmer card, so the author page can render the same component the catalog
+ * grid does. Books are the point of the page; the bio is optional garnish and
+ * is nullable because most rows will not have one.
+ */
+export const authorDetailSchema = z.object({
+  slug: z.string(),
+  name: z.string(),
+  bio: z.string().nullable(),
+  photoUrl: z.string().nullable(),
+  books: z.array(bookSummarySchema),
+});
+
+export type AuthorDetail = z.infer<typeof authorDetailSchema>;
 
 /** Grouped for the filter rail, matching `categories.group` in the schema. */
 export const categoryGroupSchema = z.object({
