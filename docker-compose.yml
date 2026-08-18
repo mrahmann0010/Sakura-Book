@@ -12,12 +12,14 @@
 #
 # Each app owns its own .env (apps/web/.env, apps/api/.env) — passed through
 # verbatim via env_file rather than restated key by key under `environment:`.
-# Deliberate, and not just brevity for the api service: values listed under
-# `environment:` are interpolated by Compose, which expands the
-# `${DATABASE_PASSWORD}` inside the connection strings itself — and without
-# percent-encoding, so a password containing `@` or `#` yields a broken URL in
-# the container and a working one everywhere else. `env_file` copies values as
-# written, leaving substitution to src/config/db-url.ts, which encodes.
+# Deliberate, and not just brevity: values listed under `environment:` are
+# interpolated by Compose, so any `$` in a secret is expanded before the
+# container sees it. `env_file` copies values as written.
+#
+# That interpolation is why the connection strings now carry the password
+# inline rather than assembling it from a separate DATABASE_PASSWORD var: the
+# `${DATABASE_PASSWORD}` placeholder they used to hold was expanded by Compose
+# and by hosting panels in their own layer, ahead of the app's substitution.
 #
 # Redis stays local: it backs the rate limiter only, holds nothing that must
 # survive a restart, and is not worth a managed instance in development.

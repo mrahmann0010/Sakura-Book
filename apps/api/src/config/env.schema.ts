@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { resolveDbUrls } from "./db-url";
 
 /**
  * Every environment variable the API depends on, validated once at boot.
@@ -11,21 +10,23 @@ export const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
 
   /**
-   * The database password on its own, kept out of the connection strings.
+   * The connection the *application* uses, password and all. On Supabase this
+   * is the Supavisor transaction-mode pooler (port 6543), which is what the
+   * platform expects a long-running server to hold: it multiplexes many short
+   * transactions over few server connections, which is the shape this API has.
    *
-   * Both URLs below differ only in port, so inlining the password meant storing
-   * the same secret twice. They instead carry a literal `${DATABASE_PASSWORD}`,
-   * substituted — and percent-encoded — by `resolveDbUrls` before this schema
-   * runs. Store it raw here: unquoted, unescaped, exactly as Supabase generated
-   * it. Optional, because a full inline URL with no placeholder is still valid.
-   */
-  DATABASE_PASSWORD: z.string().optional(),
-
-  /**
-   * The connection the *application* uses. On Supabase this is the Supavisor
-   * transaction-mode pooler (port 6543), which is what the platform expects a
-   * long-running server to hold: it multiplexes many short transactions over
-   * few server connections, which is the shape this API has.
+   * The password goes inline in this string. It used to live in its own
+   * DATABASE_PASSWORD var that a helper substituted into a `${...}` placeholder,
+   * which read well in a .env file and broke everywhere else: Docker Compose
+   * and most hosting panels interpolate `${...}` in their own layer before the
+   * process starts, so the placeholder was resolved — often to nothing — before
+   * this code could resolve it. One complete URL per environment survives that.
+   *
+   * A password with `@ : / # ? %` in it must be percent-encoded by hand now
+   * that nothing encodes it on the way in; unencoded, those characters move
+   * where the URL parser thinks the host begins and the failure surfaces as an
+   * authentication error pointing nowhere near the cause. Supabase can
+   * regenerate the password if that is easier than escaping it.
    */
   DATABASE_URL: z.string().url(),
 
@@ -152,10 +153,7 @@ export const envSchema = z.object({
 export type Env = z.infer<typeof envSchema>;
 
 export function validateEnv(raw: Record<string, unknown>): Env {
-  // Before parsing, not after: the schema asserts DATABASE_URL is a valid URL,
-  // and a string with `${DATABASE_PASSWORD}` still sitting in the userinfo is
-  // not the URL anything will actually connect with.
-  const parsed = envSchema.safeParse(resolveDbUrls(raw));
+  const parsed = envSchema.safeParse(raw);
 
   if (!parsed.success) {
     const issues = parsed.error.issues
