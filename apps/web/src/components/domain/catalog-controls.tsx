@@ -4,9 +4,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { CategoryGroup } from "@sakura/contracts";
+
 import { Button, Chip, OptionList } from "@/components/ui";
 import { Modal } from "@/components/ui";
-import { genres, type GenreValue } from "@/lib/books";
 import { sortOptions, toSearchParams, type CatalogQuery } from "@/lib/catalog";
 import { input } from "@/lib/variants";
 import { cn } from "@/lib/utils";
@@ -20,11 +21,23 @@ import { FilterChips } from "./catalog-toolbar";
    writes to the address bar and lets the server component re-render. The one
    exception is the search box, which keeps a local value so typing stays
    responsive and pushes on a 300ms debounce.
+
+   The facets are a prop, fetched server-side from GET /categories, rather than
+   the hardcoded `genres` array this used to import. The `categories` table
+   owns the shop's vocabulary; a rail built from a constant in the client
+   bundle silently stops matching the database the first time staff add a
+   category, and the symptom is a filter that returns nothing.
    -------------------------------------------------------------------------- */
 
 const SEARCH_DEBOUNCE_MS = 300;
 
-export function CatalogControls({ query }: { query: CatalogQuery }) {
+export type CatalogControlsProps = {
+  query: CatalogQuery;
+  /** Pre-grouped by the API, in `sort_order`. Rendered as one row per group. */
+  facets: CategoryGroup[];
+};
+
+export function CatalogControls({ query, facets }: CatalogControlsProps) {
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
@@ -62,18 +75,38 @@ export function CatalogControls({ query }: { query: CatalogQuery }) {
   }
 
   function toggleGenre(value: string) {
-    const genre = value as GenreValue;
     apply({
-      genres: query.genres.includes(genre)
-        ? query.genres.filter((item) => item !== genre)
-        : [...query.genres, genre],
+      genres: query.genres.includes(value)
+        ? query.genres.filter((item) => item !== value)
+        : [...query.genres, value],
     });
   }
 
-  const genreFacets = genres.map((genre) => ({
-    value: genre.value,
-    label: t(`catalog.genres.${genre.value}`),
+  /* Translate where we have a string for the slug, and fall back to the name
+     the API sent otherwise. A category added by staff this morning has no
+     translation key, and showing its English name beats showing the raw slug
+     or, worse, the missing-key string. */
+  const label = (slug: string, fallback: string) =>
+    t(`catalog.genres.${slug}`, { defaultValue: fallback });
+
+  const groups = facets.map((entry) => ({
+    group: entry.group,
+    heading: entry.group
+      ? t(`catalog.groups.${entry.group}`, { defaultValue: entry.group })
+      : t("catalog.filters.genre"),
+    facets: entry.categories.map((category) => ({
+      value: category.slug,
+      label: label(category.slug, category.name),
+    })),
   }));
+
+  /* Applied chips render by slug, and the slug alone is not a label. */
+  const labelBySlug = new Map(
+    facets.flatMap((entry) =>
+      entry.categories.map((category) => [category.slug, label(category.slug, category.name)]),
+    ),
+  );
+
   const sortChoices = sortOptions.map((option) => ({
     value: option.value,
     label: t(`catalog.sort.${option.value}`),
@@ -109,16 +142,20 @@ export function CatalogControls({ query }: { query: CatalogQuery }) {
         />
       </div>
 
-      {/* Desktop — the genre bar sits open; mobile collapses it to a sheet. */}
-      <div className="mt-4.5 hidden sm:block">
-        <p className="eyebrow">{t("catalog.filters.genre")}</p>
-        <FilterChips
-          className="mt-3.5"
-          facets={genreFacets}
-          values={query.genres}
-          onChange={toggleGenre}
-          label={t("catalog.filters.genreLabel")}
-        />
+      {/* Desktop — the facet rows sit open; mobile collapses them to a sheet. */}
+      <div className="mt-4.5 hidden space-y-4 sm:block">
+        {groups.map((group) => (
+          <div key={group.group ?? "ungrouped"}>
+            <p className="eyebrow">{group.heading}</p>
+            <FilterChips
+              className="mt-3.5"
+              facets={group.facets}
+              values={query.genres}
+              onChange={toggleGenre}
+              label={group.heading}
+            />
+          </div>
+        ))}
       </div>
 
       {/* Mobile — two 44px triggers. */}
@@ -146,7 +183,7 @@ export function CatalogControls({ query }: { query: CatalogQuery }) {
               ) : null}
               {query.genres.map((genre) => (
                 <Chip key={genre} active onClick={() => toggleGenre(genre)} className="shrink-0">
-                  {t(`catalog.genres.${genre}`)} ✕
+                  {labelBySlug.get(genre) ?? genre} ✕
                 </Chip>
               ))}
               <Button
@@ -197,12 +234,20 @@ export function CatalogControls({ query }: { query: CatalogQuery }) {
           </>
         }
       >
-        <FilterChips
-          facets={genreFacets}
-          values={query.genres}
-          onChange={toggleGenre}
-          label={t("catalog.filters.genreLabel")}
-        />
+        <div className="space-y-5">
+          {groups.map((group) => (
+            <div key={group.group ?? "ungrouped"}>
+              <p className="eyebrow">{group.heading}</p>
+              <FilterChips
+                className="mt-3.5"
+                facets={group.facets}
+                values={query.genres}
+                onChange={toggleGenre}
+                label={group.heading}
+              />
+            </div>
+          ))}
+        </div>
       </Modal>
 
       <Modal

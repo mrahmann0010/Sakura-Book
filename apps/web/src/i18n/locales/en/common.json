@@ -2,7 +2,8 @@
   "nav": {
     "home": "Home",
     "search": "Search",
-    "cart": "Cart"
+    "cart": "Cart",
+    "catalog": "Books"
   },
   "actions": {
     "shopAll": "Shop all books",
@@ -72,6 +73,13 @@
       "title": "Nothing on the shelf fits that",
       "description": "Try a shorter search, or drop a genre to widen the results.",
       "action": "Clear the filters"
+    },
+    "groups": {
+      "genre": "Genre",
+      "level": "Level",
+      "skill": "Skill",
+      "format": "Format",
+      "collection": "Collection"
     }
   },
   "cart": {
@@ -165,5 +173,41 @@
       "track": "Track this order"
     },
     "reassurance": "Nothing is charged online — you settle up with the courier or by transfer."
+  },
+  "book": {
+    "rating": "{{rating}} · {{count}} ratings",
+    "noReviews": "No reviews yet",
+    "flags": {
+      "editors-pick": "Editor's pick",
+      "last-copy": "Last copy",
+      "signed": "Signed"
+    },
+    "stock": {
+      "in": "In stock, posted next working day",
+      "low": "Only {{count}} left",
+      "out": "Out of stock"
+    },
+    "meta": {
+      "pages_one": "{{count}} page",
+      "pages_other": "{{count}} pages",
+      "isbn": "ISBN {{isbn}}",
+      "published": "Published {{date}}",
+      "language": "In {{language}}"
+    },
+    "notFound": {
+      "eyebrow": "Not on the shelf",
+      "title": "We can't find that title",
+      "description": "It may have sold out and come off the shelves, or the link may have a typo in it.",
+      "action": "Browse the catalogue"
+    }
+  },
+  "errors": {
+    "page": {
+      "eyebrow": "Something went wrong",
+      "title": "We couldn't load that just now",
+      "description": "The shop is having trouble reaching its catalogue. It is usually brief — try again in a moment.",
+      "retry": "Try again",
+      "home": "Back to the shop"
+    }
   }
 }

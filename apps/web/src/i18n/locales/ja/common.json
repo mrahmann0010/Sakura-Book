@@ -2,7 +2,8 @@
   "nav": {
     "home": "ホーム",
     "search": "検索",
-    "cart": "カート"
+    "cart": "カート",
+    "catalog": "書籍"
   },
   "actions": {
     "shopAll": "すべての本を見る",
@@ -71,6 +72,13 @@
       "title": "その条件に合う本はありません",
       "description": "短い言葉で検索するか、ジャンルを一つ外して範囲を広げてください。",
       "action": "絞り込みを解除"
+    },
+    "groups": {
+      "genre": "ジャンル",
+      "level": "レベル",
+      "skill": "スキル",
+      "format": "形式",
+      "collection": "コレクション"
     }
   },
   "cart": {
@@ -164,5 +172,41 @@
       "track": "注文を追跡する"
     },
     "reassurance": "オンラインでの決済はありません — 配達時または振込でお支払いください。"
+  },
+  "book": {
+    "rating": "{{rating}} · {{count}}件の評価",
+    "noReviews": "レビューはまだありません",
+    "flags": {
+      "editors-pick": "編集部のおすすめ",
+      "last-copy": "残り1冊",
+      "signed": "サイン入り"
+    },
+    "stock": {
+      "in": "在庫あり・翌営業日に発送",
+      "low": "残り{{count}}冊",
+      "out": "在庫切れ"
+    },
+    "meta": {
+      "pages_one": "{{count}}ページ",
+      "pages_other": "{{count}}ページ",
+      "isbn": "ISBN {{isbn}}",
+      "published": "{{date}}刊行",
+      "language": "{{language}}"
+    },
+    "notFound": {
+      "eyebrow": "棚にありません",
+      "title": "その本が見つかりません",
+      "description": "売り切れて棚から下がったか、リンクに誤りがあるかもしれません。",
+      "action": "カタログを見る"
+    }
+  },
+  "errors": {
+    "page": {
+      "eyebrow": "問題が発生しました",
+      "title": "ただいま読み込めませんでした",
+      "description": "カタログへの接続に問題が起きています。多くの場合は一時的なものです。少し経ってからお試しください。",
+      "retry": "再試行",
+      "home": "トップへ戻る"
+    }
   }
 }

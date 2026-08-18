@@ -1,7 +1,27 @@
 import type { BookSummary } from "@/components/domain";
 
-/* Placeholder catalogue. Stands in for the API until apps/api exists — the
-   shape is BookSummary, which is what every book-shaped component reads. */
+/* Placeholder catalogue.
+
+   Mostly retired. The landing page, the catalog and the book detail page now
+   read GET /books through lib/api/catalog.ts, and `queryCatalog` — which
+   filtered and sorted this array — is gone.
+
+   What still leans on it, and why it is worth writing down rather than
+   leaving to be discovered:
+
+     · `getBookById` resolves a persisted cart line back to a book, and it is
+       keyed on these placeholder ids. The cards now hand the cart the API's
+       UUID, so a cart built today will not resolve against this map. Fixing
+       that means re-pointing the cart at the API (or at the checkout quote,
+       which already prices server-side), and it touches checkout — a separate
+       pass on purpose.
+     · `titlesInStock` is a constant the cart and checkout empty states quote.
+       The landing page no longer uses it; it reads `total` off the list.
+     · `recentlyAdded` / `staffPicks` are still what /playground renders, which
+       is the one page that should stay independent of a running API.
+
+   `primaryNav` and `footerColumns` below are not placeholders — they are the
+   app's own link tables and have no server behind them. */
 
 /** Genre is a catalog facet, not something a card renders — so it sits here
     rather than widening BookSummary. */

@@ -4,28 +4,38 @@ import { AppNav, PageHeader, PageShell, Shell, SiteFooter } from "@/components/l
 import { LinkButton } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
+import { getCategories, listBooks } from "@/lib/api/catalog";
 import { footerColumns } from "@/lib/books";
-import { parseSearchParams, queryCatalog, toSearchParams } from "@/lib/catalog";
+import { toBookSummaries } from "@/lib/book-view";
+import { parseSearchParams, toSearchParams } from "@/lib/catalog";
+import { routes } from "@/lib/routes";
 
 /* Catalog, per the Catalog Wireframe (option 1a/1b/1c): page title and count,
    search, genre facets, applied chips beside sort, a 3-across grid, then
    pagination.
 
-   Filters live in the URL, so this stays a server component and every filtered
-   view is a shareable link. `queryCatalog` is the seam the API will replace. */
+   Filters live in the URL, so this stays a server component: the grid is
+   rendered on the server against GET /books, and every filtered view is a
+   shareable link rather than client state. `queryCatalog` over a hardcoded
+   array used to sit where `listBooks` now does — that was the seam, and this
+   is the API landing on it. */
 
 export default async function Catalog({ params, searchParams }: PageProps<"/[locale]/catalog">) {
   const { locale } = (await params) as { locale: Locale };
   const { t } = await getTranslation(locale);
 
   const query = parseSearchParams(await searchParams);
-  const { books, total, page, totalPages } = queryCatalog(query);
+
+  /* In parallel: the rail does not depend on the shelf, and awaiting them in
+     sequence would put the categories round-trip on the critical path of every
+     page of every search. */
+  const [list, categories] = await Promise.all([listBooks(query), getCategories()]);
+
+  const books = toBookSummaries(list.items, locale);
 
   return (
     <PageShell
-      header={
-<AppNav />
-      }
+      header={<AppNav />}
       footer={
         <SiteFooter
           blurb="A small catalogue of books, chosen by hand and posted from Bristol."
@@ -38,10 +48,12 @@ export default async function Catalog({ params, searchParams }: PageProps<"/[loc
         <PageHeader
           size="lg"
           title={t("catalog.title")}
-          description={t("catalog.count", { count: total })}
+          /* `total` is the count before pagination — the number the API sends
+             for exactly this line, not `books.length`, which is one page. */
+          description={t("catalog.count", { count: list.total })}
         />
 
-        <CatalogControls query={query} />
+        <CatalogControls query={query} facets={categories} />
 
         <div className="mt-10">
           {books.length > 0 ? (
@@ -60,12 +72,14 @@ export default async function Catalog({ params, searchParams }: PageProps<"/[loc
 
               <Pagination
                 className="mt-14"
-                page={page}
-                totalPages={totalPages}
+                page={list.page}
+                totalPages={list.totalPages}
                 label={t("catalog.pagination.label")}
-                statusFor={(value) => t("catalog.pagination.page", { page: value, totalPages })}
+                statusFor={(value) =>
+                  t("catalog.pagination.page", { page: value, totalPages: list.totalPages })
+                }
                 hrefFor={(value) =>
-                  `/${locale}/catalog${toSearchParams({ ...query, page: value })}`
+                  `${routes(locale).catalog}${toSearchParams({ ...query, page: value })}`
                 }
               />
             </>
@@ -75,7 +89,7 @@ export default async function Catalog({ params, searchParams }: PageProps<"/[loc
               title={t("catalog.empty.title")}
               description={t("catalog.empty.description")}
               action={
-                <LinkButton href={`/${locale}/catalog`} variant="secondary">
+                <LinkButton href={routes(locale).catalog} variant="secondary">
                   {t("catalog.empty.action")}
                 </LinkButton>
               }

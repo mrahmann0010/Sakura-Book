@@ -5,7 +5,10 @@ import { AppNav, PageShell, Section, Shell, SiteFooter } from "@/components/layo
 import { LinkButton } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
-import { footerColumns, recentlyAdded, staffPicks, titlesInStock } from "@/lib/books";
+import { listBooks } from "@/lib/api/catalog";
+import { footerColumns } from "@/lib/books";
+import { toBookSummaries } from "@/lib/book-view";
+import { routes } from "@/lib/routes";
 import { iconButton } from "@/lib/variants";
 import type { BookSummary } from "@/components/domain";
 
@@ -13,7 +16,35 @@ import type { BookSummary } from "@/components/domain";
    centred hero, then straight into the books. Two shelves of panel cards at
    3-up, with the catalogue CTA between them.
 
-   Book titles and authors stay untranslated — they are proper nouns. */
+   Book titles and authors stay untranslated — they are proper nouns.
+
+   Both shelves and the stock count come from GET /books rather than the
+   placeholder arrays that used to sit in lib/books.ts. The count line is the
+   list envelope's `total` — the number of titles the shop actually has, not a
+   constant someone has to remember to change.
+
+   One caveat worth stating: the second shelf is "Staff picks" in the copy, and
+   the API has no `featured` filter to ask for — `isFeatured` is on every book
+   it returns, but not something a browse query can select on. This shelf is
+   therefore the best-rated titles, which is the closest honest signal
+   available. Adding `featured` to bookQuerySchema is the fix; it is an API
+   change and is deliberately not smuggled in here. */
+
+/**
+ * Rendered per request rather than prerendered at build.
+ *
+ * This is the one page with `generateStaticParams` above it (the layout's
+ * locale list), so it is the one page Next would otherwise try to build
+ * statically — and it now fetches. A production image is built in a container
+ * with no API reachable, so prerendering would turn every deploy into a
+ * dependency on the API being up at build time, failing the build rather than
+ * degrading the page.
+ *
+ * The cost is a render, not a round trip: `listBooks` still asks Next's data
+ * cache with a 60s revalidate, so a burst of visitors shares one call to the
+ * API exactly as it would under ISR.
+ */
+export const dynamic = "force-dynamic";
 
 /** The wireframe's quick-view control. No modal exists yet, so it goes to the
     book rather than rendering a button that does nothing. */
@@ -43,6 +74,19 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
   const { locale } = (await params) as { locale: Locale };
   const { t } = await getTranslation(locale);
 
+  /* Two shelves and a count, in one round trip each and both in flight at
+     once. The hero's count comes off the first list's `total`, so the shop
+     never advertises a number no query would return. */
+  const [recent, rated] = await Promise.all([
+    listBooks({ q: "", genres: [], sort: "recent", page: 1 }),
+    listBooks({ q: "", genres: [], sort: "rating", page: 1 }),
+  ]);
+
+  const recentlyAdded = toBookSummaries(recent.items, locale);
+  /* Sliced to three, as the copy promises — "three we keep pressing on people
+     who ask what to read next". */
+  const staffPicks = toBookSummaries(rated.items, locale).slice(0, 3);
+
   return (
     <PageShell
       header={
@@ -67,7 +111,7 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
         <p className="max-w-measure-lede text-secondary mt-6">{t("home.hero.subhead")}</p>
         <p className="mt-8 flex items-center gap-3">
           <span aria-hidden="true" className="bg-rule hidden h-px w-30 sm:block" />
-          <span className="eyebrow">{t("home.hero.count", { count: titlesInStock })}</span>
+          <span className="eyebrow">{t("home.hero.count", { count: recent.total })}</span>
         </p>
       </Shell>
 
@@ -88,7 +132,7 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
         </BookGrid>
 
         <div className="mt-9 flex justify-center">
-          <LinkButton href="/catalog" variant="secondary">
+          <LinkButton href={routes(locale).catalog} variant="secondary">
             {t("home.recent.seeMore")}
           </LinkButton>
         </div>
@@ -101,7 +145,13 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
           eyebrow={t("home.second.eyebrow")}
           title={t("home.second.title")}
           description={t("home.second.description")}
-          action={<Link href="/staff-picks">{t("home.second.action")} →</Link>}
+          /* No staff-picks page exists; the sorted catalogue is the same
+             list, and a link to a 404 is worse than a link to the shelf. */
+          action={
+            <Link href={`${routes(locale).catalog}?sort=rating`}>
+              {t("home.second.action")} →
+            </Link>
+          }
         >
           <BookScroller settles>
             {staffPicks.map((book) => (
