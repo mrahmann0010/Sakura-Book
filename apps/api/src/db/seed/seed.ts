@@ -1,7 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import { join } from "node:path";
 import postgres from "postgres";
-import { resolveDbUrl } from "../../config/db-url";
 import * as schema from "../schema";
 import { seedReference } from "./reference";
 import { seedSampleCatalog } from "./sample-catalog";
@@ -27,10 +26,7 @@ async function main(): Promise<void> {
    * pooling breaks in intermittent ways — same reasoning as drizzle-kit, see
    * DIRECT_DATABASE_URL in config/env.schema.ts.
    */
-  const url = resolveDbUrl(
-    process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL,
-    process.env.DATABASE_PASSWORD,
-  );
+  const url = process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set — check apps/api/.env.");
 
   const client = postgres(url, {

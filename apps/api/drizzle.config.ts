@@ -1,6 +1,5 @@
 import { defineConfig } from "drizzle-kit";
 import { join } from "node:path";
-import { resolveDbUrl } from "./src/config/db-url";
 
 // drizzle-kit runs outside the Nest app, so ConfigModule never loads. Pull the
 // same .env the app itself uses.
@@ -13,13 +12,7 @@ process.loadEnvFile(join(__dirname, ".env"));
  * failures are intermittent, which is the worst way for a migration to break.
  * Falls back to DATABASE_URL for a plain Postgres, where the two are the same.
  */
-// The password lives in its own var and the URLs carry a placeholder; see
-// src/config/db-url.ts. Node's `loadEnvFile` does no interpolation of its own,
-// which is exactly why that substitution is a function rather than dotenv config.
-const migrationUrl = resolveDbUrl(
-  process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL,
-  process.env.DATABASE_PASSWORD,
-);
+const migrationUrl = process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL;
 
 if (!migrationUrl) {
   throw new Error("DATABASE_URL is not set — check apps/api/.env.");
