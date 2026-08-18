@@ -1,0 +1,25 @@
+node_modules
+**/node_modules
+
+# Build output. dist is excluded so the image compiles from source rather than
+# shipping whatever happened to be on the build machine — which makes the
+# tsbuildinfo line below load-bearing, not tidiness: tsc's incremental cache
+# claims those stripped outputs are current and then emits only declarations,
+# producing a dist with .d.ts files and no .js.
+**/dist
+**/.next
+**/*.tsbuildinfo
+.turbo
+**/.turbo
+
+.git
+.gitignore
+*.log
+
+.env
+**/.env
+!**/.env.example
+
+Dockerfile*
+.dockerignore
+docker-compose.yml
