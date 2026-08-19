@@ -9,8 +9,7 @@
     "shopAll": "সব বই দেখুন",
     "addToCart": "কার্টে দিন",
     "inCart": "কার্টে · {{count}}",
-    "soldOut": "স্টকে নেই",
-    "addToCartNamed": "আরেক কপি কার্টে দিন"
+    "soldOut": "স্টকে নেই"
   },
   "language": {
     "label": "ভাষা"

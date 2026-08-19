@@ -9,8 +9,7 @@
     "shopAll": "すべての本を見る",
     "addToCart": "カートに入れる",
     "inCart": "カート内 · {{count}}",
-    "soldOut": "在庫切れ",
-    "addToCartNamed": "もう1冊カートに入れる"
+    "soldOut": "在庫切れ"
   },
   "language": {
     "label": "言語"

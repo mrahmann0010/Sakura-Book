@@ -15,6 +15,14 @@ import { flagLabels, type BookSummary } from "./types";
    cart/order lines are deliberately separate components.
    -------------------------------------------------------------------------- */
 
+/**
+ * `clamp` holds every grid title to exactly two lines — clamped so a long one
+ * cannot run, and floored at `2lh` so a short one still occupies the same box.
+ * Without the floor, a one-line English title and a three-line Bengali or
+ * Japanese one push their price rows to different heights and the bottom of a
+ * grid row visibly staggers. The compact `row` layout opts out: a fixed
+ * two-line box there would inflate a list built to be short.
+ */
 const cardTitle = cva("font-serif leading-[1.28] text-ink", {
   variants: {
     size: {
@@ -23,11 +31,15 @@ const cardTitle = cva("font-serif leading-[1.28] text-ink", {
       lg: "text-18",
       feature: "text-26 leading-tight",
     },
+    clamp: {
+      true: "line-clamp-2 min-h-[2lh]",
+    },
   },
   defaultVariants: { size: "md" },
 });
 
-export type BookCardProps = Variants<VariantProps<typeof cardTitle>> & {
+/* `clamp` is internal — the layout decides it, not the caller. */
+export type BookCardProps = Omit<Variants<VariantProps<typeof cardTitle>>, "clamp"> & {
   book: BookSummary;
   /**
    * `stack` is every grid-shaped context — catalog, shelves, search, related.
@@ -43,12 +55,11 @@ export type BookCardProps = Variants<VariantProps<typeof cardTitle>> & {
    * as the curated shelf sets it.
    */
   inlineMeta?: boolean;
-  /**
-   * The catalog card's bottom row: rating on the left, price on the right,
-   * on one baseline. Falls back to the stacked price when a book has no
-   * rating, so a row never renders half-empty.
-   */
-  splitMeta?: boolean;
+  /* `splitMeta` — the rating/price bottom row — was removed with its only
+     call site. `rating` and `ratingCount` on `BookSummary` are invented
+     placeholder values, and no card may show them as social proof until real
+     data backs them. Reinstate it alongside real ratings, labelled ("4.6 · 128
+     reviews"), not as a bare decimal. */
   /**
    * Which locale to format the price in.
    *
@@ -65,6 +76,16 @@ export type BookCardProps = Variants<VariantProps<typeof cardTitle>> & {
   locale?: string;
   /** A control above the card: quick view, save, remove from a list. */
   action?: ReactNode;
+  /**
+   * A control below the meta, flush with the cover's edges — the catalog's
+   * add-to-cart. Separate from `action` because the two are different weights
+   * in different places: `action` is a light control that shares the badge's
+   * row, whereas this one closes the card's argument and is read last, after
+   * the price has been made. §10.7 draws no control on a book card at all, so
+   * anything here is an addition to the reference and stays `secondary` — the
+   * clay belongs to whatever single primary action the page owns (§2).
+   */
+  footerAction?: ReactNode;
   /**
    * `bare` is the reference card — a cover on cream, ink outline on hover
    * (§10.7). `panel` is the landing shelf card the wireframe draws: the same
@@ -83,9 +104,9 @@ export function BookCard({
   showFlag = true,
   showPrice = true,
   inlineMeta = false,
-  splitMeta = false,
   locale = "en",
   action,
+  footerAction,
   variant = "bare",
   className,
 }: BookCardProps) {
@@ -96,7 +117,9 @@ export function BookCard({
 
   const title = book.href ? (
     /* The title anchor stretches over the card, so the whole card is one
-       target and any `action` above it stays separately clickable. */
+       target. Controls opt out by raising themselves above it — `z-10` on the
+       `action` row and on `footerAction` — which works wherever they sit, not
+       only above the cover. */
     <Link href={book.href} className="before:absolute before:inset-0">
       {book.title}
     </Link>
@@ -104,27 +127,7 @@ export function BookCard({
     book.title
   );
 
-  const meta = splitMeta && book.rating != null ? (
-    <>
-      <p className="text-caption text-secondary mt-1.5">{book.author}</p>
-      <p className="mt-3 flex items-baseline justify-between gap-3">
-        <span className="text-12 text-muted">
-          {book.rating.toFixed(1)}
-          {book.ratingCount != null ? ` · ${book.ratingCount}` : null}
-        </span>
-        {showPrice ? (
-          <span
-            className={cn(
-              "text-caption font-semibold",
-              book.soldOut ? "text-secondary" : "text-ink",
-            )}
-          >
-            {priceLine}
-          </span>
-        ) : null}
-      </p>
-    </>
-  ) : inlineMeta ? (
+  const meta = inlineMeta ? (
     <p className="text-13 text-secondary mt-1.5">
       {book.author}
       {showPrice ? ` · ${priceLine}` : null}
@@ -195,9 +198,11 @@ export function BookCard({
         </div>
 
         <div className="hairline mt-5 pt-4">
-          <h3 className={cardTitle({ size })}>{title}</h3>
+          <h3 className={cardTitle({ size, clamp: true })}>{title}</h3>
           {meta}
         </div>
+
+        {footerAction ? <div className="relative z-10 mt-auto pt-4">{footerAction}</div> : null}
       </article>
     );
   }
@@ -227,8 +232,14 @@ export function BookCard({
         </p>
       ) : null}
 
-      <h3 className={cn(cardTitle({ size }), flag ? "mt-3" : "mt-4.5")}>{title}</h3>
+      <h3 className={cn(cardTitle({ size, clamp: true }), flag ? "mt-3" : "mt-4.5")}>{title}</h3>
       {meta}
+
+      {/* Read last, after the price has made its case, and flush with the
+          cover's edges so a row of cards keeps one straight bottom line.
+          `mt-auto` seats it against the cell floor when a neighbouring card
+          runs taller. */}
+      {footerAction ? <div className="relative z-10 mt-auto pt-4">{footerAction}</div> : null}
     </article>
   );
 }

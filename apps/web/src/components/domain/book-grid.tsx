@@ -95,13 +95,27 @@ export function BookScroller({
 /**
  * Placeholder that holds the exact shape of a BookCard, staggered 120ms per
  * cell, so nothing shifts when the real covers land.
+ *
+ * Two title bars, not one: the card floors its title at two lines so a grid
+ * row keeps one bottom edge, and a one-bar skeleton would give that height
+ * back the moment the real titles arrive.
  */
-export function BookCardSkeleton({ index = 0 }: { index?: number }) {
+export function BookCardSkeleton({
+  index = 0,
+  /** Match the grid being waited on — the catalog's cells end in a button. */
+  footer = false,
+}: {
+  index?: number;
+  footer?: boolean;
+}) {
   return (
     <div>
       <Skeleton index={index} className="rounded-control aspect-[2/3] w-full" />
       <Skeleton index={index} className="mt-4.5 h-3.5" />
+      <Skeleton index={index} className="mt-2 h-3.5 w-4/5" />
       <Skeleton index={index} className="mt-2.5 h-2.5 w-3/5" />
+      <Skeleton index={index} className="mt-2.5 h-2.5 w-2/5" />
+      {footer ? <Skeleton index={index} className="rounded-control mt-4 h-11 w-full" /> : null}
     </div>
   );
 }
@@ -110,16 +124,18 @@ export function BookCardSkeleton({ index = 0 }: { index?: number }) {
 export function BookGridSkeleton({
   count = 8,
   columns,
+  footer = false,
   className,
 }: {
   count?: number;
   columns?: 3 | 4;
+  footer?: boolean;
   className?: string;
 }) {
   return (
     <BookGrid columns={columns} className={className}>
       {Array.from({ length: count }, (_, index) => (
-        <BookCardSkeleton key={index} index={index} />
+        <BookCardSkeleton key={index} index={index} footer={footer} />
       ))}
     </BookGrid>
   );
