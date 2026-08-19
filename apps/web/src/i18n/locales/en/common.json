@@ -9,8 +9,7 @@
     "shopAll": "Shop all books",
     "addToCart": "Add to cart",
     "inCart": "In cart · {{count}}",
-    "soldOut": "Out of stock",
-    "addToCartNamed": "Add another copy to the cart"
+    "soldOut": "Out of stock"
   },
   "language": {
     "label": "Language"

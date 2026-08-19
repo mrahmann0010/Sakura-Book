@@ -18,13 +18,26 @@ import { selectQuantityOf } from "@/store/slices/cart-slice";
  */
 export function AddToCartButton({
   bookId,
+  title,
   soldOut = false,
   size = "sm",
+  variant,
   block = false,
 }: {
   bookId: string;
+  /**
+   * The book's title, spoken but not shown. A catalog grid renders one of
+   * these per cell, and without it a screen reader hears the same handful of
+   * words a dozen times with nothing to tell the buttons apart.
+   */
+  title?: string;
   soldOut?: boolean;
   size?: "sm" | "md";
+  /**
+   * Defaults to the page-primary clay. The catalog passes `secondary`: a grid
+   * of primaries spends the accent a dozen times over, against §2.
+   */
+  variant?: "primary" | "secondary";
   /** Full-width — the detail page's buy card, where the button is the card's
       one job and should read as wide as the price line above it. */
   block?: boolean;
@@ -39,19 +52,24 @@ export function AddToCartButton({
     return (
       <Button variant="secondary" size={size} block={block} disabled>
         {t("actions.soldOut")}
+        {title ? <span className="sr-only">{`, ${title}`}</span> : null}
       </Button>
     );
   }
 
+  /* The title rides along in a hidden span rather than an `aria-label`. A
+     label would replace the visible words instead of extending them, and an
+     accessible name that does not contain its own visible label fails WCAG
+     2.5.3 and breaks voice control ("click add to cart" matches nothing). */
   return (
     <Button
-      variant={inCart ? "secondary" : "primary"}
+      variant={variant ?? (inCart ? "secondary" : "primary")}
       size={size}
       block={block}
       onClick={() => add(bookId)}
-      aria-label={t("actions.addToCartNamed", { count: quantity })}
     >
       {inCart ? t("actions.inCart", { count: quantity }) : t("actions.addToCart")}
+      {title ? <span className="sr-only">{`, ${title}`}</span> : null}
     </Button>
   );
 }

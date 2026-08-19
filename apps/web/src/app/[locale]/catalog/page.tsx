@@ -58,14 +58,24 @@ export default async function Catalog({ params, searchParams }: PageProps<"/[loc
         <div className="mt-10">
           {books.length > 0 ? (
             <>
-              <BookGrid columns={3}>
+              {/* No `splitMeta`: it renders `book.rating` / `ratingCount`, which
+                  are placeholder values invented in `lib/books.ts`. Nothing goes
+                  in front of a buyer as social proof until real data backs it. */}
+              <BookGrid>
                 {books.map((book) => (
                   <BookCard
                     key={book.id}
                     book={book}
                     locale={locale}
-                    splitMeta
-                    action={<AddToCartButton bookId={book.id} soldOut={book.soldOut} />}
+                    footerAction={
+                      <AddToCartButton
+                        bookId={book.id}
+                        title={book.title}
+                        soldOut={book.soldOut}
+                        variant="secondary"
+                        block
+                      />
+                    }
                   />
                 ))}
               </BookGrid>

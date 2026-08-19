@@ -1,6 +1,7 @@
 import { BookGridSkeleton } from "@/components/domain";
 import { PageShell, Shell } from "@/components/layout";
 import { Skeleton } from "@/components/ui";
+import { PAGE_SIZE } from "@/lib/catalog";
 
 /* Wireframe 1b: the chrome lands first and the grid fills in. Skeletons hold
    the exact shape of what is coming, so nothing shifts (§9). */
@@ -28,7 +29,7 @@ export default function CatalogLoading() {
           <Skeleton className="rounded-control h-8 w-40" />
         </div>
 
-        <BookGridSkeleton className="mt-10" columns={3} count={6} />
+        <BookGridSkeleton className="mt-10" count={PAGE_SIZE} footer />
       </Shell>
     </PageShell>
   );
