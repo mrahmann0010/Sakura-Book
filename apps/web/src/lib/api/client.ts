@@ -26,7 +26,13 @@ import type { z } from "zod";
  * `fetch("undefined/api/v1/books")` at import time in a build log.
  */
 function apiOrigin(): string {
-  const url = process.env.NEXT_PUBLIC_API_URL;
+  // Server and browser reach the API at different addresses under Docker
+  // Compose: the browser goes through the published port on localhost, while
+  // this container has to name the sibling service. API_INTERNAL_URL carries
+  // that server-only address and is unset everywhere the two agree.
+  const url =
+    (typeof window === "undefined" ? process.env.API_INTERNAL_URL : undefined) ??
+    process.env.NEXT_PUBLIC_API_URL;
 
   if (!url) {
     throw new Error("NEXT_PUBLIC_API_URL is not set — the web app has no API to talk to.");

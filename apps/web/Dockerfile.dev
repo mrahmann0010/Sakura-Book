@@ -4,10 +4,21 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/package.json
+COPY packages/contracts/package.json packages/contracts/package.json
 RUN npm ci
 
 COPY . .
 
+# @sakura/contracts resolves through its compiled dist/, which .dockerignore
+# keeps out of the build context on purpose. Without this the image starts with
+# the workspace symlink in place but nothing behind it, and Next fails with
+# "Can't resolve '@sakura/contracts'".
+RUN npm run build --workspace @sakura/contracts
+
 EXPOSE 3000
 ENV PORT=3000 HOSTNAME=0.0.0.0
-CMD ["npm", "run", "dev", "--workspace", "@sakura/web"]
+# Not through turbo: it runs tasks in strict env mode and strips anything it
+# was not told about, including the addresses Compose injects (see
+# API_INTERNAL_URL / REDIS_URL in docker-compose.yml). Contracts is built
+# here rather than leaned on turbo's ^build for the same reason.
+CMD ["sh", "-c", "npm run build --workspace @sakura/contracts && npm run dev --workspace @sakura/web"]
