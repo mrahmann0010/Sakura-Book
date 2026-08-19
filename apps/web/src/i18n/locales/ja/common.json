@@ -24,13 +24,20 @@
       "title": "新着",
       "seeMore": "目録をすべて見る"
     },
-    "second": {
-      "eyebrow": "二番目の棚",
-      "title": "スタッフの選書",
-      "description": "次に何を読もうか迷う人に、いつもすすめている三冊です。",
-      "action": "選書をすべて見る"
-    },
-    "quickView": "{{title}}を見る"
+    "quickView": "{{title}}を見る",
+    "proof": {
+      "eyebrow": "Nihonova について",
+      "metric": "2,000+",
+      "metricLabel": "販売冊数",
+      "selected": {
+        "title": "厳選した本だけ",
+        "body": "何千冊も並べません。読む時間に値すると信じた本だけを置いています。"
+      },
+      "recommended": {
+        "title": "自分たちの言葉で薦める",
+        "body": "読み、探し、友人にそのまま薦められる本だけをご紹介します。"
+      }
+    }
   },
   "catalog": {
     "title": "棚のすべての本",

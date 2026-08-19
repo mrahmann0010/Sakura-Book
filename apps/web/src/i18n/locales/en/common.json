@@ -24,13 +24,20 @@
       "title": "Recently added",
       "seeMore": "See the whole catalogue"
     },
-    "second": {
-      "eyebrow": "Second shelf",
-      "title": "Staff picks",
-      "description": "Three we keep pressing on people who ask what to read next.",
-      "action": "All staff picks"
-    },
-    "quickView": "View {{title}}"
+    "quickView": "View {{title}}",
+    "proof": {
+      "eyebrow": "Why Nihonova",
+      "metric": "2,000+",
+      "metricLabel": "Books sold",
+      "selected": {
+        "title": "Carefully selected",
+        "body": "Not thousands of titles. Just books we believe deserve your time."
+      },
+      "recommended": {
+        "title": "Personally recommended",
+        "body": "We read, explore, and recommend books we'd genuinely share with a friend."
+      }
+    }
   },
   "catalog": {
     "title": "Every book on the shelves",
