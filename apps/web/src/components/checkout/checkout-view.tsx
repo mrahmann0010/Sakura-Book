@@ -75,7 +75,7 @@ export function CheckoutView({ locale }: { locale: Locale }) {
     cart.clear();
   }
 
-  if (!cart.hydrated) return <CheckoutSkeleton />;
+  if (!cart.hydrated || cart.quoting) return <CheckoutSkeleton />;
 
   /* The order is in. The cart is now empty by design, so this state has to be
      checked before the empty-cart guard below or placing an order would bounce

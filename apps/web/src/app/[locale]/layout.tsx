@@ -4,6 +4,7 @@ import "../globals.css";
 
 import { I18nProvider } from "@/i18n/client";
 import { locales, type Locale } from "@/i18n/settings";
+import { QueryProvider } from "@/lib/api/query-provider";
 import { StoreProvider } from "@/store/provider";
 
 export function generateStaticParams() {
@@ -39,7 +40,9 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[lo
     <html lang={locale} className={`${lora.variable} ${publicSans.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         <StoreProvider>
-          <I18nProvider locale={locale}>{children}</I18nProvider>
+          <QueryProvider>
+            <I18nProvider locale={locale}>{children}</I18nProvider>
+          </QueryProvider>
         </StoreProvider>
       </body>
     </html>

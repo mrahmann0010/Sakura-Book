@@ -1,6 +1,7 @@
+import type { CartQuote } from "@sakura/contracts";
+
 import type { BookSummary } from "@/components/domain";
 
-import { getBookById } from "./books";
 import { formatCredit, formatMoney } from "./money";
 
 /* --------------------------------------------------------------------------
@@ -73,37 +74,42 @@ export type Cart = CartTotals & {
   isEmpty: boolean;
 };
 
+/** Before the first quote lands, and for a cart with nothing in it. */
+export const emptyCart: Cart = { lines: [], isEmpty: true, ...priceCart([]) };
+
 /**
- * Resolves persisted entries against the catalogue.
- *
- * Unknown ids are dropped rather than thrown on: a cart survives in
- * localStorage across deploys, so it will eventually hold a book that has been
- * delisted, and that must degrade to "the book quietly left the cart", never a
- * crash on the cart page.
- *
- * `lookup` is injectable so a test — or the API-backed version — can supply
- * its own resolver without touching callers.
+ * Turns a priced `POST /cart/quote` response into the shape the cart and
+ * checkout pages render. The quote has already done the resolving — a stale
+ * or delisted id simply has no line here, listed instead in `quote.rejected`
+ * for the page to explain — and the pricing, so the totals below are the
+ * server's numbers, not a client recomputation of them.
  */
-export function buildCart(
-  entries: CartEntry[],
-  lookup: (bookId: string) => BookSummary | undefined = getBookById,
-): Cart {
-  const lines: CartLine[] = [];
+export function cartFromQuote(quote: CartQuote): Cart {
+  const lines: CartLine[] = quote.lines.map((line) => ({
+    book: {
+      id: line.bookId,
+      title: line.title,
+      author: line.authors.join(", "),
+      priceCents: line.unitPriceCents,
+      href: `/books/${line.slug}`,
+      coverUrl: line.coverImageUrl,
+    },
+    quantity: line.quantity,
+    unitPrice: line.unitPriceCents,
+    lineTotal: line.lineTotalCents,
+  }));
 
-  for (const entry of entries) {
-    const book = lookup(entry.bookId);
-    if (!book || entry.quantity < 1) continue;
-
-    const unitPrice = book.priceCents;
-    lines.push({
-      book,
-      quantity: entry.quantity,
-      unitPrice,
-      lineTotal: unitPrice * entry.quantity,
-    });
-  }
-
-  return { lines, isEmpty: lines.length === 0, ...priceCart(lines) };
+  return {
+    lines,
+    isEmpty: lines.length === 0,
+    lineCount: quote.lineCount,
+    itemCount: quote.itemCount,
+    subtotal: quote.subtotalCents,
+    deliveryBase: quote.deliveryBaseCents,
+    delivery: quote.deliveryCents,
+    deliveryCredit: quote.deliveryCreditCents,
+    total: quote.totalCents,
+  };
 }
 
 /** The totals block. Split out so a server-priced cart can reuse the policy. */

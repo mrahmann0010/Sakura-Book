@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { CartItem, CartItemList, EmptyState, SummaryCard, SummaryRow } from "@/components/domain";
 import { PageHeader, Shell, RailLayout, StickyBar } from "@/components/layout";
-import { LinkButton, Skeleton, SkeletonText } from "@/components/ui";
+import { LinkButton, Notice, Skeleton, SkeletonText } from "@/components/ui";
 import { useCart } from "@/hooks/use-cart";
 import type { Locale } from "@/i18n/settings";
 import { titlesInStock } from "@/lib/books";
@@ -88,7 +88,12 @@ export function CartView({ locale }: { locale: Locale }) {
     [clearTimer],
   );
 
-  if (!cart.hydrated) return <CartSkeleton label={t("cart.loading")} />;
+  /* Hydration is one wait, quoting is another: localStorage can hand back
+     entries before the server has priced them, and showing the empty state
+     in that gap would flash "your cart is empty" at someone whose cart is
+     not. Only render it once a quote has actually come back with nothing in
+     it — or there was never anything to quote. */
+  if (!cart.hydrated || cart.quoting) return <CartSkeleton label={t("cart.loading")} />;
 
   if (cart.isEmpty) {
     return (
@@ -98,7 +103,11 @@ export function CartView({ locale }: { locale: Locale }) {
           className="mt-10"
           eyebrow={t("cart.empty.eyebrow")}
           title={t("cart.empty.title")}
-          description={t("cart.empty.description", { count: titlesInStock })}
+          description={
+            cart.rejected.length > 0
+              ? t("cart.rejectedNotice", { count: cart.rejected.length })
+              : t("cart.empty.description", { count: titlesInStock })
+          }
           action={<LinkButton href={path.catalog}>{t("cart.empty.action")}</LinkButton>}
         />
       </Shell>
@@ -168,6 +177,12 @@ export function CartView({ locale }: { locale: Locale }) {
           }
         >
           <h2 className="sr-only">{t("cart.items")}</h2>
+
+          {cart.rejected.length > 0 ? (
+            <Notice tone="error" className="mb-6">
+              {t("cart.rejectedNotice", { count: cart.rejected.length })}
+            </Notice>
+          ) : null}
 
           <CartItemList>
             {/* Pending removals sink to the bottom rather than disappearing

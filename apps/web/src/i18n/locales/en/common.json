@@ -118,6 +118,8 @@
     "removeItem": "Remove",
     "removingLine": "Removed “{{title}}”.",
     "addBack": "Add back to cart",
+    "rejectedNotice_one": "{{count}} book in your cart is no longer available and was left out.",
+    "rejectedNotice_other": "{{count}} books in your cart are no longer available and were left out.",
     "summary": {
       "title": "Summary",
       "subtotal_one": "Subtotal · {{count}} book",

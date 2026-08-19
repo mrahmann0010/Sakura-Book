@@ -68,7 +68,13 @@ export const selectCartItems = (state: RootState) => state.cart.items;
 /** Whether the store has read localStorage yet. False through the first paint. */
 export const selectCartHydrated = (state: RootState) => state._persist?.rehydrated ?? false;
 
-/** Books in the cart counting quantity — the header badge. Zero until hydrated. */
+/**
+ * Raw persisted quantity, counting entries this browser has ever added —
+ * not what the header badge shows. A stale or delisted id is only known to
+ * be unresolvable once the server quotes the cart, so the badge reads
+ * `itemCount` off that quote (via useCartCount) rather than this selector,
+ * to avoid disagreeing with the cart page about how many books are in it.
+ */
 export const selectCartCount = createSelector([selectCartItems], (items) =>
   items.reduce((count, item) => count + item.quantity, 0),
 );
