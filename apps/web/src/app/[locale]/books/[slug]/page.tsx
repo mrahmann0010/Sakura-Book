@@ -19,6 +19,7 @@ import { ApiError } from "@/lib/api/client";
 import { footerColumns } from "@/lib/books";
 import { toBookSummary } from "@/lib/book-view";
 import { toSearchParams } from "@/lib/catalog";
+import { FREE_DELIVERY_THRESHOLD } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 
@@ -87,6 +88,50 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
     t("book.meta.language", { language: book.language }),
   ].filter((item): item is string => item !== null);
 
+  /* The buy card, rendered twice: inline under the title on narrow viewports,
+     where it is the thing the reader reaches for right after deciding they
+     want the book, and again in the sticky rail at `lg:`, where there is
+     room for it beside the description. Each copy is hidden at the other's
+     breakpoint via `display: none`, which drops it from both the tab order
+     and the accessibility tree — never two live "Add to cart" controls on
+     screen at once. */
+  const buyCard = (
+    <Card className="p-6">
+      <p className="flex items-baseline gap-3">
+        <span className="text-26 text-ink font-serif">{money(book.priceCents)}</span>
+        {/* Only ever shown when it is genuinely higher — a "was" price
+            at or below the current one is a data error, and printing it
+            would read as a price rise dressed as a discount. */}
+        {book.compareAtPriceCents && book.compareAtPriceCents > book.priceCents ? (
+          <span className="text-13 text-muted line-through">
+            {money(book.compareAtPriceCents)}
+          </span>
+        ) : null}
+      </p>
+
+      <p className="text-13 text-secondary mt-3">
+        {book.stockQuantity === 0
+          ? t("book.stock.out")
+          : book.stockQuantity <= 5
+            ? t("book.stock.low", { count: book.stockQuantity })
+            : t("book.stock.in")}
+      </p>
+
+      <div className="mt-5">
+        <AddToCartButton bookId={book.id} soldOut={view.soldOut} size="md" block />
+      </div>
+
+      {/* Reassurance at the decision moment — the same delivery facts the
+          cart and checkout summaries already state, not a new claim. */}
+      <p className="text-11.5 text-muted mt-4">
+        {t("cart.summary.deliveryFree", {
+          threshold: money(FREE_DELIVERY_THRESHOLD),
+        })}{" "}
+        · {t("cart.summary.note")}
+      </p>
+    </Card>
+  );
+
   return (
     <PageShell
       header={<AppNav />}
@@ -130,39 +175,14 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
               fallback="wordmark"
             />
           }
-          rail={
-            <Card className="p-6">
-              <p className="flex items-baseline gap-3">
-                <span className="text-26 text-ink font-serif">{money(book.priceCents)}</span>
-                {/* Only ever shown when it is genuinely higher — a "was" price
-                    at or below the current one is a data error, and printing it
-                    would read as a price rise dressed as a discount. */}
-                {book.compareAtPriceCents && book.compareAtPriceCents > book.priceCents ? (
-                  <span className="text-13 text-muted line-through">
-                    {money(book.compareAtPriceCents)}
-                  </span>
-                ) : null}
-              </p>
-
-              <p className="text-13 text-secondary mt-3">
-                {book.stockQuantity === 0
-                  ? t("book.stock.out")
-                  : book.stockQuantity <= 5
-                    ? t("book.stock.low", { count: book.stockQuantity })
-                    : t("book.stock.in")}
-              </p>
-
-              <div className="mt-5">
-                <AddToCartButton bookId={book.id} soldOut={view.soldOut} size="md" />
-              </div>
-            </Card>
-          }
+          rail={<div className="hidden lg:block">{buyCard}</div>}
         >
+          {/* Neutral tone even for editor's-pick, unlike the catalog card: this
+              page also carries the clay Add to Cart button, and clay marks
+              exactly one thing per screen (DESIGN_SYSTEM.md principle 02). */}
           {view.flag ? (
             <p className="mb-4">
-              <Badge tone={view.flag === "editors-pick" ? "accent" : "neutral"}>
-                {t(`book.flags.${view.flag}`)}
-              </Badge>
+              <Badge tone="neutral">{t(`book.flags.${view.flag}`)}</Badge>
             </p>
           ) : null}
 
@@ -182,6 +202,8 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
           ) : (
             <p className="text-13 text-muted mt-2">{t("book.noReviews")}</p>
           )}
+
+          <div className="mt-6 lg:hidden">{buyCard}</div>
 
           <div className="max-w-measure-lede text-body hairline mt-8 space-y-4 pt-8">
             {book.description.split(/\n{2,}/).map((paragraph, index) => (
