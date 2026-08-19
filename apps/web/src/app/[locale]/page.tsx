@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { BookCard, BookGrid, ProofPoints } from "@/components/domain";
+import { BookCard, BookGrid, HowItWorks, ProofPoints } from "@/components/domain";
 import { AppNav, PageShell, Shell, SiteFooter } from "@/components/layout";
 import { LinkButton } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
@@ -14,8 +14,8 @@ import type { BookSummary } from "@/components/domain";
 
 /* Landing page, per the Landing Wireframe (sheet 05, option 1a/1b): a brief
    centred hero, then straight into the books: one shelf of panel cards at
-   3-up, the catalogue CTA beneath it, and the "Why Nihonova" proof band
-   closing the page.
+   3-up, the catalogue CTA beneath it, then the "Why Nihonova" proof band and
+   the "How It Works" journey closing the page.
 
    Book titles and authors stay untranslated — they are proper nouns.
 
@@ -145,6 +145,32 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
           {
             title: t("home.proof.recommended.title"),
             body: t("home.proof.recommended.body"),
+          },
+        ]}
+      />
+
+      {/* The journey, closing the page after the proof band: what the shop is
+          for, then how buying from it actually goes. Full-bleed for the same
+          reason as ProofPoints — its top rule is what separates the two. */}
+      <HowItWorks
+        eyebrow={t("home.howItWorks.eyebrow")}
+        title={t("home.howItWorks.title")}
+        lede={t("home.howItWorks.lede")}
+        stages={[
+          {
+            number: t("home.howItWorks.find.number"),
+            title: t("home.howItWorks.find.title"),
+            body: t("home.howItWorks.find.body"),
+          },
+          {
+            number: t("home.howItWorks.order.number"),
+            title: t("home.howItWorks.order.title"),
+            body: t("home.howItWorks.order.body"),
+          },
+          {
+            number: t("home.howItWorks.receive.number"),
+            title: t("home.howItWorks.receive.title"),
+            body: t("home.howItWorks.receive.body"),
           },
         ]}
       />

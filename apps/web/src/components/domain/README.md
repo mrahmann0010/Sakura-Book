@@ -75,3 +75,15 @@ Three instances in the references (cart, search, order lookup) that differ only
 in eyebrow, line, sentence and button — so it is one component with slots, and
 the action is a `ReactNode` rather than `label` + `onClick`, because two of the
 three are links and one is a button.
+
+### HowItWorks
+
+One context so far — the landing page, closing it after `ProofPoints`. It takes
+props rather than hardcoding its copy because every string is translated, but
+the three illustrations are _not_ props: they are one drawn set (shared
+viewBox, one stroke weight, one optical scale) and swapping one in isolation
+would break the set. That is also why `stages` is a fixed three-tuple: the
+thread runs between exactly two gaps, and a fourth stage would have no drawing.
+
+`number` is displayed rather than derived from the index, so a locale can
+number the stages in its own digits.

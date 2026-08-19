@@ -25,6 +25,26 @@
       "seeMore": "See the whole catalogue"
     },
     "quickView": "View {{title}}",
+    "howItWorks": {
+      "eyebrow": "How It Works",
+      "title": "How It Works",
+      "lede": "From finding your next book to holding it in your hands.",
+      "find": {
+        "number": "01",
+        "title": "Find your next book",
+        "body": "Browse our carefully selected collection and find something worth reading."
+      },
+      "order": {
+        "number": "02",
+        "title": "Place your order",
+        "body": "Add your book to the cart, enter your details, and complete your payment securely."
+      },
+      "receive": {
+        "number": "03",
+        "title": "Receive your book",
+        "body": "We prepare your order with care and deliver it to your doorstep."
+      }
+    },
     "proof": {
       "eyebrow": "Why Nihonova",
       "metric": "2,000+",
