@@ -10,7 +10,7 @@ import { LinkButton, Skeleton, SkeletonText } from "@/components/ui";
 import { useCart } from "@/hooks/use-cart";
 import type { Locale } from "@/i18n/settings";
 import { titlesInStock } from "@/lib/books";
-import { FREE_DELIVERY_THRESHOLD, summaryLines } from "@/lib/cart";
+import { FREE_DELIVERY_THRESHOLD, priceCart, summaryLines } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 
@@ -34,36 +34,59 @@ export function CartView({ locale }: { locale: Locale }) {
   const path = routes(locale);
   const cart = useCart();
 
-  /* A removal is staged, not immediate: the row goes to the "removing" state
-     with an Undo, and only commits when the window closes. The line stays in
-     the totals until then — nothing has actually been removed yet, and a total
-     that drops before the removal is final would be lying. */
-  const [pendingRemoval, setPendingRemoval] = useState<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* A removal is staged, not immediate: the row sinks to the bottom of the
+     list, dims, and offers an Add back button, only leaving the cart for good
+     when the window closes. The totals drop the moment the row is staged,
+     though — the customer clicked Remove, so the price they see should say
+     so right away, even while the row is still reachable via Add back.
 
-  const clearTimer = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
+     Every row tracks its own timer, keyed by book id, so removing a second
+     book while the first is still pending cannot cancel the first. */
+  const [pendingRemovals, setPendingRemovals] = useState<Set<string>>(new Set());
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  const clearTimer = useCallback((bookId: string) => {
+    const existing = timers.current.get(bookId);
+    if (existing) clearTimeout(existing);
+    timers.current.delete(bookId);
   }, []);
 
-  useEffect(() => clearTimer, [clearTimer]);
+  useEffect(() => {
+    const timersAtMount = timers.current;
+    return () => timersAtMount.forEach((t) => clearTimeout(t));
+  }, []);
 
   const stageRemoval = useCallback(
     (bookId: string) => {
-      clearTimer();
-      setPendingRemoval(bookId);
-      timer.current = setTimeout(() => {
-        cart.remove(bookId);
-        setPendingRemoval(null);
-      }, UNDO_WINDOW_MS);
+      clearTimer(bookId);
+      setPendingRemovals((prev) => new Set(prev).add(bookId));
+      timers.current.set(
+        bookId,
+        setTimeout(() => {
+          cart.remove(bookId);
+          timers.current.delete(bookId);
+          setPendingRemovals((prev) => {
+            const next = new Set(prev);
+            next.delete(bookId);
+            return next;
+          });
+        }, UNDO_WINDOW_MS),
+      );
     },
     [cart, clearTimer],
   );
 
-  const undoRemoval = useCallback(() => {
-    clearTimer();
-    setPendingRemoval(null);
-  }, [clearTimer]);
+  const undoRemoval = useCallback(
+    (bookId: string) => {
+      clearTimer(bookId);
+      setPendingRemovals((prev) => {
+        const next = new Set(prev);
+        next.delete(bookId);
+        return next;
+      });
+    },
+    [clearTimer],
+  );
 
   if (!cart.hydrated) return <CartSkeleton label={t("cart.loading")} />;
 
@@ -86,8 +109,14 @@ export function CartView({ locale }: { locale: Locale }) {
      cannot end up formatted for a different locale than the total below it. */
   const money = intlLocale(locale);
 
+  /* Totals are priced off the lines that are not staged for removal, so the
+     subtotal drops the instant Remove is clicked — not five seconds later
+     when the removal actually commits to Redux. */
+  const activeLines = cart.lines.filter((line) => !pendingRemovals.has(line.book.id));
+  const totals = priceCart(activeLines);
+
   const rows = summaryLines(
-    cart,
+    totals,
     {
       subtotal: (count) => t("cart.summary.subtotal", { count }),
       delivery: t("cart.summary.delivery"),
@@ -98,7 +127,7 @@ export function CartView({ locale }: { locale: Locale }) {
     money,
   );
 
-  const total = formatMoney(cart.total, money);
+  const total = formatMoney(totals.total, money);
 
   /* One node, rendered into the rail on desktop and the docked bar on mobile —
      the same button, never two that can drift apart. */
@@ -113,7 +142,7 @@ export function CartView({ locale }: { locale: Locale }) {
       <Shell className="py-14 lg:py-20">
         <PageHeader
           size="lg"
-          eyebrow={t("cart.eyebrow", { count: cart.itemCount })}
+          eyebrow={t("cart.eyebrow", { count: totals.itemCount })}
           title={t("cart.title")}
         />
 
@@ -141,18 +170,26 @@ export function CartView({ locale }: { locale: Locale }) {
           <h2 className="sr-only">{t("cart.items")}</h2>
 
           <CartItemList>
-            {cart.lines.map((line) => (
-              <CartItem
-                key={line.book.id}
-                book={line.book}
-                quantity={line.quantity}
-                lineTotal={formatMoney(line.lineTotal, money)}
-                removing={pendingRemoval === line.book.id}
-                onQuantityChange={(quantity) => cart.setQuantity(line.book.id, quantity)}
-                onRemove={() => stageRemoval(line.book.id)}
-                onUndoRemove={undoRemoval}
-              />
-            ))}
+            {/* Pending removals sink to the bottom rather than disappearing
+                or collapsing in place — a stable sort keeps every other row's
+                relative order untouched. */}
+            {[...cart.lines]
+              .sort(
+                (a, b) =>
+                  Number(pendingRemovals.has(a.book.id)) - Number(pendingRemovals.has(b.book.id)),
+              )
+              .map((line) => (
+                <CartItem
+                  key={line.book.id}
+                  book={line.book}
+                  quantity={line.quantity}
+                  lineTotal={formatMoney(line.lineTotal, money)}
+                  removing={pendingRemovals.has(line.book.id)}
+                  onQuantityChange={(quantity) => cart.setQuantity(line.book.id, quantity)}
+                  onRemove={() => stageRemoval(line.book.id)}
+                  onUndoRemove={() => undoRemoval(line.book.id)}
+                />
+              ))}
           </CartItemList>
 
           <Link

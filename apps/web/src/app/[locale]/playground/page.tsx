@@ -363,7 +363,6 @@ export default function Playground() {
                 book={{ ...second, format: "Paperback" }}
                 quantity={quantity}
                 onQuantityChange={setQuantity}
-                engaged
                 lineTotal="£25.00"
                 onRemove={() => setRemoving(true)}
               />
