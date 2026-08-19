@@ -36,8 +36,14 @@ services:
         format: raw
     environment:
       WATCHPACK_POLLING: "true"
+      # Server-side fetches run inside this container, where the API's
+      # localhost:4000 is not reachable — see apiOrigin() in the web app.
+      API_INTERNAL_URL: http://api:4000
     volumes:
       - ./apps/web:/app/apps/web
+      # Mounted so edits to the shared contracts land in the container; turbo's
+      # dev task rebuilds its dist before Next starts.
+      - ./packages/contracts:/app/packages/contracts
       - /app/node_modules
       - /app/apps/web/.next
 
@@ -57,6 +63,7 @@ services:
       REDIS_URL: redis://redis:6379
     volumes:
       - ./apps/api:/app/apps/api
+      - ./packages/contracts:/app/packages/contracts
       - /app/node_modules
       - /app/apps/api/node_modules
 
