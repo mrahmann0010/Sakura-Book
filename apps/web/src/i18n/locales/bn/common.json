@@ -118,6 +118,8 @@
     "removeItem": "সরান",
     "removingLine": "“{{title}}” সরানো হয়েছে।",
     "addBack": "কার্টে আবার যোগ করুন",
+    "rejectedNotice_one": "আপনার কার্টের {{count}}টি বই আর পাওয়া যাচ্ছে না, তাই বাদ দেওয়া হয়েছে।",
+    "rejectedNotice_other": "আপনার কার্টের {{count}}টি বই আর পাওয়া যাচ্ছে না, তাই বাদ দেওয়া হয়েছে।",
     "summary": {
       "title": "সারসংক্ষেপ",
       "subtotal_one": "উপমোট · {{count}}টি বই",

@@ -117,6 +117,7 @@
     "removeItem": "削除",
     "removingLine": "「{{title}}」を削除しました。",
     "addBack": "カートに戻す",
+    "rejectedNotice_other": "カート内の{{count}}点はもう購入できないため除外されました。",
     "summary": {
       "title": "ご注文内容",
       "subtotal_one": "小計 · {{count}}冊",
