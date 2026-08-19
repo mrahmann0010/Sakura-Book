@@ -289,6 +289,9 @@
   /* --- Motion ----------------------------------------------------------- */
   --animate-spin-slow: spin var(--duration-spin) linear infinite;
   --animate-shimmer: shimmer var(--duration-shimmer) ease-in-out infinite;
+  /* The one confirmation beat principle 04 licenses: a book was just added.
+     Reuses --duration-slide rather than a new constant. */
+  --animate-bump: bump var(--duration-slide) var(--ease-standard);
 
   --ease-standard: ease-in-out;
 }
@@ -300,5 +303,17 @@
   }
   50% {
     opacity: 1;
+  }
+}
+
+@keyframes bump {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.28);
+  }
+  100% {
+    transform: scale(1);
   }
 }

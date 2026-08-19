@@ -20,10 +20,14 @@ export function AddToCartButton({
   bookId,
   soldOut = false,
   size = "sm",
+  block = false,
 }: {
   bookId: string;
   soldOut?: boolean;
   size?: "sm" | "md";
+  /** Full-width — the detail page's buy card, where the button is the card's
+      one job and should read as wide as the price line above it. */
+  block?: boolean;
 }) {
   const { t } = useTranslation();
   const { add } = useCart();
@@ -33,7 +37,7 @@ export function AddToCartButton({
 
   if (soldOut) {
     return (
-      <Button variant="secondary" size={size} disabled>
+      <Button variant="secondary" size={size} block={block} disabled>
         {t("actions.soldOut")}
       </Button>
     );
@@ -43,6 +47,7 @@ export function AddToCartButton({
     <Button
       variant={inCart ? "secondary" : "primary"}
       size={size}
+      block={block}
       onClick={() => add(bookId)}
       aria-label={t("actions.addToCartNamed", { count: quantity })}
     >

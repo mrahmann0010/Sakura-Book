@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ShoppingBag } from "lucide-react";
@@ -22,6 +22,22 @@ import { LanguageSwitcher } from "./language-switcher";
 export function AppNav({ brandHref }: { brandHref?: string } = {}) {
   const { locale } = useParams<{ locale: string }>();
   const count = useCartCount();
+
+  /* Principle 04: motion only as confirmation. A book was just added — not
+     the persisted count settling in on load, which is why the bump only
+     fires on an increase after the first render, never on mount. */
+  const previousCount = useRef(count);
+  const [bump, setBump] = useState(false);
+
+  useEffect(() => {
+    if (count > previousCount.current) {
+      setBump(true);
+      const id = setTimeout(() => setBump(false), 240);
+      previousCount.current = count;
+      return () => clearTimeout(id);
+    }
+    previousCount.current = count;
+  }, [count]);
 
   const items = useMemo<FloatingNavItem[]>(() => {
     const base = `/${locale ?? "en"}`;
@@ -53,7 +69,7 @@ export function AppNav({ brandHref }: { brandHref?: string } = {}) {
                 would leave an empty target. */}
             <ShoppingBag aria-hidden className="size-4 sm:hidden" strokeWidth={1.5} />
             <span className="sr-only sm:not-sr-only">Cart</span>
-            <CountBadge count={count} />
+            <CountBadge count={count} className={bump ? "animate-bump" : undefined} />
           </Link>
         </>
       }
