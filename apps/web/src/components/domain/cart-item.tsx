@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+
 import { Button, Stepper } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
@@ -19,8 +22,6 @@ export type CartItemProps = {
    * Undo, at half opacity, holding the row height so the list does not jump.
    */
   removing?: boolean;
-  /** Border of the stepper goes ink once the row has been touched. */
-  engaged?: boolean;
   className?: string;
 };
 
@@ -39,24 +40,42 @@ export function CartItem({
   onRemove,
   onUndoRemove,
   removing = false,
-  engaged,
   className,
 }: CartItemProps) {
+  const { t } = useTranslation();
+  /* Border goes ink once the row has been touched — local, since no other
+     row or the cart-level state has any use for it. */
+  const [engaged, setEngaged] = useState(false);
+
   if (removing) {
     return (
       <div
         className={cn(
-          "grid-line-lg border-rule py-card items-center gap-6 border-b opacity-50",
+          "grid-line-lg border-rule py-card items-start gap-6 border-b opacity-50",
           className,
         )}
       >
-        <span aria-hidden className="cover rounded-md" />
-        <p aria-live="polite" className="text-13 text-secondary">
-          Removing “{book.title}”…{" "}
-          <button type="button" onClick={onUndoRemove} className="text-clay font-semibold">
-            Undo
-          </button>
-        </p>
+        <BookCover src={book.coverUrl} title={book.title} author={book.author} radius="md" />
+
+        <div className="min-w-0">
+          <h3 className="text-19 text-ink font-serif leading-[1.25]">{book.title}</h3>
+          <p aria-live="polite" className="text-caption text-secondary mt-1.5">
+            {t("cart.removingLine", { title: book.title })}
+          </p>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onUndoRemove}
+              className="text-caption"
+            >
+              {t("cart.addBack")}
+              <span className="sr-only">{`, ${book.title}`}</span>
+            </Button>
+          </div>
+        </div>
+
         <p className="text-13.5 text-secondary">{lineTotal}</p>
       </div>
     );
@@ -76,7 +95,10 @@ export function CartItem({
         <div className="mt-4 flex flex-wrap items-center gap-3.5">
           <Stepper
             value={quantity}
-            onChange={onQuantityChange}
+            onChange={(next) => {
+              setEngaged(true);
+              onQuantityChange?.(next);
+            }}
             engaged={engaged}
             label={`Quantity, ${book.title}`}
           />
@@ -86,7 +108,8 @@ export function CartItem({
             onClick={onRemove}
             className="text-caption hover:text-clay hover:bg-transparent"
           >
-            Remove
+            {t("cart.removeItem")}
+            <span className="sr-only">{`, ${book.title}`}</span>
           </Button>
         </div>
       </div>

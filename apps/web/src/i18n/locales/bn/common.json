@@ -9,6 +9,7 @@
     "shopAll": "সব বই দেখুন",
     "addToCart": "কার্টে দিন",
     "inCart": "কার্টে · {{count}}",
+    "removeFromCart": "কার্ট থেকে সরান",
     "soldOut": "স্টকে নেই"
   },
   "language": {
@@ -114,6 +115,9 @@
     "title": "আপনার কার্ট",
     "items": "বইগুলো",
     "continue": "আরও বই দেখুন",
+    "removeItem": "সরান",
+    "removingLine": "“{{title}}” সরানো হয়েছে।",
+    "addBack": "কার্টে আবার যোগ করুন",
     "summary": {
       "title": "সারসংক্ষেপ",
       "subtotal_one": "উপমোট · {{count}}টি বই",

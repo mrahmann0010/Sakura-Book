@@ -9,6 +9,7 @@
     "shopAll": "すべての本を見る",
     "addToCart": "カートに入れる",
     "inCart": "カート内 · {{count}}",
+    "removeFromCart": "カートから削除",
     "soldOut": "在庫切れ"
   },
   "language": {
@@ -113,6 +114,9 @@
     "title": "カート",
     "items": "商品",
     "continue": "買い物を続ける",
+    "removeItem": "削除",
+    "removingLine": "「{{title}}」を削除しました。",
+    "addBack": "カートに戻す",
     "summary": {
       "title": "ご注文内容",
       "subtotal_one": "小計 · {{count}}冊",

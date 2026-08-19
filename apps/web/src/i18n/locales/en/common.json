@@ -9,6 +9,7 @@
     "shopAll": "Shop all books",
     "addToCart": "Add to cart",
     "inCart": "In cart · {{count}}",
+    "removeFromCart": "Remove from cart",
     "soldOut": "Out of stock"
   },
   "language": {
@@ -114,6 +115,9 @@
     "title": "Your cart",
     "items": "Items",
     "continue": "Continue shopping",
+    "removeItem": "Remove",
+    "removingLine": "Removed “{{title}}”.",
+    "addBack": "Add back to cart",
     "summary": {
       "title": "Summary",
       "subtotal_one": "Subtotal · {{count}} book",

@@ -43,7 +43,7 @@ export function AddToCartButton({
   block?: boolean;
 }) {
   const { t } = useTranslation();
-  const { add } = useCart();
+  const { add, remove } = useCart();
   const mounted = useMounted();
   const quantity = useAppSelector(selectQuantityOf(bookId));
   const inCart = mounted && quantity > 0;
@@ -66,9 +66,17 @@ export function AddToCartButton({
       variant={variant ?? (inCart ? "secondary" : "primary")}
       size={size}
       block={block}
-      onClick={() => add(bookId)}
+      className={inCart ? "group" : undefined}
+      onClick={() => (inCart ? remove(bookId) : add(bookId))}
     >
-      {inCart ? t("actions.inCart", { count: quantity }) : t("actions.addToCart")}
+      {inCart ? (
+        <>
+          <span className="group-hover:hidden">{t("actions.inCart", { count: quantity })}</span>
+          <span className="hidden group-hover:inline">{t("actions.removeFromCart")}</span>
+        </>
+      ) : (
+        t("actions.addToCart")
+      )}
       {title ? <span className="sr-only">{`, ${title}`}</span> : null}
     </Button>
   );
