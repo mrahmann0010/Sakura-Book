@@ -24,13 +24,40 @@
       "title": "Recently added",
       "seeMore": "See the whole catalogue"
     },
-    "second": {
-      "eyebrow": "Second shelf",
-      "title": "Staff picks",
-      "description": "Three we keep pressing on people who ask what to read next.",
-      "action": "All staff picks"
+    "quickView": "View {{title}}",
+    "howItWorks": {
+      "eyebrow": "How It Works",
+      "title": "How It Works",
+      "lede": "From finding your next book to holding it in your hands.",
+      "find": {
+        "number": "01",
+        "title": "Find your next book",
+        "body": "Browse our carefully selected collection and find something worth reading."
+      },
+      "order": {
+        "number": "02",
+        "title": "Place your order",
+        "body": "Add your book to the cart, enter your details, and complete your payment securely."
+      },
+      "receive": {
+        "number": "03",
+        "title": "Receive your book",
+        "body": "We prepare your order with care and deliver it to your doorstep."
+      }
     },
-    "quickView": "View {{title}}"
+    "proof": {
+      "eyebrow": "Why Nihonova",
+      "metric": "2,000+",
+      "metricLabel": "Books sold",
+      "selected": {
+        "title": "Carefully selected",
+        "body": "Not thousands of titles. Just books we believe deserve your time."
+      },
+      "recommended": {
+        "title": "Personally recommended",
+        "body": "We read, explore, and recommend books we'd genuinely share with a friend."
+      }
+    }
   },
   "catalog": {
     "title": "Every book on the shelves",

@@ -23,6 +23,9 @@
   --surface: #ffffff;
   --tint: #f0ece2;
   --rule: #e6e2d7;
+  /* The journey thread's nodes sit on the rule and must read a step darker
+     than it, or a 13px circle vanishes into the line it sits on. */
+  --node: #c9c6c0;
 
   /* Text ramp, darkest to lightest */
   --ink: #141413;
@@ -85,6 +88,7 @@
     --surface: #201f1c;
     --tint: #2a2825;
     --rule: #37342f;
+    --node: #4d4941;
 
     --ink: #f7f6f2;
     --body: #ddd9d0;
@@ -106,6 +110,7 @@
   --surface: #201f1c;
   --tint: #2a2825;
   --rule: #37342f;
+  --node: #4d4941;
 
   --ink: #f7f6f2;
   --body: #ddd9d0;
@@ -131,6 +136,7 @@
   --color-surface: var(--surface);
   --color-tint: var(--tint);
   --color-rule: var(--rule);
+  --color-node: var(--node);
 
   --color-ink: var(--ink);
   --color-body: var(--body);

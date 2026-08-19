@@ -30,6 +30,12 @@ export type { BookMetaProps, Facet, FilterChipsProps } from "./catalog-toolbar";
 export { EmptyState } from "./empty-state";
 export type { EmptyStateProps } from "./empty-state";
 
+export { HowItWorks } from "./how-it-works";
+export type { HowItWorksProps, HowItWorksStage } from "./how-it-works";
+
+export { ProofPoints } from "./proof-points";
+export type { ProofPoint } from "./proof-points";
+
 export { PaymentOption, PaymentOptionList } from "./payment-options";
 export type { PaymentOptionProps } from "./payment-options";
 

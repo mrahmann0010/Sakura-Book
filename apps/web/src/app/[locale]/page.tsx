@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-import { BookCard, BookGrid, BookScroller } from "@/components/domain";
-import { AppNav, PageShell, Section, Shell, SiteFooter } from "@/components/layout";
+import { BookCard, BookGrid, HowItWorks, ProofPoints } from "@/components/domain";
+import { AppNav, PageShell, Shell, SiteFooter } from "@/components/layout";
 import { LinkButton } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
@@ -13,22 +13,21 @@ import { iconButton } from "@/lib/variants";
 import type { BookSummary } from "@/components/domain";
 
 /* Landing page, per the Landing Wireframe (sheet 05, option 1a/1b): a brief
-   centred hero, then straight into the books. Two shelves of panel cards at
-   3-up, with the catalogue CTA between them.
+   centred hero, then straight into the books: one shelf of panel cards at
+   3-up, the catalogue CTA beneath it, then the "Why Nihonova" proof band and
+   the "How It Works" journey closing the page.
 
    Book titles and authors stay untranslated — they are proper nouns.
 
-   Both shelves and the stock count come from GET /books rather than the
+   The shelf and the stock count come from GET /books rather than the
    placeholder arrays that used to sit in lib/books.ts. The count line is the
    list envelope's `total` — the number of titles the shop actually has, not a
    constant someone has to remember to change.
 
-   One caveat worth stating: the second shelf is "Staff picks" in the copy, and
-   the API has no `featured` filter to ask for — `isFeatured` is on every book
-   it returns, but not something a browse query can select on. This shelf is
-   therefore the best-rated titles, which is the closest honest signal
-   available. Adding `featured` to bookQuerySchema is the fix; it is an API
-   change and is deliberately not smuggled in here. */
+   The second shelf ("Staff picks") is gone: it was sorted by rating rather
+   than curation, because the API has no `featured` filter to ask for, and a
+   shelf that claims one thing while showing another is worse than no shelf.
+   The proof band now closes the page in its place. */
 
 /**
  * Rendered per request rather than prerendered at build.
@@ -74,24 +73,16 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
   const { locale } = (await params) as { locale: Locale };
   const { t } = await getTranslation(locale);
 
-  /* Two shelves and a count, in one round trip each and both in flight at
-     once. The hero's count comes off the first list's `total`, so the shop
-     never advertises a number no query would return. */
-  const [recent, rated] = await Promise.all([
-    listBooks({ q: "", genres: [], sort: "recent", page: 1 }),
-    listBooks({ q: "", genres: [], sort: "rating", page: 1 }),
-  ]);
+  /* One shelf and a count, in a single round trip. The hero's count comes off
+     the list's `total`, so the shop never advertises a number no query would
+     return. */
+  const recent = await listBooks({ q: "", genres: [], sort: "recent", page: 1 });
 
   const recentlyAdded = toBookSummaries(recent.items, locale);
-  /* Sliced to three, as the copy promises — "three we keep pressing on people
-     who ask what to read next". */
-  const staffPicks = toBookSummaries(rated.items, locale).slice(0, 3);
 
   return (
     <PageShell
-      header={
-<AppNav />
-      }
+      header={<AppNav />}
       footer={
         <SiteFooter
           blurb="A small catalogue of books, chosen by hand and posted from Bristol."
@@ -103,7 +94,7 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
       {/* Hero — headline · subhead · count line, centred. */}
       <Shell
         as="section"
-        className="lg:pt-page-desktop flex flex-col items-center py-20 text-center lg:pb-block"
+        className="lg:pt-page-desktop lg:pb-block flex flex-col items-center py-20 text-center"
       >
         <h1 className="max-w-measure-intro text-36 text-ink sm:text-48 lg:text-64 font-serif leading-[1.04]">
           {t("home.hero.title")}
@@ -138,38 +129,51 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
         </div>
       </Shell>
 
-      {/* Second shelf — same card, no badge. Scrolls on mobile. */}
-      <Shell className="mt-20 lg:mt-24">
-        <Section
-          className="hairline pt-8"
-          eyebrow={t("home.second.eyebrow")}
-          title={t("home.second.title")}
-          description={t("home.second.description")}
-          /* No staff-picks page exists; the sorted catalogue is the same
-             list, and a link to a 404 is worse than a link to the shelf. */
-          action={
-            <Link href={`${routes(locale).catalog}?sort=rating`}>
-              {t("home.second.action")} →
-            </Link>
-          }
-        >
-          <BookScroller settles>
-            {staffPicks.map((book) => (
-              <BookCard
-                key={book.id}
-                book={book}
-                locale={locale}
-                variant="panel"
-                showFlag={false}
-                inlineMeta
-                action={
-                  <QuickView book={book} label={t("home.quickView", { title: book.title })} />
-                }
-              />
-            ))}
-          </BookScroller>
-        </Section>
-      </Shell>
+      {/* The credibility band, in place of the second shelf: three quiet
+          claims rather than three more covers. Full-bleed so its top rule runs
+          the width of the page — hence no <Shell> around it. */}
+      <ProofPoints
+        className="mt-20 lg:mt-24"
+        eyebrow={t("home.proof.eyebrow")}
+        metric={t("home.proof.metric")}
+        metricLabel={t("home.proof.metricLabel")}
+        points={[
+          {
+            title: t("home.proof.selected.title"),
+            body: t("home.proof.selected.body"),
+          },
+          {
+            title: t("home.proof.recommended.title"),
+            body: t("home.proof.recommended.body"),
+          },
+        ]}
+      />
+
+      {/* The journey, closing the page after the proof band: what the shop is
+          for, then how buying from it actually goes. Full-bleed for the same
+          reason as ProofPoints — its top rule is what separates the two. */}
+      <HowItWorks
+        eyebrow={t("home.howItWorks.eyebrow")}
+        title={t("home.howItWorks.title")}
+        lede={t("home.howItWorks.lede")}
+        stages={[
+          {
+            number: t("home.howItWorks.find.number"),
+            title: t("home.howItWorks.find.title"),
+            body: t("home.howItWorks.find.body"),
+          },
+          {
+            number: t("home.howItWorks.order.number"),
+            title: t("home.howItWorks.order.title"),
+            body: t("home.howItWorks.order.body"),
+          },
+          {
+            number: t("home.howItWorks.receive.number"),
+            title: t("home.howItWorks.receive.title"),
+            body: t("home.howItWorks.receive.body"),
+          },
+        ]}
+      />
 
       <div className="lg:h-section h-20" />
     </PageShell>
