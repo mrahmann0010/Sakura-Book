@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-ARG NODE_VERSION=20.18-alpine
+ARG NODE_VERSION=20.20-alpine
 
 FROM node:${NODE_VERSION} AS base
 WORKDIR /app
@@ -38,12 +38,18 @@ COPY apps/api apps/api
 RUN npm run build --workspace @sakura/api
 
 # ---- prune: the same tree with devDependencies and the web app left out ----
+# Sequenced after `build` rather than beside it. BuildKit runs independent
+# stages concurrently, and two npm installs of a 1GB workspace at once is what
+# a small build host runs out of memory (or disk) on — the build dies mid-npm
+# with no npm error, which reads as a mystery rather than as exhaustion. This
+# COPY creates the ordering edge; the file itself is never used.
 # Scoped to the two workspaces the runtime actually loads. Without the
 # --workspace flags this installs the web app's production tree as well — next,
 # react, three Tailwind packages — several hundred megabytes shipped in an image
 # that never serves a page. --include-workspace-root keeps the root manifest's
 # own deps and the node_modules/@sakura/* symlinks intact.
 FROM manifests AS prune
+COPY --from=build /app/package.json /tmp/.build-done
 RUN --mount=type=cache,target=/root/.npm,sharing=locked \
     npm ci --omit=dev --no-audit --no-fund \
       --include-workspace-root \

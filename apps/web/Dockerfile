@@ -4,7 +4,7 @@
 # resolves the same bytes — `node:20-alpine` is a moving tag, and a silent minor
 # bump between the build and the rollback you reach for is the worst time to
 # discover it moved.
-ARG NODE_VERSION=20.18-alpine
+ARG NODE_VERSION=20.20-alpine
 
 # ---------- deps ----------
 FROM node:${NODE_VERSION} AS deps
