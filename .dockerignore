@@ -23,3 +23,28 @@ node_modules
 Dockerfile*
 .dockerignore
 docker-compose.yml
+
+# Nothing below is read by a build. They are excluded so they never enter the
+# build context: every byte here is uploaded to the daemon on every build and
+# invalidates the COPY layer that carries it, so docs churn would rebuild the
+# app. ~8MB and a cache bust each, for files no compiler opens.
+docs
+reference
+.github
+.claude
+.impeccable
+.history
+.vscode
+.idea
+*.md
+!apps/*/README.md
+.DS_Store
+**/.DS_Store
+.prettierrc.json
+.prettierignore
+coverage
+**/coverage
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/__tests__
