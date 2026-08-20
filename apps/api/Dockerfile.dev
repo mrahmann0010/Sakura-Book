@@ -1,11 +1,14 @@
-# syntax=docker/dockerfile:1
-FROM node:20-alpine
+# syntax=docker/dockerfile:1.7
+ARG NODE_VERSION=20.18-alpine
+FROM node:${NODE_VERSION}
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm ci --no-audit --no-fund
 
 COPY . .
 
