@@ -5,6 +5,7 @@ import {
   adminPreOrderInternalNoteSchema,
   adminPreOrderListSchema,
   adminPreOrderPaymentDecisionSchema,
+  adminPreOrderVerificationResultSchema,
   adminPreOrderBookUpsertRequestSchema,
   adminPreOrderBookListSchema,
   adminSessionSchema,
@@ -16,6 +17,7 @@ import {
   type AdminPreOrderFulfillmentTransition,
   type AdminPreOrderList,
   type AdminPreOrderPaymentDecision,
+  type AdminPreOrderVerificationResult,
   type AdminSession,
   type PreOrderBook,
 } from "@sakura/contracts";
@@ -168,6 +170,23 @@ export function decideAdminPreOrderPayment(
     `/admin/pre-orders/${encodeURIComponent(orderNumber)}/payment`,
     adminPreOrderDetailSchema,
     { method: "POST", body: validated },
+  );
+}
+
+/**
+ * Ask the API to check this pre-order's transaction ID against the SMS
+ * payment gateway again.
+ *
+ * No request body: the transaction ID lives on the pre-order, and the
+ * endpoint deliberately refuses to take one from the caller.
+ */
+export function recheckAdminPreOrderPayment(
+  orderNumber: string,
+): Promise<AdminPreOrderVerificationResult> {
+  return adminFetch(
+    `/admin/pre-orders/${encodeURIComponent(orderNumber)}/verify-payment`,
+    adminPreOrderVerificationResultSchema,
+    { method: "POST" },
   );
 }
 

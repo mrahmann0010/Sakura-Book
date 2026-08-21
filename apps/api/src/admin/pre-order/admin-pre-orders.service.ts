@@ -6,11 +6,13 @@ import type {
   AdminPreOrderList,
   AdminPreOrderPaymentDecision,
   AdminPreOrderQuery,
+  AdminPreOrderVerificationResult,
 } from "@sakura/contracts";
 import { and, eq, sql } from "drizzle-orm";
 import { ResourceNotFoundError } from "../../common/errors";
 import { DbService } from "../../db/db.service";
 import { preOrderOrders } from "../../db/schema";
+import { toVerificationRecord } from "../../payment-verification";
 import {
   InvalidPreOrderFulfillmentTransitionError,
   InvalidPreOrderPaymentTransitionError,
@@ -18,9 +20,11 @@ import {
   canStartFulfillment,
   canTransitionFulfillment,
   canTransitionPayment,
+  PreOrderPaymentVerificationService,
+  verificationNote,
   type PreOrderRow,
 } from "../../pre-orders";
-import { AuditService } from "../audit/audit.service";
+import { AuditService } from "../../audit";
 import type { AdminContext } from "../orders";
 import { toAdminPreOrderDetail, toAdminPreOrderSummary } from "./admin-pre-order.mapper";
 import { adminPreOrderFilters, adminPreOrderOrder } from "./admin-pre-order.query";
@@ -49,6 +53,7 @@ export class AdminPreOrdersService {
   constructor(
     private readonly dbService: DbService,
     private readonly auditService: AuditService,
+    private readonly paymentVerification: PreOrderPaymentVerificationService,
   ) {}
 
   /**
@@ -146,6 +151,49 @@ export class AdminPreOrdersService {
     });
 
     return this.detail(row.orderNumber);
+  }
+
+  /**
+   * Check this pre-order's transaction ID against the SMS payment gateway
+   * again, on demand.
+   *
+   * The button exists because the automatic check at placement is a snapshot
+   * of a moving target: payment SMS are forwarded from a handset and arrive
+   * seconds or minutes late, so a great many pre-orders land NOT_FOUND and
+   * become verifiable shortly afterwards. Without this, every one of those
+   * would need a member of staff to open a bank app — which is the manual
+   * process the whole feature is here to remove.
+   *
+   * Runs the same code the automatic check runs, deliberately: a second
+   * implementation of "does this receipt exist and is it enough" is a second
+   * place for the amount comparison to be subtly wrong.
+   *
+   * The actor is recorded, unlike the automatic check's anonymous entry, so
+   * the trail distinguishes "the machine accepted this on its own" from
+   * "someone asked it to look again and it accepted".
+   */
+  async recheckPayment(
+    orderNumber: string,
+    context: AdminContext,
+  ): Promise<AdminPreOrderVerificationResult> {
+    const row = await this.requirePreOrder(orderNumber);
+
+    const verification = await this.paymentVerification.verifyAndAccept(row, {
+      sub: context.actor.sub,
+      email: context.actor.email,
+    });
+
+    const preOrder = await this.detail(row.orderNumber);
+
+    return {
+      verification: toVerificationRecord(verification, row.totalCents),
+      summary: verificationNote(verification),
+      // Compared against what we read *before* the check, so this says
+      // "this check moved it" rather than "it is accepted now" — which would
+      // also be true for a pre-order a colleague accepted an hour ago.
+      accepted: row.paymentStatus === "PENDING" && preOrder.paymentStatus === "ACCEPTED",
+      preOrder,
+    };
   }
 
   /**

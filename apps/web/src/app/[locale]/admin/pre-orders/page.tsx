@@ -7,6 +7,7 @@ import {
   decideAdminPreOrderPayment,
   getAdminPreOrder,
   listAdminPreOrders,
+  recheckAdminPreOrderPayment,
   setAdminPreOrderNote,
   transitionAdminPreOrderFulfillment,
 } from "@/lib/api/admin";
@@ -15,6 +16,7 @@ import { useAdminGate } from "@/lib/use-admin-gate";
 import type {
   AdminPreOrderDetail,
   AdminPreOrderSummary,
+  PaymentVerificationRecord,
   PreOrderFulfillmentStatus,
   PreOrderPaymentStatus,
 } from "@sakura/contracts";
@@ -63,6 +65,10 @@ export default function AdminPreOrdersPage() {
   const [selected, setSelected] = useState<AdminPreOrderDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* The gateway's own words about the last re-check, kept apart from `error`:
+     "no payment matching X has reached the gateway yet" is a perfectly normal
+     answer, and colouring it red would train staff to ignore real failures. */
+  const [verdict, setVerdict] = useState<string | null>(null);
 
   useEffect(() => {
     if (!checking) void loadQueue(preset);
@@ -81,6 +87,7 @@ export default function AdminPreOrdersPage() {
 
   async function open(orderNumber: string) {
     setError(null);
+    setVerdict(null);
     try {
       setSelected(await getAdminPreOrder(orderNumber));
     } catch (err) {
@@ -99,11 +106,36 @@ export default function AdminPreOrdersPage() {
   async function act(run: () => Promise<AdminPreOrderDetail>) {
     setBusy(true);
     setError(null);
+    setVerdict(null);
     try {
       setSelected(await run());
       await loadQueue(preset);
     } catch (err) {
       setError(messageOf(err, "That action did not go through."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * The re-check, which is `act` plus a sentence.
+   *
+   * Separate because its response is not just a pre-order: the verdict
+   * explains *why* nothing changed, and "nothing changed" is the common case —
+   * payment SMS arrive late, so most re-checks legitimately find nothing yet.
+   * Silently refreshing the row would look like a broken button.
+   */
+  async function recheck(orderNumber: string) {
+    setBusy(true);
+    setError(null);
+    setVerdict(null);
+    try {
+      const result = await recheckAdminPreOrderPayment(orderNumber);
+      setSelected(result.preOrder);
+      setVerdict(result.summary);
+      if (result.accepted) await loadQueue(preset);
+    } catch (err) {
+      setError(messageOf(err, "Could not reach the payment gateway."));
     } finally {
       setBusy(false);
     }
@@ -164,6 +196,7 @@ export default function AdminPreOrdersPage() {
             <th style={cell}>Book</th>
             <th style={cell}>Total</th>
             <th style={cell}>Payment</th>
+            <th style={cell}>Gateway</th>
             <th style={cell}>Delivery</th>
           </tr>
         </thead>
@@ -196,12 +229,15 @@ export default function AdminPreOrdersPage() {
               </td>
               <td style={cell}>{formatMoney(row.totalCents)}</td>
               <td style={cell}>{row.paymentStatus}</td>
+              <td style={{ ...cell, color: outcomeColour(row.verificationOutcome) }}>
+                {row.verificationOutcome ?? "—"}
+              </td>
               <td style={cell}>{row.fulfillmentStatus}</td>
             </tr>
           ))}
           {rows.length === 0 ? (
             <tr>
-              <td style={{ ...cell, color: "#777" }} colSpan={6}>
+              <td style={{ ...cell, color: "#777" }} colSpan={7}>
                 Nothing in this list.
               </td>
             </tr>
@@ -216,7 +252,9 @@ export default function AdminPreOrdersPage() {
           key={selected.orderNumber}
           preOrder={selected}
           busy={busy}
+          verdict={verdict}
           onClose={() => setSelected(null)}
+          onRecheck={() => void recheck(selected.orderNumber)}
           onDecidePayment={(status, note) =>
             act(() => decideAdminPreOrderPayment(selected.orderNumber, { status, note }))
           }
@@ -240,14 +278,18 @@ export default function AdminPreOrdersPage() {
 function PreOrderPanel({
   preOrder,
   busy,
+  verdict,
   onClose,
+  onRecheck,
   onDecidePayment,
   onTransitionFulfillment,
   onSaveNote,
 }: {
   preOrder: AdminPreOrderDetail;
   busy: boolean;
+  verdict: string | null;
   onClose: () => void;
+  onRecheck: () => void;
   onDecidePayment: (status: PreOrderPaymentStatus, note?: string) => void;
   onTransitionFulfillment: (status: PreOrderFulfillmentStatus, note?: string) => void;
   onSaveNote: (note: string | null) => void;
@@ -298,6 +340,36 @@ function PreOrderPanel({
               <code>{preOrder.transactionId ?? "—"}</code>
             </dd>
           </dl>
+
+          {/* The gateway's answer sits between the claim and the buttons on
+              purpose: it is the evidence the accept/reject decision is made
+              against, and it is only ever advisory — a member of staff can
+              still accept an UNDERPAID pre-order because the customer sent
+              the balance separately, or reject a MATCHED one for a reason no
+              database knows about. */}
+          <GatewayVerdict record={preOrder.paymentVerification} />
+
+          <button
+            type="button"
+            onClick={onRecheck}
+            disabled={busy || !preOrder.transactionId}
+            style={{
+              cursor: busy || !preOrder.transactionId ? "default" : "pointer",
+              padding: "5px 10px",
+              marginBottom: 12,
+              border: "1px solid #ccc",
+              borderRadius: 4,
+              background: "#fff",
+            }}
+          >
+            {busy ? "Checking…" : "Re-check against gateway"}
+          </button>
+
+          {verdict ? (
+            <p style={{ fontSize: 13, color: "#333", background: "#f4f4f4", padding: 8 }}>
+              {verdict}
+            </p>
+          ) : null}
 
           <Actions
             busy={busy}
@@ -393,6 +465,75 @@ function Actions<T extends string>({
       ))}
     </div>
   );
+}
+
+/**
+ * The last cross-check, spelled out.
+ *
+ * Shows the two numbers that were compared rather than only the verdict,
+ * because the verdict is the machine's opinion and the numbers are the fact.
+ * A member of staff overriding an UNDERPAID needs to see how short it was;
+ * one accepting a MATCHED wants to confirm the amount is the one they expect
+ * before they take responsibility for it.
+ */
+function GatewayVerdict({ record }: { record: PaymentVerificationRecord | null }) {
+  if (!record) {
+    return (
+      <p style={{ fontSize: 13, color: "#777", margin: "0 0 12px" }}>
+        Not yet checked against the payment gateway.
+      </p>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        fontSize: 13,
+        border: "1px solid #ddd",
+        borderLeft: `3px solid ${outcomeColour(record.outcome)}`,
+        padding: "8px 10px",
+        margin: "0 0 12px",
+      }}
+    >
+      <strong style={{ color: outcomeColour(record.outcome) }}>{record.outcome}</strong>
+      {record.provider ? ` · ${record.provider}` : null}
+      <br />
+      {record.paidCents === undefined ? null : (
+        <>
+          Received {formatMoney(record.paidCents)} against {formatMoney(record.expectedCents ?? 0)}{" "}
+          owed
+          <br />
+        </>
+      )}
+      {record.reason ? (
+        <>
+          {record.reason}
+          <br />
+        </>
+      ) : null}
+      <span style={{ color: "#777" }}>
+        Checked {new Date(record.checkedAt).toLocaleString()}
+        {record.receivedAt ? ` · paid ${new Date(record.receivedAt).toLocaleString()}` : null}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Three colours, not four. MATCHED is the only one that is unambiguously
+ * good and NOT_FOUND the only one that is routine — UNDERPAID and UNAVAILABLE
+ * are both "a person has to look at this", so they read the same.
+ */
+function outcomeColour(outcome: PaymentVerificationRecord["outcome"] | null): string {
+  switch (outcome) {
+    case "MATCHED":
+      return "#1a7f37";
+    case "UNDERPAID":
+    case "UNAVAILABLE":
+      return "#a04000";
+    default:
+      return "#777";
+  }
 }
 
 function messageOf(error: unknown, fallback: string): string {

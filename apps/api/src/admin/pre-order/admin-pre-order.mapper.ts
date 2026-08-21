@@ -38,6 +38,10 @@ export function toAdminPreOrderSummary(row: PreOrderRow): AdminPreOrderSummary {
     totalCents: row.totalCents,
     hasPaymentReference: Boolean(row.transactionId?.trim() || row.senderNumber?.trim()),
     hasInternalNote: Boolean(row.internalNote?.trim()),
+    // The outcome alone, not the record: it is what tells staff which PENDING
+    // rows are worth opening, and the amounts behind it belong on the detail
+    // panel for the same reason the transaction ID does.
+    verificationOutcome: row.paymentVerification?.outcome ?? null,
   };
 }
 
@@ -61,6 +65,7 @@ export function toAdminPreOrderDetail(row: PreOrderRow): AdminPreOrderDetail {
     senderNumber: row.senderNumber,
     transactionId: row.transactionId,
     internalNote: row.internalNote,
+    paymentVerification: row.paymentVerification ?? null,
 
     allowedPaymentTransitions: [...PRE_ORDER_PAYMENT_TRANSITIONS[row.paymentStatus]],
     allowedFulfillmentTransitions: [...fulfillmentMoves],

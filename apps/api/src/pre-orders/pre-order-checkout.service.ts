@@ -7,6 +7,7 @@ import { DbService } from "../db/db.service";
 import type { Transaction } from "../db/db.types";
 import { preOrderOrders } from "../db/schema";
 import { PreOrderBooksService } from "./pre-order-books.service";
+import { PreOrderPaymentVerificationService } from "./pre-order-payment-verification.service";
 import { toPreOrderResponse, type PreOrderRow } from "./pre-order.mapper";
 
 /**
@@ -26,6 +27,7 @@ export class PreOrderCheckoutService {
   constructor(
     private readonly dbService: DbService,
     private readonly preOrderBooksService: PreOrderBooksService,
+    private readonly paymentVerification: PreOrderPaymentVerificationService,
   ) {}
 
   async placePreOrder(
@@ -43,11 +45,44 @@ export class PreOrderCheckoutService {
       const created = await this.findById(id);
       if (!created) throw new Error(`Pre-order ${id} vanished after commit`);
 
-      return { preOrder: toPreOrderResponse(created), created: true };
+      /**
+       * Cross-check the claimed payment against the SMS gateway, after the
+       * commit rather than inside it.
+       *
+       * Outside on purpose: the pre-order is a real thing the moment it is
+       * written, and holding a Postgres transaction open across a network
+       * call to a different database — one that is allowed to be slow or
+       * absent — would make an unrelated outage able to fail checkouts. The
+       * verification is an *upgrade* to a row that is already safe.
+       *
+       * It also cannot throw; see PaymentVerificationService's contract. The
+       * worst case is that the pre-order stays PENDING and someone checks it
+       * by hand, which is exactly the process this automates.
+       */
+      const verified = await this.verifyQuietly(created);
+
+      return { preOrder: toPreOrderResponse(verified), created: true };
     } catch (error) {
       const replayed = await this.replayOf(error, idempotencyKey);
       if (replayed) return { preOrder: toPreOrderResponse(replayed), created: false };
       throw error;
+    }
+  }
+
+  /**
+   * Verify, then re-read. Never lets a verification problem reach the
+   * customer: they have paid, or believe they have, and the response they get
+   * back must be their order number either way.
+   */
+  private async verifyQuietly(row: PreOrderRow): Promise<PreOrderRow> {
+    try {
+      await this.paymentVerification.verifyAndAccept(row);
+      return (await this.findById(row.id)) ?? row;
+    } catch (error) {
+      this.logger.error(
+        `Post-placement verification of pre-order ${row.orderNumber} failed: ${String(error)}`,
+      );
+      return row;
     }
   }
 
@@ -56,6 +91,15 @@ export class PreOrderCheckoutService {
     idempotencyKey: string,
     tx: Transaction,
   ): Promise<string> {
+    /**
+     * Before anything is written: one payment SMS is one payment, so a
+     * transaction ID already quoted against another pre-order is refused
+     * rather than queued for a member of staff to notice. Inside the
+     * transaction so the check and the insert are serialised, not merely
+     * adjacent.
+     */
+    await this.paymentVerification.assertTransactionIdUnused(request.transactionId ?? null, tx);
+
     const book = await this.preOrderBooksService.findRowById(request.preOrderBookId, tx);
 
     const unitPriceCents = book.priceCents;
@@ -113,7 +157,9 @@ export class PreOrderCheckoutService {
     const existing = await this.findByIdempotencyKey(idempotencyKey);
 
     if (!existing) {
-      this.logger.warn(`Idempotency key ${idempotencyKey} conflicted but no pre-order was readable`);
+      this.logger.warn(
+        `Idempotency key ${idempotencyKey} conflicted but no pre-order was readable`,
+      );
     }
 
     return existing;

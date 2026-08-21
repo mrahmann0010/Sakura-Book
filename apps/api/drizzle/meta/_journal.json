@@ -85,6 +85,13 @@
       "when": 1787400000000,
       "tag": "0011_pre_order_status_tracks",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787329642461,
+      "tag": "0012_pre_order_payment_verification",
+      "breakpoints": true
     }
   ]
 }

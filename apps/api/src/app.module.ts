@@ -6,7 +6,9 @@ import { validateEnv } from "./config/env.schema";
 import { AdminModule } from "./admin";
 import { CatalogModule } from "./catalog";
 import { CouponsModule } from "./coupons";
+import { AuditModule } from "./audit";
 import { DbModule } from "./db/db.module";
+import { PaymentVerificationModule } from "./payment-verification";
 import { HealthModule } from "./health/health.module";
 import { InventoryModule } from "./inventory";
 import { OrdersModule } from "./orders";
@@ -28,6 +30,8 @@ import { ShippingModule } from "./shipping";
     // the module graph: nothing below may be imported by anything above it.
     CommonModule,
     DbModule,
+    AuditModule,
+    PaymentVerificationModule,
 
     CatalogModule,
     CouponsModule,

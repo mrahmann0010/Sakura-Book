@@ -18,6 +18,7 @@ import {
   adminPreOrderQuerySchema,
   type AdminPreOrderDetail,
   type AdminPreOrderList,
+  type AdminPreOrderVerificationResult,
 } from "@sakura/contracts";
 import type { Request } from "express";
 import { createZodDto } from "nestjs-zod";
@@ -86,6 +87,28 @@ export class AdminPreOrdersController {
     @Req() request: Request,
   ): Promise<AdminPreOrderDetail> {
     return this.service.decidePayment(orderNumber, body, contextOf(admin, request));
+  }
+
+  /**
+   * Ask the SMS payment gateway about this pre-order's transaction ID again.
+   *
+   * POST rather than GET despite reading like a query: it can change the
+   * pre-order's payment status, and a GET that accepts money is a GET a
+   * prefetcher or a link crawler can trigger.
+   *
+   * Takes no body on purpose. The transaction ID is already on the row, and
+   * accepting one from the caller would turn this into a way to probe the
+   * shop's payment history for arbitrary IDs.
+   */
+  @Post(":orderNumber/verify-payment")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Re-check the pre-order's payment against the SMS gateway." })
+  async recheckPayment(
+    @Param("orderNumber") orderNumber: string,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminPreOrderVerificationResult> {
+    return this.service.recheckPayment(orderNumber, contextOf(admin, request));
   }
 
   /** Move the parcel along. Refused unless the payment is accepted. */

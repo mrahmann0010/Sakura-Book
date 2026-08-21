@@ -1,5 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import type { PaymentVerificationRecord } from "@sakura/contracts";
 import {
   paymentMethodEnum,
   preOrderFulfillmentStatusEnum,
@@ -71,6 +72,23 @@ export const preOrderOrders = pgTable(
       .notNull()
       .default("NOT_STARTED"),
 
+    /**
+     * What the last cross-check against the SMS payment gateway concluded —
+     * outcome, when we looked, which wallet the receipt was found in, and the
+     * amount that actually arrived. See PaymentVerificationRecord.
+     *
+     * One jsonb column rather than four typed ones because this is the record
+     * of *a check*, not four independent facts: `paidCents` means nothing
+     * without the outcome that interpreted it, and half the shape is absent
+     * for half the outcomes. Nothing filters or sorts on it — the queue
+     * filters on `payment_status`, which is what the check moves — so the
+     * indexing argument for separate columns does not apply either.
+     *
+     * Null means never checked. That is distinct from a stored UNAVAILABLE,
+     * which means we looked and could not reach the gateway.
+     */
+    paymentVerification: jsonb("payment_verification").$type<PaymentVerificationRecord>(),
+
     /** Staff-only scratchpad, same as orders.internalNote. Never sent to a customer. */
     internalNote: text("internal_note"),
 
@@ -85,6 +103,11 @@ export const preOrderOrders = pgTable(
     // payment track, so that is the one that gets an index.
     index("pre_order_orders_payment_status_idx").on(table.paymentStatus),
     index("pre_order_orders_customer_email_idx").on(table.customerEmail),
+    // Not a uniqueness constraint, deliberately — see
+    // assertTransactionIdUnused in the pre-orders module for why the reuse
+    // check is a query rather than an index. This exists to make that query,
+    // which runs on every placement, a lookup rather than a scan.
+    index("pre_order_orders_transaction_id_idx").on(table.transactionId),
     index("pre_order_orders_customer_name_trgm_idx").using(
       "gin",
       sql`${table.customerName} extensions.gin_trgm_ops`,

@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { paymentMethods } from "./checkout";
 import { paginated, pageQuerySchema } from "./pagination";
+import {
+  paymentVerificationOutcomes,
+  paymentVerificationRecordSchema,
+} from "./payment-verification";
 import { preOrderFulfillmentStatuses, preOrderPaymentStatuses, preOrderSchema } from "./pre-order";
 
 /* --------------------------------------------------------------------------
@@ -79,6 +83,15 @@ export const adminPreOrderSummarySchema = z.object({
    */
   hasPaymentReference: z.boolean(),
   hasInternalNote: z.boolean(),
+  /**
+   * What the last automatic cross-check concluded, or null if none has run.
+   *
+   * On the summary rather than only the detail because it is the column that
+   * tells a member of staff which of the remaining PENDING rows is worth
+   * opening: NOT_FOUND means the SMS has not arrived and there is nothing to
+   * do yet, while UNDERPAID and UNAVAILABLE are both rows that need a person.
+   */
+  verificationOutcome: z.enum(paymentVerificationOutcomes).nullable(),
 });
 
 export type AdminPreOrderSummary = z.infer<typeof adminPreOrderSummarySchema>;
@@ -100,6 +113,16 @@ export const adminPreOrderDetailSchema = preOrderSchema.extend({
   transactionId: z.string().nullable(),
 
   internalNote: z.string().nullable(),
+
+  /**
+   * The full record of the last cross-check against the SMS payment gateway.
+   *
+   * Sent to the panel so the accept/reject decision can be made against the
+   * evidence rather than against a green tick: a member of staff overriding a
+   * MATCHED verdict, or accepting an UNDERPAID one because the customer sent
+   * the rest separately, both need to see the numbers the machine compared.
+   */
+  paymentVerification: paymentVerificationRecordSchema.nullable(),
 
   /**
    * Read off the two state machines at request time, never stored — a
@@ -143,3 +166,24 @@ export const adminPreOrderInternalNoteSchema = z.object({
 });
 
 export type AdminPreOrderInternalNote = z.infer<typeof adminPreOrderInternalNoteSchema>;
+
+/**
+ * The answer to "check this against the gateway again".
+ *
+ * A response type rather than a request one: the re-check takes no arguments
+ * — the transaction ID is already on the row, and letting the caller supply a
+ * different one would turn a verification endpoint into a way to search the
+ * shop's payment history. What comes back is the verdict *and* the pre-order,
+ * because a MATCHED verdict changes the row and the panel must not have to
+ * infer that from the outcome string.
+ */
+export const adminPreOrderVerificationResultSchema = z.object({
+  verification: paymentVerificationRecordSchema,
+  /** Human-readable summary of the verdict, ready to show. */
+  summary: z.string(),
+  /** True when this check is what moved the payment to ACCEPTED. */
+  accepted: z.boolean(),
+  preOrder: adminPreOrderDetailSchema,
+});
+
+export type AdminPreOrderVerificationResult = z.infer<typeof adminPreOrderVerificationResultSchema>;
