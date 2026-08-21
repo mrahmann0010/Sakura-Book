@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ShoppingBag } from "lucide-react";
 
 import { CountBadge } from "@/components/ui";
 import { useCartCount } from "@/hooks/use-cart";
@@ -46,8 +45,26 @@ export function AppNav({ brandHref }: { brandHref?: string } = {}) {
       { kind: "link", label: "Home", href: base },
       { kind: "link", label: "Books", href: `${base}/catalog` },
       { kind: "link", label: "Track Order", href: `${base}/orders` },
+      /* Mobile only. Above the tablet floor the cart keeps its place in the
+         right-hand actions, where the wordmark and the language switcher give
+         it a side of the bar to sit on. Below it, there is no room for a
+         second cluster — so rather than a lone glyph pushed against the edge,
+         the cart joins the items and behaves like one: the pill tracks it, and
+         /cart lights up the way every other route does. */
+      {
+        kind: "link",
+        label: "Cart",
+        href: `${base}/cart`,
+        className: "sm:hidden",
+        content: (
+          <>
+            <span>Cart</span>
+            <CountBadge count={count} className={bump ? "animate-bump" : undefined} />
+          </>
+        ),
+      },
     ];
-  }, [locale]);
+  }, [locale, count, bump]);
 
   return (
     <FloatingNav
@@ -60,15 +77,13 @@ export function AppNav({ brandHref }: { brandHref?: string } = {}) {
           <span className="hidden sm:block">
             <LanguageSwitcher />
           </span>
+          {/* Tablet and up only — below that the cart is a nav item instead,
+              so this would be the same destination twice in one bar. */}
           <Link
             href={`/${locale ?? "en"}/cart`}
-            className="text-13.5 text-ink rounded-pill focus-visible:rounded-pill flex items-center gap-2 px-2 py-2 sm:px-3"
+            className="text-13.5 text-ink rounded-pill focus-visible:rounded-pill hidden items-center gap-2 px-2 py-2 sm:flex sm:px-3"
           >
-            {/* The word gives way to the glyph at mobile. The badge cannot
-                stand alone there — CountBadge renders nothing at zero, which
-                would leave an empty target. */}
-            <ShoppingBag aria-hidden className="size-4 sm:hidden" strokeWidth={1.5} />
-            <span className="sr-only sm:not-sr-only">Cart</span>
+            <span>Cart</span>
             <CountBadge count={count} className={bump ? "animate-bump" : undefined} />
           </Link>
         </>

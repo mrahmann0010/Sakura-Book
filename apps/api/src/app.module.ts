@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { join } from "node:path";
 import { CommonModule } from "./common/common.module";
 import { validateEnv } from "./config/env.schema";
+import { AdminModule } from "./admin";
 import { CatalogModule } from "./catalog";
 import { CouponsModule } from "./coupons";
 import { DbModule } from "./db/db.module";
@@ -34,6 +35,15 @@ import { ShippingModule } from "./shipping";
     PricingModule,
     OrdersModule,
     PaymentsModule,
+
+    /**
+     * Last of the bounded contexts, because admin reads and writes all of
+     * them — it is the one module allowed to depend on everything above it,
+     * and nothing above it may depend on admin. The day a storefront service
+     * imports something from here, the arrow has been reversed and the
+     * ordering in this list has stopped documenting anything.
+     */
+    AdminModule,
 
     HealthModule,
   ],

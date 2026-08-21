@@ -93,7 +93,8 @@ export function CartView({ locale }: { locale: Locale }) {
      in that gap would flash "your cart is empty" at someone whose cart is
      not. Only render it once a quote has actually come back with nothing in
      it — or there was never anything to quote. */
-  if (!cart.hydrated || cart.quoting) return <CartSkeleton label={t("cart.loading")} />;
+  if (!cart.hydrated || (cart.quoting && cart.lines.length === 0))
+    return <CartSkeleton label={t("cart.loading")} />;
 
   if (cart.isEmpty) {
     return (
@@ -118,10 +119,22 @@ export function CartView({ locale }: { locale: Locale }) {
      cannot end up formatted for a different locale than the total below it. */
   const money = intlLocale(locale);
 
+  /* `cart.lines` is the last answer from POST /cart/quote, not Redux. When a
+     removal commits, the requote for the shortened cart is briefly in flight
+     and `keepPreviousData` keeps handing back the quote that still contains
+     the removed book — so without this filter the row would reappear at full
+     opacity, and the subtotal jump back up, for exactly one round-trip. That
+     is the flash. `cart.entries` changes in the same tick as the dispatch, so
+     a line the cart no longer holds is hidden immediately; a line still
+     staged for removal stays visible so Add back has something to undo. */
+  const entryIds = new Set(cart.entries.map((entry) => entry.bookId));
+  const visibleLines = cart.lines.filter(
+    (line) => entryIds.has(line.book.id) || pendingRemovals.has(line.book.id),
+  );
   /* Totals are priced off the lines that are not staged for removal, so the
      subtotal drops the instant Remove is clicked — not five seconds later
      when the removal actually commits to Redux. */
-  const activeLines = cart.lines.filter((line) => !pendingRemovals.has(line.book.id));
+  const activeLines = visibleLines.filter((line) => !pendingRemovals.has(line.book.id));
   const totals = priceCart(activeLines);
 
   const rows = summaryLines(
@@ -188,7 +201,7 @@ export function CartView({ locale }: { locale: Locale }) {
             {/* Pending removals sink to the bottom rather than disappearing
                 or collapsing in place — a stable sort keeps every other row's
                 relative order untouched. */}
-            {[...cart.lines]
+            {[...visibleLines]
               .sort(
                 (a, b) =>
                   Number(pendingRemovals.has(a.book.id)) - Number(pendingRemovals.has(b.book.id)),

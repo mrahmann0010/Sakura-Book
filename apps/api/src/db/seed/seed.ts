@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { join } from "node:path";
 import postgres from "postgres";
 import * as schema from "../schema";
+import { seedAdmin } from "./admin";
 import { seedReference } from "./reference";
 import { seedSampleCatalog } from "./sample-catalog";
 
@@ -17,6 +18,13 @@ import { seedSampleCatalog } from "./sample-catalog";
  * deploy step, because two app instances booting at once must not both try to
  * migrate — folding the two together is how that guarantee gets lost.
  */
+/** `--flag=value` from argv, for the two bootstrap options. */
+function argumentValue(flag: string): string | undefined {
+  const match = process.argv.find((argument) => argument.startsWith(`${flag}=`));
+
+  return match?.slice(flag.length + 1) || undefined;
+}
+
 async function main(): Promise<void> {
   process.loadEnvFile(join(__dirname, "..", "..", "..", ".env"));
 
@@ -39,6 +47,34 @@ async function main(): Promise<void> {
   try {
     await seedReference(db);
     console.log("Seeded reference data: delivery regions, categories.");
+
+    /**
+     * The bootstrap admin, only when an email is supplied. Unconditionally
+     * creating one would put an account with a known-shape address into every
+     * environment this script has ever been run against, including production.
+     *
+     *   npm run db:seed -- --admin-email=you@shop.com --admin-name="Your Name"
+     */
+    const adminEmail = argumentValue("--admin-email");
+
+    if (adminEmail) {
+      const result = await seedAdmin(db, {
+        email: adminEmail,
+        name: argumentValue("--admin-name") ?? adminEmail,
+        password: process.env.ADMIN_BOOTSTRAP_PASSWORD,
+      });
+
+      if (!result.created) {
+        console.log(`Admin ${result.email} already exists — left unchanged.`);
+      } else if (result.password) {
+        // Printed once and never recoverable. Deliberately not logged through
+        // pino: this must not end up in a structured log shipper.
+        console.log(`\nCreated admin ${result.email}`);
+        console.log(`Password (shown once): ${result.password}\n`);
+      } else {
+        console.log(`Created admin ${result.email} with ADMIN_BOOTSTRAP_PASSWORD.`);
+      }
+    }
 
     /**
      * The guard, and it is the point of the file being split in two.

@@ -4,6 +4,7 @@ import { SHIPPING_CONFIG, shippingConfigFrom } from "../config/shipping.config";
 import { RegionsService } from "./regions.service";
 import { ShippingController } from "./shipping.controller";
 import { ShippingPolicy } from "./shipping.policy";
+import { ShippingTermsService } from "./shipping-terms.service";
 
 /**
  * Postage: what it costs, when it is waived, and where the shop delivers.
@@ -22,8 +23,9 @@ import { ShippingPolicy } from "./shipping.policy";
       inject: [ConfigService],
     },
     ShippingPolicy,
+    ShippingTermsService,
     RegionsService,
   ],
-  exports: [ShippingPolicy, RegionsService],
+  exports: [ShippingPolicy, ShippingTermsService, RegionsService],
 })
 export class ShippingModule {}

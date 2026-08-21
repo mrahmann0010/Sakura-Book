@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { InventoryService } from "./inventory.service";
 import { SalesRollupListener } from "./sales-rollup.listener";
+import { UnitsSoldReconciler } from "./units-sold-reconciler";
 
 /**
  * Deliberately has no controller. Stock is never adjusted by an anonymous
@@ -14,7 +15,7 @@ import { SalesRollupListener } from "./sales-rollup.listener";
  * this design bends on purpose.
  */
 @Module({
-  providers: [InventoryService, SalesRollupListener],
-  exports: [InventoryService],
+  providers: [InventoryService, SalesRollupListener, UnitsSoldReconciler],
+  exports: [InventoryService, UnitsSoldReconciler],
 })
 export class InventoryModule {}

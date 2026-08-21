@@ -5,6 +5,7 @@ import "../globals.css";
 import { I18nProvider } from "@/i18n/client";
 import { locales, type Locale } from "@/i18n/settings";
 import { QueryProvider } from "@/lib/api/query-provider";
+import { localeAlternates, siteUrl } from "@/lib/site";
 import { StoreProvider } from "@/store/provider";
 
 export function generateStaticParams() {
@@ -28,10 +29,36 @@ const publicSans = Public_Sans({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: "Marginalia",
-  description: "A small catalog of books, chosen by hand and posted from Bristol.",
-};
+/* Per-locale rather than a module constant, because `alternates` needs to know
+   which locale it is the canonical of, and the title template has to be set
+   somewhere every page inherits it. Pages below override `title` alone and get
+   the template, the description and the Open Graph defaults for free. */
+export async function generateMetadata({ params }: LayoutProps<"/[locale]">): Promise<Metadata> {
+  const { locale } = (await params) as { locale: Locale };
+  const description = "A small catalog of books, chosen by hand and posted from Bristol.";
+
+  return {
+    /* Makes every relative URL in metadata below — and in the pages — resolve
+       against the real origin instead of being emitted as a path, which is not
+       a valid og:url. */
+    metadataBase: new URL(siteUrl()),
+    title: {
+      default: "Marginalia",
+      template: "%s · Marginalia",
+    },
+    description,
+    alternates: localeAlternates(locale),
+    openGraph: {
+      type: "website",
+      siteName: "Marginalia",
+      locale,
+      title: "Marginalia",
+      description,
+      url: localeAlternates(locale).canonical,
+    },
+    twitter: { card: "summary_large_image" },
+  };
+}
 
 export default async function RootLayout({ children, params }: LayoutProps<"/[locale]">) {
   const { locale } = (await params) as { locale: Locale };

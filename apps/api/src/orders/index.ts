@@ -9,6 +9,9 @@ export { OrdersModule } from "./orders.module";
 export { CheckoutService } from "./checkout.service";
 export { OrdersService } from "./orders.service";
 export { toOrderResponse, type OrderRow } from "./order.mapper";
+// The shared read shape, so the admin detail view cannot assemble an order
+// differently from the way checkout and guest lookup assemble theirs.
+export { findOrder } from "./order.query";
 export { generateOrderNumber } from "./order-number";
 export { ORDER_STATUS_CHANGED, type OrderStatusChangedEvent } from "./order.events";
 export {
@@ -16,6 +19,7 @@ export {
   STOCK_HELD_STATUSES,
   canTransition,
   isTerminal,
+  releasesStock,
   type OrderStatus,
 } from "./order-status.machine";
 export {

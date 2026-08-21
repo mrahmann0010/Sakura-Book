@@ -5,7 +5,7 @@ import { CouponsService } from "../coupons";
 import { DbService } from "../db/db.service";
 import type { Executor } from "../db/db.types";
 import type { PricedCart, PricedLine } from "./priced-cart";
-import { RegionsService, ShippingPolicy } from "../shipping";
+import { RegionsService, ShippingPolicy, ShippingTermsService } from "../shipping";
 
 /**
  * The pricing authority.
@@ -28,6 +28,7 @@ export class PricingService {
     private readonly booksService: BooksService,
     private readonly couponsService: CouponsService,
     private readonly shippingPolicy: ShippingPolicy,
+    private readonly shippingTermsService: ShippingTermsService,
     private readonly regionsService: RegionsService,
   ) {}
 
@@ -82,13 +83,21 @@ export class PricingService {
        "free shipping" is explicitly not expressible in this coupon model, see
        CouponsService.computeDiscountCents. If that is ever the wrong call it is
        one argument on the next line, not a rewrite. */
-    const regionRateCents = await this.regionsService.deliveryRateFor(options.region, executor);
+    /* Both resolved through the same executor as everything else in this
+       method, so that when checkout calls it inside its transaction the
+       postage rules it prices against are the ones committed at that moment —
+       not ones an admin changed while the order was being written. */
+    const [regionRateCents, terms] = await Promise.all([
+      this.regionsService.deliveryRateFor(options.region, executor),
+      this.shippingTermsService.current(executor),
+    ]);
+
     const delivery = this.shippingPolicy.quote(
       subtotalCents - discountCents,
       lines.length,
+      terms,
       regionRateCents,
     );
-    const terms = this.shippingPolicy.terms;
 
     return {
       currency: terms.currency,

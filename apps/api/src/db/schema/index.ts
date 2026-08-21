@@ -14,6 +14,12 @@ export * from "./catalog/book-author";
 export * from "./catalog/book-category";
 export * from "./catalog/review";
 
+export * from "./admin/admin-user";
+export * from "./admin/admin-session";
+export * from "./admin/audit-log";
+
+export * from "./settings/shop-settings";
+
 export * from "./marketing/coupon";
 
 export * from "./shipping/delivery-region";

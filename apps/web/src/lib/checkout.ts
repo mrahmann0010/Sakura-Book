@@ -35,18 +35,16 @@ import { acceptedPaymentMethods, type PaymentMethod } from "@sakura/contracts";
 export const availablePaymentMethods: readonly PaymentMethod[] = acceptedPaymentMethods;
 
 /**
- * Delivery regions. Still a placeholder list, and deliberately not moved into
- * the contract: the regions table (Phase 1) and GET /shipping/regions own this
- * vocabulary, so freezing today's five values into a shared package would make
- * adding a sixth a package release. `region` is a slug string in the schema
- * and is validated server-side against the table.
+ * Delivery zones. Slugs match the `delivery_regions` rows seeded in
+ * apps/api/src/db/seed/reference.ts and are validated server-side against
+ * that table — this is the label lookup, not the source of truth.
+ *
+ * The customer no longer picks one: `deliveryZoneFor` in ./bd-geo derives it
+ * from the division they select in the address form.
  */
 export const regions = [
-  { value: "dhaka", label: "Dhaka" },
-  { value: "chattogram", label: "Chattogram" },
-  { value: "sylhet", label: "Sylhet" },
-  { value: "khulna", label: "Khulna" },
-  { value: "rajshahi", label: "Rajshahi" },
+  { value: "inside-dhaka", label: "Inside Dhaka" },
+  { value: "outside-dhaka", label: "Outside Dhaka" },
 ] as const;
 
 export type Region = (typeof regions)[number]["value"];

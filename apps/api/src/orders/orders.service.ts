@@ -12,6 +12,7 @@ import { findOrder } from "./order.query";
 import {
   STOCK_HELD_STATUSES,
   canTransition,
+  releasesStock,
   type OrderStatus,
 } from "./order-status.machine";
 import { InvalidStatusTransitionError } from "./order.errors";
@@ -96,6 +97,15 @@ export class OrdersService {
    * The update is guarded on the status we believe the order is in, so two
    * concurrent transitions cannot both succeed: the loser matches zero rows
    * and gets the same refusal as an illegal transition.
+   *
+   * **It also returns stock**, when the move is one that releases it — see
+   * `releasesStock`. That lives here rather than in each caller because there
+   * are now three of them (the guest cancel, the admin panel, a payment
+   * reversal) and the failure mode of forgetting is silent: the order looks
+   * correctly cancelled and the copies are simply gone from the shelf, with
+   * nothing in any log to say so. Putting it behind the single write path for
+   * `orders.status` makes "cancelled without restocking" a state this codebase
+   * cannot express.
    */
   async transition(
     orderId: string,
@@ -127,9 +137,40 @@ export class OrdersService {
       throw new InvalidStatusTransitionError(orderId, current.status, next);
     }
 
+    if (releasesStock(current.status, next)) {
+      await this.restoreStock(orderId, tx);
+    }
+
     await tx.insert(orderStatusHistory).values({ orderId, status: next, note: note ?? null });
 
     return next;
+  }
+
+  /**
+   * Put an order's copies back on the shelf.
+   *
+   * Private, and reachable only through `transition`, so stock cannot be
+   * returned except as part of a status change that justifies it — the
+   * inverse guarantee to the one InventoryService.increment's comment asks
+   * for. Calling it twice for one order would invent inventory, and the only
+   * caller is guarded by the same zero-rows check that serialises concurrent
+   * transitions.
+   */
+  private async restoreStock(orderId: string, tx: Transaction): Promise<void> {
+    const items = await tx.query.orderItems.findMany({
+      where: (item, { eq: equals }) => equals(item.orderId, orderId),
+      columns: { bookId: true, quantity: true },
+    });
+
+    for (const item of items) {
+      // A null bookId means the title was deleted outright rather than
+      // delisted. There is no row to credit, and the order line keeps its
+      // snapshot regardless — this is the one case where stock cannot be
+      // returned, and it is silent because there is nothing to say.
+      if (!item.bookId) continue;
+
+      await this.inventoryService.increment(item.bookId, item.quantity, tx);
+    }
   }
 
   /**
@@ -192,21 +233,9 @@ export class OrdersService {
         throw new InvalidStatusTransitionError(locked.id, locked.status, "CANCELLED");
       }
 
-      const items = await tx.query.orderItems.findMany({
-        where: (item, { eq: equals }) => equals(item.orderId, locked.id),
-        columns: { bookId: true, quantity: true },
-      });
-
-      for (const item of items) {
-        // A null bookId means the title was deleted outright rather than
-        // delisted. There is no row to credit, and the order line keeps its
-        // snapshot regardless — this is the one case where stock cannot be
-        // returned, and it is silent because there is nothing to say.
-        if (!item.bookId) continue;
-
-        await this.inventoryService.increment(item.bookId, item.quantity, tx);
-      }
-
+      // Stock comes back inside `transition`, not here — see its comment. This
+      // method used to do it by hand, which worked precisely as long as it was
+      // the only way to cancel an order.
       await this.transition(locked.id, "CANCELLED", tx, request.reason ?? "Cancelled by customer");
 
       return locked.status;
@@ -258,6 +287,26 @@ export class OrdersService {
     this.emitStatusChange({ orderId, orderNumber, from, to: next });
 
     return next;
+  }
+
+  /**
+   * Announce a status change committed by a caller that owned the transaction.
+   *
+   * The public counterpart to the private emitter below, for the one shape
+   * `transitionAndCommit` cannot serve: a caller that has to write something
+   * else in the *same* transaction as the transition — the admin refund, which
+   * writes a payment row that must not commit without the status change that
+   * explains it. Such a caller drives `transition` directly, so nothing emits
+   * on its behalf.
+   *
+   * Named for what it is rather than exposing `emitStatusChange`, because the
+   * contract is "you have already committed". Calling it before commit
+   * reintroduces exactly the bug the emit-after-commit rule exists to prevent,
+   * and a method called `announce` reads wrong at a call site where the commit
+   * has not happened yet.
+   */
+  announceStatusChange(event: OrderStatusChangedEvent): void {
+    this.emitStatusChange(event);
   }
 
   /**

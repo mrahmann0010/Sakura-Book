@@ -54,3 +54,27 @@ export const paymentStatusEnum = pgEnum("payment_status", [
   "FAILED",
   "REFUNDED",
 ]);
+
+/**
+ * Staff roles. SCREAMING_SNAKE like the other internal enums — unlike
+ * `payment_method`, these are our words, not a contract with a form control.
+ * The values mirror `ADMIN_ROLES` in @sakura/contracts; see the comment there
+ * for why there are two of them and not a permissions table.
+ */
+export const adminRoleEnum = pgEnum("admin_role", ["STAFF", "ADMIN"]);
+
+/**
+ * What an audited action did. Coarse on purpose: the *what* is already in the
+ * before/after diff, so this column exists to make "show me every deletion" a
+ * cheap indexed query rather than to re-describe the change.
+ */
+export const auditActionEnum = pgEnum("audit_action", [
+  "CREATE",
+  "UPDATE",
+  "DELETE",
+  "LOGIN",
+  "LOGIN_FAILED",
+  "LOGOUT",
+  "TRANSITION",
+  "ADJUST",
+]);

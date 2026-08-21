@@ -55,6 +55,31 @@ export const STOCK_HELD_STATUSES: readonly OrderStatus[] = Object.freeze([
   "PROCESSING",
 ]);
 
+/**
+ * Whether moving `from` → `to` puts copies back on the shelf.
+ *
+ * Derived from the two structures above rather than being a third list to keep
+ * in step: stock is held in exactly the STOCK_HELD_STATUSES, and it stops
+ * being held when the order reaches a status with nowhere left to go. So an
+ * order abandoned before dispatch — cancelled, or refunded after payment but
+ * before picking — returns its copies, and one that has physically left the
+ * building does not, because the copies left with it.
+ *
+ * The case worth naming is PAYMENT_CONFIRMED → REFUNDED. It is easy to read
+ * "refund" as always meaning the goods are gone, and for SHIPPED and DELIVERED
+ * it does. For an order refunded before dispatch it does not: those copies are
+ * still on the shelf, and leaving them decremented is inventory the shop
+ * cannot sell and cannot see.
+ *
+ * `OrdersService.transition` applies this itself, so no caller can move an
+ * order to a terminal status and forget the stock — which is the bug
+ * STOCK_HELD_STATUSES' comment warns about, closed by construction rather than
+ * by remembering.
+ */
+export function releasesStock(from: OrderStatus, to: OrderStatus): boolean {
+  return STOCK_HELD_STATUSES.includes(from) && isTerminal(to);
+}
+
 export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
   return ORDER_STATUS_TRANSITIONS[from].includes(to);
 }

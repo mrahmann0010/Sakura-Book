@@ -20,6 +20,8 @@ export type ShippingConfig = {
   readonly flatRateCents: number;
   /** Subtotal at or above which postage is waived, in minor units. */
   readonly freeDeliveryThresholdCents: number;
+  /** The division the shop currently ships from. See WAREHOUSE_DIVISION. */
+  readonly originDivision: string;
 };
 
 /**
@@ -34,5 +36,6 @@ export function shippingConfigFrom(config: ConfigService<Env, true>): ShippingCo
     currency: config.get("CURRENCY", { infer: true }),
     flatRateCents: config.get("DELIVERY_FLAT_CENTS", { infer: true }),
     freeDeliveryThresholdCents: config.get("FREE_DELIVERY_THRESHOLD_CENTS", { infer: true }),
+    originDivision: config.get("WAREHOUSE_DIVISION", { infer: true }),
   });
 }

@@ -29,6 +29,34 @@
       "when": 1787041174538,
       "tag": "0003_lock_down_public_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787224042180,
+      "tag": "0004_admin_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787227899948,
+      "tag": "0005_admin_order_queue",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787232438022,
+      "tag": "0006_shop_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787289710661,
+      "tag": "0007_fresh_ikaris",
+      "breakpoints": true
     }
   ]
 }

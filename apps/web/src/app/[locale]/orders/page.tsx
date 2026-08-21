@@ -9,6 +9,8 @@ import { localizeLinks, routes } from "@/lib/routes";
 
 export const metadata: Metadata = {
   title: "Track your order · Marginalia",
+  /* A personal view of one shopper's state — nothing here belongs in an index. */
+  robots: { index: false, follow: true },
 };
 
 export default async function TrackOrderPage({ params }: PageProps<"/[locale]/orders">) {

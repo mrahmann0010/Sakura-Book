@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { orderStatusEnum, paymentMethodEnum } from "../enums";
 import { coupons } from "../marketing/coupon";
@@ -93,6 +93,40 @@ export const orders = pgTable(
   (table) => [
     index("orders_customer_email_idx").on(table.customerEmail),
     index("orders_customer_phone_idx").on(table.customerPhone),
+
+    /**
+     * The admin fulfilment queue's index.
+     *
+     * `(status, created_at desc)` in that order because the queue is almost
+     * always filtered by status first and then read newest-first within it —
+     * "everything still to pack, most recent at the top". The reverse order
+     * would make the status filter a scan of every order ever placed.
+     *
+     * The sort direction is in the index rather than left to Postgres to
+     * reverse. It can walk a btree backwards, but not while also honouring the
+     * `id` tiebreak that keeps offset pagination stable — and an unstable
+     * fulfilment queue silently omits orders between pages.
+     */
+    index("orders_status_created_idx").on(table.status, table.createdAt.desc(), table.id),
+
+    /** The unfiltered queue, and the dashboard's "orders today". */
+    index("orders_created_idx").on(table.createdAt.desc(), table.id),
+
+    /**
+     * Trigram index for the queue's free-text search over the customer's name.
+     *
+     * Same reasoning and the same schema-qualified operator class as
+     * `books_title_trgm_idx` — see that comment for why `extensions.` is
+     * spelled out. Email and phone already have btree indexes above; those
+     * serve the exact-match half of the search, and a leading-wildcard ILIKE
+     * on them falls back to a scan that is acceptable at this table's size.
+     * The name has no index at all otherwise, and it is the field staff
+     * actually search by.
+     */
+    index("orders_customer_name_trgm_idx").using(
+      "gin",
+      sql`${table.customerName} extensions.gin_trgm_ops`,
+    ),
   ],
 );
 

@@ -46,7 +46,6 @@ import { ShippingFields } from "./shipping-fields";
 export function CheckoutView({ locale }: { locale: Locale }) {
   const { t } = useTranslation();
   const path = routes(locale);
-  const cart = useCart();
 
   const [placedOrder, setPlacedOrder] = useState<{ id: string; email: string } | null>(null);
 
@@ -65,6 +64,11 @@ export function CheckoutView({ locale }: { locale: Locale }) {
   /* useWatch rather than `watch()`: watch returns a fresh function each render,
      which opts the whole component out of the React Compiler's memoisation. */
   const method = useWatch({ control, name: "method" }) as AcceptedPaymentMethod;
+  /* The region the address form derived from the chosen division — undefined
+     until then, so the cart quotes at the flat rate exactly as it did before
+     an address existed, and only re-quotes once there is a real zone to price. */
+  const region = useWatch({ control, name: "region" });
+  const cart = useCart(region || undefined);
 
   async function placeOrder(values: CheckoutValues) {
     /* The seam the API takes over: POST the validated values plus the cart
@@ -228,7 +232,7 @@ export function CheckoutView({ locale }: { locale: Locale }) {
             onSubmit={handleSubmit(placeOrder)}
             className="mt-9 flex flex-col gap-10"
           >
-            <ShippingFields register={register} errors={errors} />
+            <ShippingFields register={register} errors={errors} setValue={setValue} />
 
             <PaymentSection
               register={register}

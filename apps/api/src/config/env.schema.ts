@@ -112,6 +112,18 @@ export const envSchema = z.object({
   FREE_DELIVERY_THRESHOLD_CENTS: z.coerce.number().int().nonnegative().default(150000),
 
   /**
+   * The division the shop currently ships from. The fallback for
+   * `shop_settings.origin_division` — same "environment until saved" relationship
+   * as the two constants above.
+   *
+   * Zone pricing compares a customer's destination division against this
+   * rather than assuming Dhaka: the shipment point moves (a different
+   * warehouse, a publisher shipping direct), and this is what lets it move
+   * without a code deploy once staff can edit it from Settings.
+   */
+  WAREHOUSE_DIVISION: z.string().trim().min(1).default("dhaka"),
+
+  /**
    * Connection string for the Redis that docker compose already provisions.
    *
    * Optional, and the throttler falls back to per-instance in-memory counters
@@ -148,12 +160,128 @@ export const envSchema = z.object({
 
   /** Seconds an idle pooled connection is kept before being closed. */
   DATABASE_IDLE_TIMEOUT: z.coerce.number().int().nonnegative().default(30),
+  /**
+   * IANA zone the shop's business day runs on.
+   *
+   * The dashboard's "today", "last 7 days" and "last 30 days" are computed
+   * against this rather than against UTC, and the difference is not cosmetic:
+   * Dhaka is UTC+6, so every order placed after 6pm local time falls on the
+   * *next* UTC day. A dashboard reading in UTC would show a shop's busiest
+   * hours as tomorrow's takings, and "orders today" would be wrong by a
+   * quarter of the day, every day.
+   *
+   * Passed to Postgres as an `AT TIME ZONE` argument, so the boundaries are
+   * computed where the rows are and daylight-saving rules — irrelevant for
+   * Dhaka, but not for a zone this might later be set to — are the database's
+   * problem rather than a date library's.
+   */
+  SHOP_TIMEZONE: z.string().min(1).default("Asia/Dhaka"),
+
+  /**
+   * Signing key for admin access tokens. HMAC-SHA256, so this is a shared
+   * secret rather than a key pair — there is one service issuing and one
+   * verifying, and asymmetric signing solves a distribution problem this
+   * deployment does not have.
+   *
+   * Required in production and optional elsewhere, which is the reverse of how
+   * most secrets are treated and is deliberate: a *default* signing key is
+   * worse than a missing one, because it silently works. `validateEnv` refuses
+   * to boot a production process without it (see the refinement below), while
+   * a developer running the API against a local Postgres gets a random
+   * per-boot key and is signed out on every restart — mildly annoying, and
+   * annoying in the direction that cannot leak.
+   *
+   * 32 characters minimum: `openssl rand -base64 32`.
+   */
+  ADMIN_JWT_SECRET: z.string().min(32).optional(),
+
+  /**
+   * Access-token lifetime in seconds. Fifteen minutes.
+   *
+   * Short because the token is a bearer credential the server does not consult
+   * a table for — its lifetime is the window in which a stolen one keeps
+   * working. It is not the *whole* revocation story: `admin_users.sessions_valid_from`
+   * invalidates outstanding tokens immediately, and this bounds the damage
+   * from a leak nobody has noticed yet.
+   *
+   * Not shorter, because every expiry costs a refresh round-trip, and a value
+   * measured in seconds turns the refresh endpoint into the busiest route in
+   * the admin panel.
+   */
+  ADMIN_ACCESS_TOKEN_TTL: z.coerce.number().int().positive().default(900),
+
+  /**
+   * Refresh-token lifetime in seconds. Thirty days — how long a staff member
+   * stays signed in on a device they keep using. Enforced in the database
+   * (`admin_sessions.expires_at`) as well as in the cookie, because a cookie
+   * lifetime is a request the browser is free to ignore.
+   */
+  ADMIN_REFRESH_TOKEN_TTL: z.coerce.number().int().positive().default(2592000),
+
+  /**
+   * Consecutive failed logins before an account is locked, and for how long.
+   *
+   * This is a *per-account* control and the throttler is a per-IP one; they
+   * catch different attacks and neither substitutes for the other. The
+   * throttler stops one address grinding many passwords; this stops a
+   * distributed attempt on one known address, where every request comes from a
+   * different IP and no throttle bucket ever fills.
+   *
+   * Locking rather than escalating delay because there are a dozen accounts
+   * and a real staff member who trips it can be unlocked by a colleague — and
+   * a fifteen-minute wait is a support conversation, not an outage.
+   */
+  ADMIN_MAX_FAILED_LOGINS: z.coerce.number().int().positive().default(5),
+  ADMIN_LOCKOUT_SECONDS: z.coerce.number().int().positive().default(900),
+
+  /**
+   * Whether session cookies carry `Secure`.
+   *
+   * Defaults to on outside development. Split from NODE_ENV rather than
+   * derived from it because the failure is silent and confusing in both
+   * directions: `Secure` on a plain-HTTP staging box means the browser accepts
+   * the login response and then never sends the cookie back, which presents as
+   * "login succeeds and then I am logged out" rather than as a cookie problem.
+   */
+  ADMIN_COOKIE_SECURE: z
+    .union([z.boolean(), z.enum(["true", "false"])])
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value === true || value === "true")),
+
+  /**
+   * Domain for the session cookies. Unset means host-only, which is correct
+   * when the admin panel is a route group in the Next.js app behind the same
+   * origin as the API. Set it only for a genuinely separate admin host, and
+   * note that a parent domain here shares the cookie with every subdomain.
+   */
+  ADMIN_COOKIE_DOMAIN: z.string().optional(),
+});
+
+/**
+ * Cross-field rules the object schema cannot express.
+ *
+ * Kept as a refinement rather than as an `if` in `validateEnv`, so the failure
+ * arrives in the same issue list as every other environment problem — an
+ * operator fixing a bad `.env` should see all of it at once rather than
+ * peeling off one error per restart.
+ */
+export const envSchemaChecked = envSchema.superRefine((env, ctx) => {
+  if (env.NODE_ENV === "production" && !env.ADMIN_JWT_SECRET) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["ADMIN_JWT_SECRET"],
+      message:
+        "Required in production. Generate one with `openssl rand -base64 32`. " +
+        "Without it the API would sign admin sessions with a key that changes " +
+        "every restart, logging staff out on each deploy.",
+    });
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;
 
 export function validateEnv(raw: Record<string, unknown>): Env {
-  const parsed = envSchema.safeParse(raw);
+  const parsed = envSchemaChecked.safeParse(raw);
 
   if (!parsed.success) {
     const issues = parsed.error.issues

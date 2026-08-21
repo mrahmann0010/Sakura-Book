@@ -22,6 +22,7 @@ import { toSearchParams } from "@/lib/catalog";
 import { FREE_DELIVERY_THRESHOLD } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
+import { localeAlternates, siteUrl } from "@/lib/site";
 
 /* Book detail, per the Detail Wireframe: 320px cover · content · 300px buy
    rail. The cards in the catalogue have always linked here; until now nothing
@@ -53,12 +54,24 @@ async function loadBook(slug: string) {
 export async function generateMetadata({
   params,
 }: PageProps<"/[locale]/books/[slug]">): Promise<Metadata> {
-  const { slug } = await params;
+  const { locale, slug } = (await params) as { locale: Locale; slug: string };
   const book = await loadBook(slug);
+
+  const description = book.description.slice(0, 160);
 
   return {
     title: book.title,
-    description: book.description.slice(0, 160),
+    description,
+    alternates: localeAlternates(locale, `/books/${slug}`),
+    openGraph: {
+      type: "article",
+      title: book.title,
+      description,
+      url: localeAlternates(locale, `/books/${slug}`).canonical,
+      images: book.coverImageUrl
+        ? [{ url: book.coverImageUrl, alt: book.coverImageAlt ?? book.title }]
+        : undefined,
+    },
   };
 }
 
@@ -103,9 +116,7 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
             at or below the current one is a data error, and printing it
             would read as a price rise dressed as a discount. */}
         {book.compareAtPriceCents && book.compareAtPriceCents > book.priceCents ? (
-          <span className="text-13 text-muted line-through">
-            {money(book.compareAtPriceCents)}
-          </span>
+          <span className="text-13 text-muted line-through">{money(book.compareAtPriceCents)}</span>
         ) : null}
       </p>
 
@@ -132,6 +143,46 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
     </Card>
   );
 
+  /* schema.org Book + Offer, which is what turns a result into a rich one:
+     price, currency and availability in the search listing rather than a blue
+     link. Built from the same `book` the page renders, so it can never claim a
+     price the page does not show — the one rule structured data has. */
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Book",
+    name: book.title,
+    ...(book.subtitle ? { alternateName: book.subtitle } : {}),
+    description: book.description,
+    inLanguage: book.language,
+    ...(book.isbn13 ? { isbn: book.isbn13 } : {}),
+    ...(book.pageCount ? { numberOfPages: book.pageCount } : {}),
+    ...(book.publishedDate ? { datePublished: book.publishedDate } : {}),
+    ...(book.publisher
+      ? { publisher: { "@type": "Organization", name: book.publisher.name } }
+      : {}),
+    ...(book.authors.length > 0
+      ? { author: book.authors.map((name) => ({ "@type": "Person", name })) }
+      : {}),
+    ...(book.coverImageUrl ? { image: book.coverImageUrl } : {}),
+    ...(book.rating != null && book.ratingCount
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: book.rating,
+            reviewCount: book.ratingCount,
+          },
+        }
+      : {}),
+    offers: {
+      "@type": "Offer",
+      url: `${siteUrl()}${routes(locale).book(slug)}`,
+      price: (book.priceCents / 100).toFixed(2),
+      priceCurrency: "GBP",
+      availability:
+        book.stockQuantity > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+    },
+  };
+
   return (
     <PageShell
       header={<AppNav />}
@@ -143,6 +194,13 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
         />
       }
     >
+      <script
+        type="application/ld+json"
+        /* Serialised, not spread into props: this is a <script> body, and JSON
+           is the only thing that may go in it. */
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
       <Shell className="py-10 lg:py-14">
         <Breadcrumbs
           items={[
