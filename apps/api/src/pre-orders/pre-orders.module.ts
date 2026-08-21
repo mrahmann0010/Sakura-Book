@@ -8,11 +8,13 @@ import { PreOrdersController } from "./pre-orders.controller";
 @Module({
   controllers: [PreOrderBooksController, PreOrdersController],
   providers: [PreOrderBooksService, PreOrderCheckoutService, PreOrderPaymentVerificationService],
-  // Exported so AdminModule's pre-order feature can read the active book
-  // through the same service the storefront uses, rather than a second copy.
-  // PreOrderPaymentVerificationService goes out too: the admin desk's
-  // "re-check payment" button runs the same code path as the automatic check,
-  // rather than a second implementation that could drift from it.
+  /**
+   * Both consumed by AdminModule, which imports this module.
+   *
+   * PreOrderPaymentVerificationService in particular: the desk's "re-check
+   * payment" button runs the same code path as the automatic check at
+   * placement, rather than a second implementation that could drift from it.
+   */
   exports: [PreOrderBooksService, PreOrderPaymentVerificationService],
 })
 export class PreOrdersModule {}
