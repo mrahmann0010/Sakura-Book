@@ -100,7 +100,7 @@ export default async function Catalog({ params, searchParams }: PageProps<"/[loc
         <SiteFooter
           blurb="A small catalogue of books, chosen by hand and posted from Bristol."
           columns={footerColumns}
-          note={`© ${new Date().getFullYear()} Marginalia Books`}
+          note={`© ${new Date().getFullYear()} Nihonova Books`}
         />
       }
     >

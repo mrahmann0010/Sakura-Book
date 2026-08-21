@@ -31,7 +31,7 @@ import { localizeLinks, routes } from "@/lib/routes";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Pre-order · Marginalia",
+  title: "Pre-order · Nihonova Books",
 };
 
 /* The one part of the page that waits on the API. Isolated behind its own
@@ -95,7 +95,7 @@ export default async function PreOrderPage({ params }: PageProps<"/[locale]/pre-
             ...column,
             links: localizeLinks(column.links, locale),
           }))}
-          note={`© ${new Date().getFullYear()} Marginalia Books`}
+          note={`© ${new Date().getFullYear()} Nihonova Books`}
         />
       }
     >

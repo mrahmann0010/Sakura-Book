@@ -8,7 +8,7 @@ import { footerColumns } from "@/lib/books";
 import { localizeLinks, routes } from "@/lib/routes";
 
 export const metadata: Metadata = {
-  title: "Track your order · Marginalia",
+  title: "Track your order · Nihonova Books",
   /* A personal view of one shopper's state — nothing here belongs in an index. */
   robots: { index: false, follow: true },
 };
@@ -25,7 +25,7 @@ export default async function TrackOrderPage({ params }: PageProps<"/[locale]/or
         <SiteFooter
           blurb={t("home.hero.subhead")}
           columns={localizeFooter(locale)}
-          note={`© ${new Date().getFullYear()} Marginalia Books`}
+          note={`© ${new Date().getFullYear()} Nihonova Books`}
         />
       }
     >

@@ -26,7 +26,7 @@ export type SiteFooterProps = {
  * page that has one — transactional pages drop the footer entirely.
  */
 export function SiteFooter({
-  brand = "Marginalia",
+  brand = "Nihonova Books",
   blurb,
   columns = [],
   note,

@@ -252,7 +252,7 @@ function useScrolledPast(threshold: number): boolean {
 
 export function FloatingNav({
   items,
-  brand = "Marginalia",
+  brand = "Nihonova Books",
   brandHref = "/",
   actions,
   scrollThreshold = 8,

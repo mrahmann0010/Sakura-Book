@@ -13,7 +13,7 @@ import { routes } from "@/lib/routes";
    between this page and the cart, and it follows from their different jobs. */
 
 export const metadata: Metadata = {
-  title: "Checkout · Marginalia",
+  title: "Checkout · Nihonova Books",
   /* Nothing here should ever be indexed or prefetched into a crawler. */
   robots: { index: false, follow: false },
 };

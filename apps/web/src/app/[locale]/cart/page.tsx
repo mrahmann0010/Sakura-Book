@@ -15,7 +15,7 @@ import type { Locale } from "@/i18n/settings";
    goes away. */
 
 export const metadata: Metadata = {
-  title: "Your cart · Marginalia",
+  title: "Your cart · Nihonova Books",
 };
 
 export default async function Page({ params }: PageProps<"/[locale]/cart">) {

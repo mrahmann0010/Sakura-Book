@@ -22,6 +22,9 @@ export function routes(locale: Locale | string) {
     order: (id: string) => `${base}/orders/${id}`,
     orders: `${base}/orders`,
     refundPolicy: `${base}/refund-policy`,
+    privacyPolicy: `${base}/privacy-policy`,
+    terms: `${base}/terms`,
+    contact: `${base}/contact`,
   } as const;
 }
 

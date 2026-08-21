@@ -20,7 +20,7 @@ export function Eyebrow({
 
 /** The wordmark: 13px, 0.18em, uppercase, 600. */
 export function Wordmark({
-  children = "Marginalia",
+  children = "Nihonova Books",
   as: Tag = "span",
   className,
 }: {

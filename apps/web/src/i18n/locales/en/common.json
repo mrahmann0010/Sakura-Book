@@ -263,6 +263,7 @@
   "refundPolicy": {
     "eyebrow": "Policies",
     "title": "Refund Policy",
+    "onThisPage": "On this page",
     "intro": "We strive to deliver every order accurately and within the promised delivery timeframe. However, if an order cannot be delivered for any reason, or is cancelled where applicable, the following refund policy will apply.",
     "sections": {
       "cancellation": {
@@ -305,6 +306,132 @@
       }
     },
     "note": "Refund eligibility and the refundable amount may vary depending on the type of order, delivery status, and reason for the refund."
+  },
+  "privacyPolicy": {
+    "eyebrow": "Policies",
+    "title": "Privacy Policy",
+    "intro": "We respect your privacy and are committed to protecting your personal information. This policy explains what we collect when you place an order, and how it is used.",
+    "sections": {
+      "collection": {
+        "title": "1. Information We Collect",
+        "body": [
+          "When you place an order, we may collect your name, phone number, email address, delivery address, order details, and any delivery notes you provide.",
+          "For manual payments, we may also collect your payment method, mobile-money sender number, and transaction ID."
+        ]
+      },
+      "use": {
+        "title": "2. How We Use Your Information",
+        "body": [
+          "We use this information only to process and deliver your orders, verify payments, contact you regarding your order, process cancellations, returns and refunds, provide customer support, maintain necessary transaction and accounting records, and prevent fraud and comply with applicable laws.",
+          "We do not sell, rent, or use your personal information for marketing or promotional purposes."
+        ]
+      },
+      "sharing": {
+        "title": "3. Sharing Your Information",
+        "body": [
+          "We may share necessary delivery information, such as your name, phone number and address, with our courier/delivery partners.",
+          "Payment information may be accessed by authorized personnel for payment verification. We do not share your information for unrelated advertising or marketing."
+        ]
+      },
+      "payment": {
+        "title": "4. Payment Information",
+        "body": [
+          "Mobile-money payment details, including transaction IDs and sender numbers, are used only for payment verification, order processing, refunds and dispute resolution. We do not collect or store card details through our current payment process."
+        ]
+      },
+      "retention": {
+        "title": "5. Data Retention & Deletion",
+        "body": [
+          "We retain information only for as long as reasonably necessary for order support, payment verification, refunds, accounting, dispute resolution and legal requirements.",
+          "You may contact us to request correction or deletion of your personal information, subject to applicable legal or business requirements."
+        ]
+      },
+      "cookies": {
+        "title": "6. Cookies & Tracking",
+        "body": [
+          "We currently do not use advertising pixels or analytics tools to track users. Essential cookies may be used for the basic operation and security of the website."
+        ]
+      },
+      "security": {
+        "title": "7. Data Security",
+        "body": [
+          "We take reasonable measures to protect your information from unauthorized access, misuse, loss or disclosure."
+        ]
+      },
+      "updates": {
+        "title": "8. Policy Updates",
+        "body": [
+          "We may update this Privacy Policy when our services, practices or applicable legal requirements change. The updated version will be published on this page."
+        ]
+      }
+    },
+    "note": "For privacy-related questions or requests, please contact us using the details in the footer below."
+  },
+  "terms": {
+    "eyebrow": "Policies",
+    "title": "Terms & Conditions",
+    "intro": "By browsing this site or placing an order, you agree to the following terms.",
+    "sections": {
+      "orders": {
+        "title": "1. Orders & Availability",
+        "body": [
+          "Placing an order is a request to buy, not a guaranteed sale — we may cancel or adjust an order for stock, pricing, or address issues and will let you know. Listed books are subject to availability; a sold-out title is removed rather than back-ordered."
+        ]
+      },
+      "payment": {
+        "title": "2. Pricing & Payment",
+        "body": [
+          "Prices are shown in BDT and may change without notice. For cash on delivery, payment is due to the courier; for bKash, Nagad, Rocket, or bank transfer, an order is confirmed only once payment is verified."
+        ]
+      },
+      "delivery": {
+        "title": "3. Delivery",
+        "body": [
+          "Delivery timeframes are estimates, not guarantees, and depend on your address and the courier. Please double-check your shipping details — we are not responsible for delays caused by an incomplete or incorrect address."
+        ]
+      },
+      "refunds": {
+        "title": "4. Cancellations & Refunds",
+        "body": [
+          "Cancellations, returns, and refunds are handled under our Refund Policy."
+        ]
+      },
+      "conduct": {
+        "title": "5. Fair Use",
+        "body": [
+          "Please order in good faith. We reserve the right to cancel repeated or fraudulent orders, including habitual refusal of cash-on-delivery parcels."
+        ]
+      },
+      "liability": {
+        "title": "6. Liability",
+        "body": [
+          "We are not liable for delays or losses caused by circumstances outside our control, including courier or payment provider outages."
+        ]
+      },
+      "changes": {
+        "title": "7. Changes to These Terms",
+        "body": [
+          "We may update these terms from time to time; the version on this page is the one that applies."
+        ]
+      }
+    },
+    "note": "Questions about these terms? Reach us at info@nihonovaacademy.com."
+  },
+  "contact": {
+    "eyebrow": "Get in touch",
+    "title": "Contact",
+    "intro": "Questions about an order or a book? Reach us any of these ways.",
+    "address": {
+      "label": "Address",
+      "value": "Uttara, Dhaka 1230"
+    },
+    "email": {
+      "label": "Email"
+    },
+    "messenger": {
+      "label": "Messenger",
+      "action": "Message us on Facebook"
+    }
   },
   "errors": {
     "page": {

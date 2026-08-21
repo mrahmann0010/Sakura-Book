@@ -55,7 +55,7 @@ export function BookCover({
 
   return (
     <span aria-hidden className={cn(shape, "flex flex-col justify-between overflow-hidden p-5")}>
-      <span className="eyebrow">Marginalia</span>
+      <span className="eyebrow">Nihonova Books</span>
       <span className="block">
         <span className="text-20 text-ink block font-serif leading-tight">{title}</span>
         {author ? <span className="text-12 text-secondary mt-2 block">{author}</span> : null}

@@ -41,7 +41,7 @@ const publicSans = Public_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Page not found · Marginalia",
+  title: "Page not found · Nihonova Books",
   description: "The page you are looking for does not exist.",
 };
 
@@ -100,7 +100,7 @@ export default function GlobalNotFound() {
                locale is all we know. */
             links: localizeLinks(column.links, defaultLocale),
           }))}
-          note={`© ${new Date().getFullYear()} Marginalia Books`}
+          note={`© ${new Date().getFullYear()} Nihonova Books`}
         />
       </body>
     </html>

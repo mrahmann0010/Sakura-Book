@@ -171,23 +171,27 @@ export const footerColumns = [
     links: [
       { href: "/catalog", label: "Books" },
       { href: "/catalog?sort=new", label: "New this month" },
-      { href: "/gift-cards", label: "Gift cards" },
     ],
   },
   {
     heading: "Orders",
     links: [
       { href: "/orders", label: "Track an order" },
-      { href: "/delivery", label: "Delivery" },
       { href: "/refund-policy", label: "Refund policy" },
+      { href: "/privacy-policy", label: "Privacy policy" },
+      { href: "/terms", label: "Terms & conditions" },
     ],
   },
   {
     heading: "Contact",
     links: [
-      { href: "mailto:hello@marginalia.example", label: "hello@marginalia.co" },
-      { href: "/visit", label: "Visit us" },
-      { href: "https://instagram.com", label: "Instagram" },
+      { href: "/contact", label: "Contact" },
+      { href: "mailto:info@nihonovaacademy.com", label: "info@nihonovaacademy.com" },
+      {
+        href: "https://maps.google.com/?q=Uttara,+Dhaka+1230",
+        label: "Uttara, Dhaka 1230",
+      },
+      { href: "https://www.facebook.com/nihonovaacademy/", label: "Facebook" },
     ],
   },
 ];

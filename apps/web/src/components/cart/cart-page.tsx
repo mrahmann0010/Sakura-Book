@@ -45,7 +45,7 @@ export function CartPage({ locale }: { locale: Locale }) {
             ...column,
             links: localizeLinks(column.links, locale),
           }))}
-          note={`© ${new Date().getFullYear()} Marginalia Books`}
+          note={`© ${new Date().getFullYear()} Nihonova Books`}
         />
       }
     >

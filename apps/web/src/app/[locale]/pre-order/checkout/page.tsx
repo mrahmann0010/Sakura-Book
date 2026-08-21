@@ -28,7 +28,7 @@ import { localizeLinks, routes } from "@/lib/routes";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Pre-order checkout · Marginalia",
+  title: "Pre-order checkout · Nihonova Books",
 };
 
 export default async function PreOrderCheckoutPage({
@@ -53,7 +53,7 @@ export default async function PreOrderCheckoutPage({
             ...column,
             links: localizeLinks(column.links, locale),
           }))}
-          note={`© ${new Date().getFullYear()} Marginalia Books`}
+          note={`© ${new Date().getFullYear()} Nihonova Books`}
         />
       }
     >

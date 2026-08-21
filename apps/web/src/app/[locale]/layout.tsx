@@ -43,16 +43,16 @@ export async function generateMetadata({ params }: LayoutProps<"/[locale]">): Pr
        a valid og:url. */
     metadataBase: new URL(siteUrl()),
     title: {
-      default: "Marginalia",
-      template: "%s · Marginalia",
+      default: "Nihonova Books",
+      template: "%s · Nihonova Books",
     },
     description,
     alternates: localeAlternates(locale),
     openGraph: {
       type: "website",
-      siteName: "Marginalia",
+      siteName: "Nihonova Books",
       locale,
-      title: "Marginalia",
+      title: "Nihonova Books",
       description,
       url: localeAlternates(locale).canonical,
     },

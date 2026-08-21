@@ -45,7 +45,7 @@ export default async function RefundPolicyPage({
             ...column,
             links: localizeLinks(column.links, locale),
           }))}
-          note={`© ${new Date().getFullYear()} Marginalia Books`}
+          note={`© ${new Date().getFullYear()} Nihonova Books`}
         />
       }
     >
@@ -57,33 +57,49 @@ export default async function RefundPolicyPage({
           size="md"
         />
 
-        <div className="mt-12 flex flex-col gap-10">
-          {sectionKeys.map((key) => {
-            const body = t(`refundPolicy.sections.${key}.body`, { returnObjects: true }) as
-              | string[]
-              | string;
-            const paragraphs = Array.isArray(body) ? body : [body];
-
-            return (
-              <div key={key}>
+        <div className="mt-12 lg:grid lg:grid-cols-[1fr_240px] lg:items-start lg:gap-16">
+          <div className="flex flex-col gap-10 lg:max-w-[68ch]">
+            {sectionKeys.map((key) => (
+              <div key={key} id={key} className="scroll-mt-24">
                 <h2 className="text-20 text-ink lg:text-22 font-serif leading-tight">
                   {t(`refundPolicy.sections.${key}.title`)}
                 </h2>
                 <div className="mt-3 flex flex-col gap-3">
-                  {paragraphs.map((paragraph, index) => (
-                    <p key={index} className="text-body max-w-measure-lede text-secondary">
+                  {(
+                    t(`refundPolicy.sections.${key}.body`, { returnObjects: true }) as string[]
+                  ).map((paragraph, index) => (
+                    <p key={index} className="text-body text-secondary">
                       {paragraph}
                     </p>
                   ))}
                 </div>
               </div>
-            );
-          })}
-        </div>
+            ))}
 
-        <Section tint className="mt-12">
-          <p className="text-caption text-secondary max-w-measure-lede">{t("refundPolicy.note")}</p>
-        </Section>
+            <Section tint>
+              <p className="text-caption text-secondary">{t("refundPolicy.note")}</p>
+            </Section>
+          </div>
+
+          <nav
+            aria-label={t("refundPolicy.title")}
+            className="border-rule mt-12 hidden border-t pt-6 lg:sticky lg:top-24 lg:mt-0 lg:block lg:border-t-0 lg:pt-0"
+          >
+            <p className="eyebrow">{t("refundPolicy.onThisPage")}</p>
+            <ul className="mt-4 flex flex-col gap-3">
+              {sectionKeys.map((key) => (
+                <li key={key}>
+                  <a
+                    href={`#${key}`}
+                    className="text-13 text-secondary hover:text-ink block leading-snug"
+                  >
+                    {t(`refundPolicy.sections.${key}.title`)}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </div>
       </Shell>
     </PageShell>
   );
