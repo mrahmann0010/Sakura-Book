@@ -3,13 +3,19 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 
 import { ShippingFields } from "@/components/checkout/shipping-fields";
+import { PreOrderPaymentSection } from "@/components/pre-order/pre-order-payment-section";
 import { PageHeader, Shell } from "@/components/layout";
 import { Button, Card, Notice, OrderId } from "@/components/ui";
 import type { Locale } from "@/i18n/settings";
-import { checkoutDefaults, checkoutSchema, type CheckoutValues } from "@/lib/checkout";
+import {
+  checkoutDefaults,
+  checkoutSchema,
+  type AcceptedPaymentMethod,
+  type CheckoutValues,
+} from "@/lib/checkout";
 import { placePreOrder } from "@/lib/api/pre-order";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
@@ -19,15 +25,18 @@ import type { PreOrderBook } from "@sakura/contracts";
 /**
  * The pre-order checkout step.
  *
- * A parallel component to CheckoutView rather than a shared one: this form
- * has no payment step (`pre_order_orders` carries no paymentMethod column —
- * see the API schema) and posts to a different, simpler endpoint. It still
- * borrows `checkoutSchema`/`ShippingFields` wholesale for the address half,
- * since that half — name, email, phone, BD address — is identical to the
- * real checkout's and re-deriving it would be the copy the shared schema
- * exists to prevent. `method`/`senderNumber`/`transactionId` ride along on
- * the form only because `checkoutSchema` still validates them; they are never
- * read when building the pre-order request below.
+ * A parallel component to CheckoutView rather than a shared one: it posts to
+ * a different, simpler endpoint and has no cart/coupon/shipping-cost concept.
+ * It still borrows `checkoutSchema`/`ShippingFields`/the payment building
+ * blocks wholesale, since that half — name, email, phone, BD address, "how
+ * will you pay" — is identical in shape to the real checkout's and
+ * re-deriving it would be the copy the shared schema exists to prevent.
+ *
+ * The one real difference: pre-orders are prepaid, so cash-on-delivery is not
+ * offered. `PreOrderPaymentSection` renders a smaller method list (COD
+ * commented out, not deleted) and the default below matches — see that
+ * component and `preOrderPaymentMethods` in @sakura/contracts, which is what
+ * the API actually enforces regardless of what this form renders.
  */
 export function PreOrderCheckoutView({ locale, book }: { locale: Locale; book: PreOrderBook }) {
   const router = useRouter();
@@ -41,15 +50,18 @@ export function PreOrderCheckoutView({ locale, book }: { locale: Locale; book: P
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const {
+    control,
     register,
     handleSubmit,
     setValue,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isSubmitted, isValid },
   } = useForm<CheckoutValues>({
     resolver: zodResolver(checkoutSchema),
-    defaultValues: checkoutDefaults,
+    defaultValues: { ...checkoutDefaults, method: "manual-transfer" },
     mode: "onBlur",
   });
+
+  const method = useWatch({ control, name: "method" }) as AcceptedPaymentMethod;
 
   async function submit(values: CheckoutValues) {
     setSubmitError(null);
@@ -69,6 +81,9 @@ export function PreOrderCheckoutView({ locale, book }: { locale: Locale; book: P
             city: values.city,
             region: values.region,
           },
+          method: values.method as "manual-transfer",
+          senderNumber: values.senderNumber,
+          transactionId: values.transactionId,
           note: values.notes,
         },
         idempotencyKey,
@@ -117,6 +132,19 @@ export function PreOrderCheckoutView({ locale, book }: { locale: Locale; book: P
         className="mt-9 flex max-w-measure flex-col gap-10"
       >
         <ShippingFields register={register} errors={errors} setValue={setValue} />
+
+        <PreOrderPaymentSection
+          register={register}
+          errors={errors}
+          method={method}
+          onMethodChange={(next) =>
+            setValue("method", next, { shouldValidate: true, shouldDirty: true })
+          }
+        />
+
+        {isSubmitted && !isValid ? (
+          <Notice tone="error">Check the highlighted fields above.</Notice>
+        ) : null}
 
         {submitError ? <Notice tone="error">{submitError}</Notice> : null}
 

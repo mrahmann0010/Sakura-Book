@@ -1,6 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
-import { preOrderStatusEnum } from "../enums";
+import { paymentMethodEnum, preOrderStatusEnum } from "../enums";
 import type { ShippingAddress } from "../orders/order";
 import { timestamps } from "../timestamps";
 import { preOrderBooks } from "./pre-order-book";
@@ -42,6 +42,14 @@ export const preOrderOrders = pgTable(
     customerPhone: text("customer_phone").notNull(),
     shippingAddress: jsonb("shipping_address").$type<ShippingAddress>().notNull(),
     customerNote: text("customer_note"),
+
+    // Reuses orders' payment_method enum rather than a second copy — see that
+    // enum's comment. `cash-on-delivery` is a valid DB value but never chosen:
+    // preOrderPaymentMethods in @sakura/contracts leaves it commented out, so
+    // nothing upstream of this column can ever write it.
+    paymentMethod: paymentMethodEnum("payment_method").notNull(),
+    senderNumber: text("sender_number"),
+    transactionId: text("transaction_id"),
 
     status: preOrderStatusEnum("status").notNull().default("PENDING"),
 

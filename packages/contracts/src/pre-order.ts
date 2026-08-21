@@ -1,21 +1,61 @@
 import { z } from "zod";
-import { shippingAddressSchema } from "./checkout";
+import { methodNeedsTransferDetails, shippingAddressSchema, type PaymentMethod } from "./checkout";
 
 /* --------------------------------------------------------------------------
    Placing a pre-order.
 
    Mirrors placeOrderRequestSchema in ./checkout, simplified: one book, one
-   quantity, no coupon, no payment method — see pre_order_orders in the API
-   schema for why. `customer` reuses `shippingAddressSchema` rather than the
-   full `checkoutSchema`, since a pre-order has no payment-method step.
+   quantity, no coupon — see pre_order_orders in the API schema for why.
+   `customer` reuses `shippingAddressSchema` rather than the full
+   `checkoutSchema`, since a pre-order's payment step is its own, smaller
+   thing (below) rather than the real checkout's.
    -------------------------------------------------------------------------- */
 
-export const placePreOrderRequestSchema = z.object({
-  preOrderBookId: z.string().uuid(),
-  quantity: z.number().int().positive().max(99),
-  customer: shippingAddressSchema,
-  note: z.string().trim().max(500, "Keep the note under 500 characters.").optional(),
-});
+/**
+ * Pre-orders are prepaid only: there is no physical stock yet for a courier
+ * to collect cash against, so `cash-on-delivery` is left commented out here
+ * rather than deleted — the same way `card` stays in `paymentMethods` (see
+ * ./checkout) as a visible-but-disabled option instead of being removed.
+ * Re-enabling COD for pre-orders, if that ever makes sense, is uncommenting
+ * one line.
+ */
+export const preOrderPaymentMethods = [
+  // "cash-on-delivery",
+  "manual-transfer",
+] as const satisfies readonly PaymentMethod[];
+export type PreOrderPaymentMethod = (typeof preOrderPaymentMethods)[number];
+
+export const placePreOrderRequestSchema = z
+  .object({
+    preOrderBookId: z.string().uuid(),
+    quantity: z.number().int().positive().max(99),
+    customer: shippingAddressSchema,
+    method: z.enum(preOrderPaymentMethods),
+    /* Transfer details are only asked for when manual-transfer is chosen, so
+       they are optional at the field level and required by the refinement —
+       same shape as checkoutSchema in ./checkout. */
+    senderNumber: z.string().trim().optional(),
+    transactionId: z.string().trim().optional(),
+    note: z.string().trim().max(500, "Keep the note under 500 characters.").optional(),
+  })
+  .superRefine((values, ctx) => {
+    if (!methodNeedsTransferDetails(values.method)) return;
+
+    if (!values.senderNumber) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["senderNumber"],
+        message: "Add the number you sent the money from.",
+      });
+    }
+    if (!values.transactionId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["transactionId"],
+        message: "Add the transaction ID from your payment confirmation.",
+      });
+    }
+  });
 
 export type PlacePreOrderRequest = z.infer<typeof placePreOrderRequestSchema>;
 

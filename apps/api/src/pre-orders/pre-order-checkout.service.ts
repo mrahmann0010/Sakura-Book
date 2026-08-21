@@ -84,6 +84,9 @@ export class PreOrderCheckoutService {
         region: customer.region,
       },
       customerNote: request.note ?? null,
+      paymentMethod: request.method,
+      senderNumber: request.senderNumber ?? null,
+      transactionId: request.transactionId ?? null,
       idempotencyKey,
     };
 
