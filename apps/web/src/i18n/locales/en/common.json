@@ -198,6 +198,7 @@
       "reference": "Reference (optional)",
       "completeOrder": "Complete the order",
       "back": "Back",
+      "changeMethod": "Change payment method",
       "copy": "Copy",
       "copied": "Copied",
       "card": "Card payment",

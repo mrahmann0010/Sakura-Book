@@ -26,6 +26,12 @@ import { cn } from "@/lib/utils";
    so switching providers mid-flow always restarts at step 2 rather than
    showing stale verification fields for a different number.
 
+   Once a provider is picked the other two unmount: past step 1 they are only
+   noise, and a stray click on one would throw away whatever has been typed
+   into the verification fields. Getting back to the full list is an explicit
+   "change payment method" button rather than an accident — which is also what
+   stands in for the radio-group semantics the collapsed list gives up.
+
    Reused as-is by both PreOrderPaymentSection and PaymentSection: the fields
    it fills — senderNumber, transactionId, notes — are the same three the
    `manual-transfer` branch of checkoutSchema already validates, so no
@@ -55,7 +61,7 @@ export function MobileMoneyPayment({
   register: UseFormRegister<CheckoutValues>;
   errors: FieldErrors<CheckoutValues>;
   provider: MobileMoneyProviderId | null;
-  onProviderChange: (provider: MobileMoneyProviderId) => void;
+  onProviderChange: (provider: MobileMoneyProviderId | null) => void;
   className?: string;
 }) {
   const { t } = useTranslation();
@@ -66,25 +72,43 @@ export function MobileMoneyPayment({
     onProviderChange(id);
   }
 
+  function clearProvider() {
+    setPhase("pay");
+    onProviderChange(null);
+  }
+
+  const shown = provider
+    ? mobileMoneyProviders.filter((entry) => entry.id === provider)
+    : mobileMoneyProviders;
+
   return (
-    <PaymentOptionList
-      label={t("checkout.payment.mobileMoneyLegend")}
-      className={cn("gap-2.5", className)}
-    >
-      {mobileMoneyProviders.map((entry) => (
-        <ProviderOption
-          key={entry.id}
-          entry={entry}
-          checked={provider === entry.id}
-          phase={phase}
-          onSelect={() => selectProvider(entry.id)}
-          onSent={() => setPhase("verify")}
-          onBack={() => setPhase("pay")}
-          register={register}
-          errors={errors}
-        />
-      ))}
-    </PaymentOptionList>
+    <div className={cn("min-w-0", className)}>
+      <PaymentOptionList label={t("checkout.payment.mobileMoneyLegend")} className="gap-2.5">
+        {shown.map((entry) => (
+          <ProviderOption
+            key={entry.id}
+            entry={entry}
+            checked={provider === entry.id}
+            phase={phase}
+            onSelect={() => selectProvider(entry.id)}
+            onSent={() => setPhase("verify")}
+            onBack={() => setPhase("pay")}
+            register={register}
+            errors={errors}
+          />
+        ))}
+      </PaymentOptionList>
+
+      {provider ? (
+        <button
+          type="button"
+          onClick={clearProvider}
+          className="text-caption text-secondary hover:text-ink mt-2.5 underline underline-offset-2"
+        >
+          {t("checkout.payment.changeMethod")}
+        </button>
+      ) : null}
+    </div>
   );
 }
 

@@ -37,6 +37,7 @@ export function PaymentSection({
 }) {
   const { t } = useTranslation();
   const [provider, setProvider] = useState<MobileMoneyProviderId | null>(null);
+  const chosen = provider !== null || method === "cash-on-delivery";
 
   return (
     <fieldset className="min-w-0">
@@ -47,7 +48,13 @@ export function PaymentSection({
           name="method"
           value="cash-on-delivery"
           checked={method === "cash-on-delivery"}
-          onSelect={(next) => onMethodChange(next as AcceptedPaymentMethod)}
+          onSelect={(next) => {
+            // Picking cash also drops the mobile-money selection: otherwise the
+            // collapsed provider card would sit there looking active under a
+            // method that is no longer chosen.
+            setProvider(null);
+            onMethodChange(next as AcceptedPaymentMethod);
+          }}
           label={t("checkout.payment.cash-on-delivery")}
           meta={t("checkout.payment.cash-on-deliveryMeta")}
         />
@@ -60,21 +67,25 @@ export function PaymentSection({
         provider={provider}
         onProviderChange={(next) => {
           setProvider(next);
-          if (method !== "manual-transfer") onMethodChange("manual-transfer");
+          if (next && method !== "manual-transfer") onMethodChange("manual-transfer");
         }}
       />
 
-      <PaymentOptionList className="mt-2.5" label={t("checkout.payment.legend")}>
-        <PaymentOption
-          name="method"
-          value="card"
-          checked={false}
-          disabled
-          label={t("checkout.payment.card")}
-          meta={t("checkout.payment.cardMeta")}
-          description={t("checkout.payment.cardUnavailable")}
-        />
-      </PaymentOptionList>
+      {/* Same as the pre-order step: worth stating while the shopper is still
+          deciding, pure noise once they have settled on a method. */}
+      {chosen ? null : (
+        <PaymentOptionList className="mt-2.5" label={t("checkout.payment.legend")}>
+          <PaymentOption
+            name="method"
+            value="card"
+            checked={false}
+            disabled
+            label={t("checkout.payment.card")}
+            meta={t("checkout.payment.cardMeta")}
+            description={t("checkout.payment.cardUnavailable")}
+          />
+        </PaymentOptionList>
+      )}
     </fieldset>
   );
 }
