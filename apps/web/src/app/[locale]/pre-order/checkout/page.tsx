@@ -8,6 +8,25 @@ import { getActivePreOrderBook } from "@/lib/api/pre-order";
 import { footerColumns } from "@/lib/books";
 import { localizeLinks, routes } from "@/lib/routes";
 
+/**
+ * Rendered per request, not frozen into the build.
+ *
+ * This page's content is live shop state — whether a pre-order is running at
+ * all — fetched from an API that deploys separately from this frontend. Next
+ * prerenders it at build time by default, which quietly made a successful
+ * frontend build depend on the API being up and current at that moment. It
+ * is not a theoretical coupling: the build that shipped this feature failed
+ * on exactly that, because Vercel built from main while the API was still
+ * mid-deploy and had never heard of /pre-order-books/active.
+ *
+ * Two services that release independently must not be able to fail each
+ * other's builds. Nothing is lost by moving the fetch to request time: the
+ * API sets its own Cache-Control, and an outage now surfaces as an error
+ * rather than as a build that cannot be made to pass until the other side
+ * recovers.
+ */
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Pre-order checkout · Marginalia",
 };
