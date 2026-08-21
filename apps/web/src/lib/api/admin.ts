@@ -1,5 +1,10 @@
 import {
   adminLoginRequestSchema,
+  adminPreOrderDetailSchema,
+  adminPreOrderFulfillmentTransitionSchema,
+  adminPreOrderInternalNoteSchema,
+  adminPreOrderListSchema,
+  adminPreOrderPaymentDecisionSchema,
   adminPreOrderBookUpsertRequestSchema,
   adminPreOrderBookListSchema,
   adminSessionSchema,
@@ -7,6 +12,10 @@ import {
   type AdminLoginRequest,
   type AdminPreOrderBookList,
   type AdminPreOrderBookUpsertRequest,
+  type AdminPreOrderDetail,
+  type AdminPreOrderFulfillmentTransition,
+  type AdminPreOrderList,
+  type AdminPreOrderPaymentDecision,
   type AdminSession,
   type PreOrderBook,
 } from "@sakura/contracts";
@@ -112,4 +121,76 @@ export function updateAdminPreOrderBook(
     method: "PUT",
     body: validated,
   });
+}
+
+/* --------------------------------------------------------------------------
+   Pre-order queue.
+
+   Two status calls rather than one, mirroring the two columns behind them —
+   verifying a transfer and dispatching a parcel are different jobs, months
+   apart. Both return the whole pre-order, so the panel re-renders the newly
+   allowed moves from the response: accepting a payment is exactly what
+   unlocks the fulfilment buttons, and a client that inferred that for itself
+   would need its own copy of the cross-track rule.
+   -------------------------------------------------------------------------- */
+
+export function listAdminPreOrders(
+  params: {
+    paymentStatus?: readonly string[];
+    fulfillmentStatus?: readonly string[];
+    q?: string;
+    page?: number;
+  } = {},
+): Promise<AdminPreOrderList> {
+  const search = new URLSearchParams();
+  for (const status of params.paymentStatus ?? []) search.append("paymentStatus", status);
+  for (const status of params.fulfillmentStatus ?? []) search.append("fulfillmentStatus", status);
+  if (params.q) search.set("q", params.q);
+  if (params.page) search.set("page", String(params.page));
+
+  const query = search.toString();
+  return adminFetch(`/admin/pre-orders${query ? `?${query}` : ""}`, adminPreOrderListSchema);
+}
+
+export function getAdminPreOrder(orderNumber: string): Promise<AdminPreOrderDetail> {
+  return adminFetch(
+    `/admin/pre-orders/${encodeURIComponent(orderNumber)}`,
+    adminPreOrderDetailSchema,
+  );
+}
+
+export function decideAdminPreOrderPayment(
+  orderNumber: string,
+  request: AdminPreOrderPaymentDecision,
+): Promise<AdminPreOrderDetail> {
+  const validated = adminPreOrderPaymentDecisionSchema.parse(request);
+  return adminFetch(
+    `/admin/pre-orders/${encodeURIComponent(orderNumber)}/payment`,
+    adminPreOrderDetailSchema,
+    { method: "POST", body: validated },
+  );
+}
+
+export function transitionAdminPreOrderFulfillment(
+  orderNumber: string,
+  request: AdminPreOrderFulfillmentTransition,
+): Promise<AdminPreOrderDetail> {
+  const validated = adminPreOrderFulfillmentTransitionSchema.parse(request);
+  return adminFetch(
+    `/admin/pre-orders/${encodeURIComponent(orderNumber)}/fulfillment`,
+    adminPreOrderDetailSchema,
+    { method: "POST", body: validated },
+  );
+}
+
+export function setAdminPreOrderNote(
+  orderNumber: string,
+  note: string | null,
+): Promise<AdminPreOrderDetail> {
+  const validated = adminPreOrderInternalNoteSchema.parse({ note });
+  return adminFetch(
+    `/admin/pre-orders/${encodeURIComponent(orderNumber)}/note`,
+    adminPreOrderDetailSchema,
+    { method: "PATCH", body: validated },
+  );
 }

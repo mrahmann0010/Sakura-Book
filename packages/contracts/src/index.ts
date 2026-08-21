@@ -30,3 +30,4 @@ export * from "./admin-settings";
 export * from "./pre-order-book";
 export * from "./pre-order";
 export * from "./admin-pre-order-book";
+export * from "./admin-pre-order";

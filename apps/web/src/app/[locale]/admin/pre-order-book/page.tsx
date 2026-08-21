@@ -1,16 +1,14 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
 import {
   AdminApiError,
-  adminMe,
   createAdminPreOrderBook,
   listAdminPreOrderBooks,
   updateAdminPreOrderBook,
 } from "@/lib/api/admin";
-import { ADMIN_AUTHED_KEY } from "@/lib/admin-auth";
+import { useAdminGate } from "@/lib/use-admin-gate";
 import type { PreOrderBook } from "@sakura/contracts";
 
 const emptyForm = {
@@ -31,17 +29,12 @@ const emptyForm = {
  * navigation — picking an existing book from the dropdown loads it into the
  * same form that creates a new one.
  *
- * Gated client-side: redirect to /admin/login unless localStorage says this
- * browser signed in, then confirm against GET /admin/auth/me (the actual
- * gate — the httpOnly session cookie either works or it doesn't). This is a
- * first pass; a server-side check via middleware reading the cookie's
- * presence would be the next step if this panel grows.
+ * Gated client-side by `useAdminGate` — shared with the pre-order queue, see
+ * that hook for what the gate actually proves.
  */
 export default function AdminPreOrderBookPage() {
-  const router = useRouter();
-  const { locale } = useParams<{ locale: string }>();
+  const { checking } = useAdminGate();
 
-  const [checking, setChecking] = useState(true);
   const [books, setBooks] = useState<PreOrderBook[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [form, setForm] = useState(emptyForm);
@@ -49,28 +42,12 @@ export default function AdminPreOrderBookPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  /* Load once the gate has cleared, never before: an unauthenticated fetch
+     would 401 and surface as "could not load pre-order books" over the top of
+     a redirect that is already happening. */
   useEffect(() => {
-    async function check() {
-      if (typeof window === "undefined") return;
-
-      if (!window.localStorage.getItem(ADMIN_AUTHED_KEY)) {
-        router.replace(`/${locale}/admin/login`);
-        return;
-      }
-
-      try {
-        await adminMe();
-        setChecking(false);
-        void loadBooks();
-      } catch {
-        window.localStorage.removeItem(ADMIN_AUTHED_KEY);
-        router.replace(`/${locale}/admin/login`);
-      }
-    }
-
-    void check();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!checking) void loadBooks();
+  }, [checking]);
 
   async function loadBooks() {
     try {

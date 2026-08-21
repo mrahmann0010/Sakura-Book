@@ -27,6 +27,9 @@ export const KNOWN_ERROR_CODES = [
   "COUPON_UNAVAILABLE",
   "OUT_OF_STOCK",
   "INVALID_STATUS_TRANSITION",
+  // A pre-order cannot be fulfilled until its payment has been accepted — the
+  // one rule that spans the two pre-order lifecycles.
+  "PAYMENT_NOT_ACCEPTED",
   "INVALID_CREDENTIALS",
   "ACCOUNT_LOCKED",
   "ACCOUNT_DISABLED",

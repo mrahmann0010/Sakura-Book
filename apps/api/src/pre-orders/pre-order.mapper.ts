@@ -1,4 +1,4 @@
-import type { PreOrder } from "@sakura/contracts";
+import { derivePreOrderStatus, type PreOrder } from "@sakura/contracts";
 import type { InferSelectModel } from "drizzle-orm";
 import type { ShippingAddress } from "../db/schema";
 import type { preOrderOrders } from "../db/schema";
@@ -10,7 +10,11 @@ export function toPreOrderResponse(row: PreOrderRow): PreOrder {
 
   return {
     orderNumber: row.orderNumber,
-    status: row.status,
+    // One word for the customer, two columns for staff — the derivation is in
+    // contracts so both apps read the lifecycle the same way.
+    status: derivePreOrderStatus(row.paymentStatus, row.fulfillmentStatus),
+    paymentStatus: row.paymentStatus,
+    fulfillmentStatus: row.fulfillmentStatus,
     placedAt: row.createdAt.toISOString(),
 
     bookTitle: row.bookTitleSnapshot,

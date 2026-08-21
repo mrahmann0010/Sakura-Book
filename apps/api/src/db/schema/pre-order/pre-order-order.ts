@@ -1,6 +1,10 @@
 import { relations, sql } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
-import { paymentMethodEnum, preOrderStatusEnum } from "../enums";
+import {
+  paymentMethodEnum,
+  preOrderFulfillmentStatusEnum,
+  preOrderPaymentStatusEnum,
+} from "../enums";
 import type { ShippingAddress } from "../orders/order";
 import { timestamps } from "../timestamps";
 import { preOrderBooks } from "./pre-order-book";
@@ -51,7 +55,24 @@ export const preOrderOrders = pgTable(
     senderNumber: text("sender_number"),
     transactionId: text("transaction_id"),
 
-    status: preOrderStatusEnum("status").notNull().default("PENDING"),
+    /**
+     * Two tracks, not one — see the enums' comment. `payment_status` is the
+     * acceptance decision a human makes after reading the transaction ID
+     * above; `fulfillment_status` is where the parcel is, and stays
+     * NOT_STARTED until there are printed copies to pick.
+     *
+     * The rule that ties them together — fulfilment cannot leave NOT_STARTED
+     * unless payment is ACCEPTED — is enforced in pre-order-status.machine.ts
+     * rather than by a CHECK constraint, so that the refusal arrives as a 422
+     * naming the reason instead of a constraint-violation 500.
+     */
+    paymentStatus: preOrderPaymentStatusEnum("payment_status").notNull().default("PENDING"),
+    fulfillmentStatus: preOrderFulfillmentStatusEnum("fulfillment_status")
+      .notNull()
+      .default("NOT_STARTED"),
+
+    /** Staff-only scratchpad, same as orders.internalNote. Never sent to a customer. */
+    internalNote: text("internal_note"),
 
     // Same double-submit guard as orders.idempotencyKey.
     idempotencyKey: text("idempotency_key").unique(),
@@ -60,6 +81,9 @@ export const preOrderOrders = pgTable(
   },
   (table) => [
     index("pre_order_orders_created_idx").on(table.createdAt.desc(), table.id),
+    // The queue's default view is "what needs verifying" — a filter on the
+    // payment track, so that is the one that gets an index.
+    index("pre_order_orders_payment_status_idx").on(table.paymentStatus),
     index("pre_order_orders_customer_email_idx").on(table.customerEmail),
     index("pre_order_orders_customer_name_trgm_idx").using(
       "gin",
