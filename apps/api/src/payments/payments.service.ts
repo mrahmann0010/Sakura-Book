@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import { isPostgresError, ResourceNotFoundError } from "../common/errors";
 import { DbService } from "../db/db.service";
+import type { Transaction } from "../db/db.types";
 import { payments } from "../db/schema";
 import { OrdersService } from "../orders";
 import { PaymentProviderRegistry } from "./payment-provider.registry";
@@ -52,6 +53,37 @@ export class PaymentsService {
    * replay without pretending it did the work twice.
    */
   async applyWebhook(providerName: string, event: WebhookEvent): Promise<{ confirmed: boolean }> {
+    return this.apply(providerName, event);
+  }
+
+  /**
+   * Record a payment a member of staff matched by hand.
+   *
+   * Bank and bKash transfers arrive out of band: the customer pays, quotes the
+   * order number, and someone at the shop finds it on a statement. That is a
+   * *fact about a payment* reported by a trusted party, which is exactly what
+   * the provider port describes — so it goes down the same path a gateway
+   * webhook does rather than getting a private one.
+   *
+   * That equivalence is the point. The amount check, the duplicate-reference
+   * index, the "record the payment before transitioning" ordering and the
+   * decision that a payment for a dead order stays on the books all apply
+   * unchanged, because they are properties of confirming a payment and not of
+   * the transport it arrived over. A separate admin implementation would have
+   * had to re-derive every one of them, and would have got one wrong.
+   *
+   * What differs is only the authentication: a webhook proves itself with an
+   * HMAC, and this proves itself with a signed-in admin and an audit entry
+   * written by the caller.
+   */
+  async confirmManually(
+    providerName: string,
+    event: WebhookEvent,
+  ): Promise<{ confirmed: boolean }> {
+    return this.apply(providerName, event);
+  }
+
+  private async apply(providerName: string, event: WebhookEvent): Promise<{ confirmed: boolean }> {
     const order = await this.dbService.db.query.orders.findFirst({
       where: (row, { eq: equals }) => equals(row.orderNumber, event.referenceId),
       columns: { id: true, orderNumber: true, totalCents: true, status: true },
@@ -81,7 +113,7 @@ export class PaymentsService {
     const recorded = await this.record(providerName, event, order.id);
 
     if (!recorded) {
-      this.logger.log(`Replayed ${providerName} webhook for ${order.orderNumber}; ignoring`);
+      this.logger.log(`Replayed ${providerName} confirmation for ${order.orderNumber}; ignoring`);
 
       return { confirmed: false };
     }
@@ -134,6 +166,37 @@ export class PaymentsService {
 
       throw error;
     }
+  }
+
+  /**
+   * Record a refund against an order.
+   *
+   * A row, not a transfer. Nothing here calls a gateway — the manual methods
+   * have none, and the money is moved by a person at the shop. This is the
+   * record that they did, and the order's transition to REFUNDED is the
+   * caller's to make.
+   *
+   * `Transaction`, because a refund row and the status change that explains it
+   * are one fact: a REFUNDED order with no refund row is a customer whose
+   * money nobody can account for, and a refund row on an order that never
+   * reached REFUNDED is worse.
+   */
+  async recordRefund(
+    orderId: string,
+    input: { providerName: string; amountCents: number; reference: string; raw?: unknown },
+    tx: Transaction,
+  ): Promise<void> {
+    await tx.insert(payments).values({
+      orderId,
+      provider: input.providerName,
+      // Distinct from the original payment's reference, which is still in the
+      // table — the unique index on (provider, provider_reference_id) would
+      // otherwise reject the refund as a duplicate of the payment it reverses.
+      providerReferenceId: `refund:${input.reference}`,
+      amountCents: input.amountCents,
+      status: "REFUNDED",
+      rawResponse: (input.raw ?? {}) as Record<string, unknown>,
+    });
   }
 
   /** Payments recorded against an order, oldest first. */

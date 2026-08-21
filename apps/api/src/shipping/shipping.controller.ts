@@ -3,14 +3,14 @@ import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { ShippingTerms } from "@sakura/contracts";
 import type { Response } from "express";
 import { RegionsService } from "./regions.service";
-import { ShippingPolicy } from "./shipping.policy";
+import { ShippingTermsService } from "./shipping-terms.service";
 
 @ApiTags("shipping")
 @Controller("shipping")
 export class ShippingController {
   constructor(
     private readonly regionsService: RegionsService,
-    private readonly shippingPolicy: ShippingPolicy,
+    private readonly shippingTermsService: ShippingTermsService,
   ) {}
 
   /**
@@ -32,12 +32,13 @@ export class ShippingController {
     // other reference data rather than like a price.
     response.setHeader("Cache-Control", "public, max-age=300, s-maxage=3600");
 
-    const terms = this.shippingPolicy.terms;
+    const terms = await this.shippingTermsService.current();
 
     return {
       currency: terms.currency,
       flatRateCents: terms.flatRateCents,
       freeDeliveryThresholdCents: terms.freeDeliveryThresholdCents,
+      originDivision: terms.originDivision,
       regions: await this.regionsService.list(),
     };
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import type { CartQuoteRejection } from "@sakura/contracts";
+import type { CartItem, CartQuoteRejection } from "@sakura/contracts";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
@@ -32,6 +32,16 @@ import { useMounted } from "./use-mounted";
 export type UseCart = Cart & {
   /** False through the first paint, while localStorage is still being read. */
   hydrated: boolean;
+  /**
+   * The persisted `{ bookId, quantity }` entries, straight from Redux.
+   *
+   * Exposed because `lines` lags: it is the last quote to come back, and
+   * `keepPreviousData` keeps serving the quote for the *previous* cart while
+   * a requote is in flight. A caller that needs to know what is in the cart
+   * *now* — rather than what the server last said it was worth — reads this,
+   * which changes in the same tick as the dispatch.
+   */
+  entries: CartItem[];
   /** True while a quote is in flight for the current cart contents. */
   quoting: boolean;
   /** Entries the server could not price — delisted, unavailable, out of stock. */
@@ -42,7 +52,7 @@ export type UseCart = Cart & {
   clear: () => void;
 };
 
-export function useCart(): UseCart {
+export function useCart(region?: string): UseCart {
   const dispatch = useAppDispatch();
   const items = useAppSelector(selectCartItems);
   const rehydrated = useAppSelector(selectCartHydrated);
@@ -55,10 +65,12 @@ export function useCart(): UseCart {
      structurally, so a quantity edit or a different set of ids naturally
      requotes, while an unrelated re-render does not. Every page reading the
      cart uses this same key, so they share one in-flight request instead of
-     each firing their own. */
+     each firing their own. `region` joins the key on checkout, once the
+     customer's division has resolved one, so the recap's delivery line prices
+     against the same zone the order will actually be charged. */
   const { data: quote, isLoading } = useQuery({
-    queryKey: ["cart-quote", items],
-    queryFn: () => quoteCart(items),
+    queryKey: ["cart-quote", items, region],
+    queryFn: () => quoteCart(items, { region }),
     enabled: hydrated && items.length > 0,
     placeholderData: keepPreviousData,
     staleTime: 0,
@@ -77,6 +89,7 @@ export function useCart(): UseCart {
   return {
     ...cart,
     hydrated,
+    entries: items,
     quoting: hydrated && items.length > 0 && isLoading,
     rejected: quote?.rejected ?? [],
     add: useCallback(

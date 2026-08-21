@@ -1,5 +1,5 @@
-import { Inject, Injectable } from "@nestjs/common";
-import { SHIPPING_CONFIG, type ShippingConfig } from "../config/shipping.config";
+import { Injectable } from "@nestjs/common";
+import type { ShippingConfig } from "../config/shipping.config";
 
 /**
  * What postage costs, and when it is waived.
@@ -20,10 +20,24 @@ export type DeliveryQuote = {
   creditCents: number;
 };
 
+/**
+ * ## Why this has no dependencies
+ *
+ * It used to hold the shipping config, injected at boot from the environment.
+ * That was fine while the numbers could only change with a deploy, and wrong
+ * the moment they became editable in the panel: a value injected once into a
+ * singleton is a value that keeps pricing carts at whatever it was when the
+ * process started.
+ *
+ * The fix is not to give this class a database — it is to stop it holding
+ * state at all. `quote` now takes the terms alongside the numbers it was
+ * already taking, so it is a pure function of its arguments, resolvable in a
+ * test with a literal and incapable of going stale. Fetching the terms is the
+ * caller's job, and the caller is already doing a database round-trip to
+ * resolve the region.
+ */
 @Injectable()
 export class ShippingPolicy {
-  constructor(@Inject(SHIPPING_CONFIG) private readonly config: ShippingConfig) {}
-
   /**
    * `regionRateCents` is the selected region's override, or null/undefined for
    * the flat national rate — which is every region today. It is a parameter
@@ -41,24 +55,19 @@ export class ShippingPolicy {
    * principle total zero (a fully-discounted line) and still be a real order
    * that needs posting. Only "no lines at all" means no postage.
    */
-  quote(subtotalCents: number, lineCount: number, regionRateCents?: number | null): DeliveryQuote {
-    const baseCents = lineCount === 0 ? 0 : (regionRateCents ?? this.config.flatRateCents);
-    const waived = subtotalCents >= this.config.freeDeliveryThresholdCents;
+  quote(
+    subtotalCents: number,
+    lineCount: number,
+    terms: ShippingConfig,
+    regionRateCents?: number | null,
+  ): DeliveryQuote {
+    const baseCents = lineCount === 0 ? 0 : (regionRateCents ?? terms.flatRateCents);
+    const waived = subtotalCents >= terms.freeDeliveryThresholdCents;
 
     return {
       baseCents,
       chargedCents: waived ? 0 : baseCents,
       creditCents: waived ? baseCents : 0,
     };
-  }
-
-  /**
-   * Exposed so /cart/quote and /shipping/regions can tell the client the rule
-   * it is being priced under — "spend 4.50 more for free delivery" is a
-   * frontend string, but the numbers behind it are shop policy and must come
-   * from here rather than from a constant in the bundle.
-   */
-  get terms(): ShippingConfig {
-    return this.config;
   }
 }

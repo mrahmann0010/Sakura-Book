@@ -32,10 +32,27 @@ import { cn } from "@/lib/utils";
    Types
    -------------------------------------------------------------------------- */
 
-/** An item that navigates. Renders a next/link <a>. */
-export type FloatingNavLink = {
-  kind: "link";
+/**
+ * Fields every item shares, whatever it renders as.
+ *
+ * `content` exists so an item can carry more than a word — the cart needs a
+ * count beside its label — without the nav learning what a cart is. `label`
+ * stays required either way: it keys the list and names the item for a screen
+ * reader when `content` is a glyph.
+ *
+ * `className` lands on the <li>, which is what lets an item be present in the
+ * array but shown only at some widths. Measurement copes: a display:none item
+ * measures 0 wide and the pill simply stays hidden for it.
+ */
+type FloatingNavItemBase = {
   label: string;
+  content?: ReactNode;
+  className?: string;
+};
+
+/** An item that navigates. Renders a next/link <a>. */
+export type FloatingNavLink = FloatingNavItemBase & {
+  kind: "link";
   href: string;
 };
 
@@ -43,9 +60,8 @@ export type FloatingNavLink = {
  * An item that performs an action — opening a modal or panel. Renders a
  * <button>. Never an anchor: it has no destination, so it is not a link.
  */
-export type FloatingNavAction = {
+export type FloatingNavAction = FloatingNavItemBase & {
   kind: "action";
-  label: string;
   onSelect: () => void;
 };
 
@@ -268,11 +284,7 @@ export function FloatingNav({
     return best;
   }, [items, pathname]);
 
-  const { listRef, setItemRef, rect, visible } = useNavPill(
-    items.length,
-    targetIndex,
-    activeIndex,
-  );
+  const { listRef, setItemRef, rect, visible } = useNavPill(items.length, targetIndex, activeIndex);
 
   return (
     <>
@@ -282,131 +294,133 @@ export function FloatingNav({
       <div aria-hidden className="h-15 sm:h-17" />
 
       <header
-      className={cn(
-        "pointer-events-none fixed inset-x-0 top-0 z-40",
-        /* The bar floats: full-width header, inset content. The page margin is
+        className={cn(
+          "pointer-events-none fixed inset-x-0 top-0 z-40",
+          /* The bar floats: full-width header, inset content. The page margin is
            narrower here than --spacing-page-mobile so the items keep their own
            padding at 375px rather than surrendering it to the gutter. */
-        "px-4 sm:px-page-tablet pt-4 sm:pt-5",
-        className,
-      )}
-    >
-      <div
-        className={cn(
-          "max-w-shell pointer-events-auto mx-auto flex items-center justify-between gap-1",
-          "rounded-pill border sm:gap-6",
-          /* Padding shrinks with the viewport; the nav never collapses to a
-             hamburger, so every item stays reachable at every width. */
-          "py-1.5 pr-1 pl-1 sm:pr-3 sm:pl-5",
-          "transition-[background-color,border-color,backdrop-filter]",
-          "duration-(--duration-slide) ease-standard",
-          scrolled
-            ? /* saturate() lifts the colour the blur washes out, so a book
-                 cover passing underneath stays a colour and not grey. */
-              "bg-frost border-rule [backdrop-filter:blur(12px)_saturate(180%)]"
-            : "border-transparent bg-transparent",
+          "sm:px-page-tablet px-4 pt-4 sm:pt-5",
+          className,
         )}
       >
-        {/* The wordmark stands down below the tablet floor. It links to the
+        <div
+          className={cn(
+            "max-w-shell pointer-events-auto mx-auto flex items-center justify-between gap-1",
+            "rounded-pill border sm:gap-6",
+            /* Padding shrinks with the viewport; the nav never collapses to a
+             hamburger, so every item stays reachable at every width. */
+            "py-1.5 pr-1 pl-1 sm:pr-3 sm:pl-5",
+            "transition-[background-color,border-color,backdrop-filter]",
+            "ease-standard duration-(--duration-slide)",
+            scrolled
+              ? /* saturate() lifts the colour the blur washes out, so a book
+                 cover passing underneath stays a colour and not grey. */
+                "bg-frost border-rule [backdrop-filter:blur(12px)_saturate(180%)]"
+              : "border-transparent bg-transparent",
+          )}
+        >
+          {/* The wordmark stands down below the tablet floor. It links to the
             same place the first nav item does, and at 375px the items are what
             the reader needs the width for. */}
-        <Link
-          href={brandHref}
-          className="wordmark hidden shrink-0 px-1 whitespace-nowrap hover:text-clay sm:block"
-        >
-          {brand}
-        </Link>
+          <Link
+            href={brandHref}
+            className="wordmark hover:text-clay hidden shrink-0 px-1 whitespace-nowrap sm:block"
+          >
+            {brand}
+          </Link>
 
-        <nav
-          aria-label="Primary"
-          /* Safety valve: a longer item set, a wider locale or a large font
+          <nav
+            aria-label="Primary"
+            /* Safety valve: a longer item set, a wider locale or a large font
              size scrolls rather than colliding. The pill's coordinates are
              list-relative, so it stays aligned inside the scroller. */
-          /* `-my-1 py-1` buys the focus ring its 2px width plus 2px offset
+            /* `-my-1 py-1` buys the focus ring its 2px width plus 2px offset
              back: an overflow-x scroller clips on Y too, and without the
              headroom the ring is sliced flat top and bottom. */
-          className="scrollbar-none -my-1 min-w-0 overflow-x-auto py-1 [&::-webkit-scrollbar]:hidden"
-        >
-          <ul
-            ref={listRef}
-            className="relative flex w-max items-center"
-            onPointerLeave={() => setTargetIndex(null)}
-            onBlur={(event) => {
-              /* Only clear when focus leaves the list entirely — moving
-                 between items must not flicker the pill off and on. */
-              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                setTargetIndex(null);
-              }
-            }}
+            className="-my-1 min-w-0 scrollbar-none overflow-x-auto py-1 [&::-webkit-scrollbar]:hidden"
           >
-            {/* One pill, moved. Rendered first so it paints behind the labels,
+            <ul
+              ref={listRef}
+              className="relative flex w-max items-center"
+              onPointerLeave={() => setTargetIndex(null)}
+              onBlur={(event) => {
+                /* Only clear when focus leaves the list entirely — moving
+                 between items must not flicker the pill off and on. */
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                  setTargetIndex(null);
+                }
+              }}
+            >
+              {/* One pill, moved. Rendered first so it paints behind the labels,
                 and aria-hidden because it carries no information a screen
                 reader cannot get from aria-current. */}
-            <li
-              aria-hidden
-              className={cn(
-                "bg-tint rounded-pill absolute inset-y-0 left-0 z-0",
-                "transition-[opacity,transform,width]",
-                "ease-standard",
-                visible ? "opacity-100" : "opacity-0",
-              )}
-              style={{
-                width: rect?.width ?? 0,
-                transform: `translateX(${rect?.left ?? 0}px)`,
-                /* Opacity always animates; the slide is dropped under reduced
+              <li
+                aria-hidden
+                className={cn(
+                  "bg-tint rounded-pill absolute inset-y-0 left-0 z-0",
+                  "transition-[opacity,transform,width]",
+                  "ease-standard",
+                  visible ? "opacity-100" : "opacity-0",
+                )}
+                style={{
+                  width: rect?.width ?? 0,
+                  transform: `translateX(${rect?.left ?? 0}px)`,
+                  /* Opacity always animates; the slide is dropped under reduced
                    motion by giving transform/width no duration of their own. */
-                transitionDuration: reducedMotion
-                  ? "var(--duration-press), 0ms, 0ms"
-                  : "var(--duration-press), var(--duration-slide), var(--duration-slide)",
-              }}
-            />
+                  transitionDuration: reducedMotion
+                    ? "var(--duration-press), 0ms, 0ms"
+                    : "var(--duration-press), var(--duration-slide), var(--duration-slide)",
+                }}
+              />
 
-            {items.map((item, index) => {
-              const isActive = index === activeIndex;
-              const ref = setItemRef(index);
+              {items.map((item, index) => {
+                const isActive = index === activeIndex;
+                const ref = setItemRef(index);
 
-              const shared = {
-                onPointerEnter: () => setTargetIndex(index),
-                onFocus: () => setTargetIndex(index),
-                className: cn(
-                  "text-13.5 rounded-pill block px-2 py-2 whitespace-nowrap sm:px-3.5",
-                  "transition-colors duration-(--duration-press)",
-                  /* The base :focus-visible rule squares the outline to
+                const shared = {
+                  onPointerEnter: () => setTargetIndex(index),
+                  onFocus: () => setTargetIndex(index),
+                  className: cn(
+                    "text-13.5 rounded-pill flex items-center gap-1.5 px-2 py-2 whitespace-nowrap sm:px-3.5",
+                    "transition-colors duration-(--duration-press)",
+                    /* The base :focus-visible rule squares the outline to
                      --radius-xs; the pill's radius is restated so the ring
                      hugs the shape the reader can actually see. */
-                  "focus-visible:rounded-pill",
-                  isActive ? "text-ink font-semibold" : "text-secondary hover:text-ink",
-                ),
-              };
+                    "focus-visible:rounded-pill",
+                    isActive ? "text-ink font-semibold" : "text-secondary hover:text-ink",
+                  ),
+                };
 
-              return (
-                <li key={item.label} className="relative z-10">
-                  {item.kind === "link" ? (
-                    <Link
-                      {...shared}
-                      ref={ref as React.Ref<HTMLAnchorElement>}
-                      href={item.href}
-                      aria-current={isActive ? "page" : undefined}
-                    >
-                      {item.label}
-                    </Link>
-                  ) : (
-                    <button
-                      {...shared}
-                      ref={ref as React.Ref<HTMLButtonElement>}
-                      type="button"
-                      onClick={item.onSelect}
-                    >
-                      {item.label}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
+                return (
+                  <li key={item.label} className={cn("relative z-10", item.className)}>
+                    {item.kind === "link" ? (
+                      <Link
+                        {...shared}
+                        ref={ref as React.Ref<HTMLAnchorElement>}
+                        href={item.href}
+                        aria-current={isActive ? "page" : undefined}
+                        aria-label={item.content ? item.label : undefined}
+                      >
+                        {item.content ?? item.label}
+                      </Link>
+                    ) : (
+                      <button
+                        {...shared}
+                        ref={ref as React.Ref<HTMLButtonElement>}
+                        type="button"
+                        onClick={item.onSelect}
+                        aria-label={item.content ? item.label : undefined}
+                      >
+                        {item.content ?? item.label}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
 
-        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+          <div className="flex shrink-0 items-center gap-2">{actions}</div>
         </div>
       </header>
     </>

@@ -15,13 +15,21 @@ const config: ShippingConfig = Object.freeze({
   currency: "BDT",
   flatRateCents: 6000,
   freeDeliveryThresholdCents: 150000,
+  originDivision: "dhaka",
 });
 
-const policy = new ShippingPolicy(config);
+/**
+ * No constructor argument any more: ShippingPolicy holds no state, because the
+ * numbers it prices with became editable in the admin panel and a value
+ * injected once into a singleton is a value that goes stale. `config` is now
+ * passed per call, which is what makes this a pure function — and what lets
+ * these tests pin the money rules to exact figures with no DI at all.
+ */
+const policy = new ShippingPolicy();
 
 describe("ShippingPolicy.quote", () => {
   it("charges the flat rate below the threshold", () => {
-    expect(policy.quote(100000, 1)).toEqual({
+    expect(policy.quote(100000, 1, config)).toEqual({
       baseCents: 6000,
       chargedCents: 6000,
       creditCents: 0,
@@ -32,7 +40,7 @@ describe("ShippingPolicy.quote", () => {
     // The boundary, spelled out because "over ৳1,500" in the copy and `>=` in
     // the code are not the same rule, and a customer landing exactly on the
     // threshold is the one who notices.
-    expect(policy.quote(150000, 2)).toEqual({
+    expect(policy.quote(150000, 2, config)).toEqual({
       baseCents: 6000,
       chargedCents: 0,
       creditCents: 6000,
@@ -43,14 +51,14 @@ describe("ShippingPolicy.quote", () => {
     // The summary rail draws three rows: what postage would have cost, what is
     // charged, and the waiver as a credit line. Collapsing base to zero when
     // it is waived would make the credit row unrenderable.
-    const quote = policy.quote(200000, 1);
+    const quote = policy.quote(200000, 1, config);
 
     expect(quote.baseCents).toBe(6000);
     expect(quote.creditCents).toBe(6000);
   });
 
   it("charges nothing for an empty cart", () => {
-    expect(policy.quote(0, 0)).toEqual({ baseCents: 0, chargedCents: 0, creditCents: 0 });
+    expect(policy.quote(0, 0, config)).toEqual({ baseCents: 0, chargedCents: 0, creditCents: 0 });
   });
 
   it("charges postage on a zero-subtotal cart that still has lines", () => {
@@ -58,18 +66,18 @@ describe("ShippingPolicy.quote", () => {
     // totals zero and still has to be posted. Note this also means such a cart
     // qualifies for no waiver — it is below the threshold — which is the
     // intended reading.
-    expect(policy.quote(0, 1).chargedCents).toBe(6000);
+    expect(policy.quote(0, 1, config).chargedCents).toBe(6000);
   });
 
   it("uses a region override in place of the flat rate", () => {
-    expect(policy.quote(100000, 1, 12000).chargedCents).toBe(12000);
+    expect(policy.quote(100000, 1, config, 12000).chargedCents).toBe(12000);
   });
 
   it("waives an overridden rate too", () => {
     // "Free delivery over ৳1,500" must mean the same thing outside Dhaka as
     // inside it. A threshold that only waived the cheap rate would surprise
     // exactly the customers who are already paying more.
-    expect(policy.quote(150000, 1, 12000)).toEqual({
+    expect(policy.quote(150000, 1, config, 12000)).toEqual({
       baseCents: 12000,
       chargedCents: 0,
       creditCents: 12000,
@@ -79,6 +87,6 @@ describe("ShippingPolicy.quote", () => {
   it("falls back to the flat rate for a null override", () => {
     // Null is what RegionsService returns for "flat rate applies" and for "no
     // region chosen yet", and both must price as the national rate.
-    expect(policy.quote(100000, 1, null).chargedCents).toBe(6000);
+    expect(policy.quote(100000, 1, config, null).chargedCents).toBe(6000);
   });
 });

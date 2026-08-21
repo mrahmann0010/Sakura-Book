@@ -1,7 +1,9 @@
 import { VersioningType } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { ConfigService } from "@nestjs/config";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { Logger as PinoLogger } from "nestjs-pino";
 import { cleanupOpenApiDoc } from "nestjs-zod";
@@ -23,12 +25,39 @@ async function bootstrap(): Promise<void> {
    * the cost is one retained buffer per request, and the alternative is a
    * bespoke body parser mounted on one path.
    */
-  const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
+  // Typed as the Express application because `app.set("trust proxy", ...)`
+  // below is an Express escape hatch that the platform-agnostic
+  // INestApplication interface does not expose.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: true,
+    rawBody: true,
+  });
   const config = app.get(ConfigService<Env, true>);
 
   app.useLogger(app.get(PinoLogger));
 
   app.use(helmet());
+
+  /**
+   * Admin sessions are httpOnly cookies, and without this `request.cookies` is
+   * undefined — which AdminJwtGuard reads as "no token" and turns into a 401
+   * on every admin request. Registered before the routes and after helmet,
+   * which sets headers and reads nothing.
+   */
+  app.use(cookieParser());
+
+  /**
+   * Trust the first proxy hop, so `request.ip` is the client's address rather
+   * than the load balancer's. Admin session rows and audit entries both record
+   * it, and a column that uniformly holds `10.0.0.1` is worse than an empty
+   * one — it looks like data.
+   *
+   * `1`, not `true`. Trusting every hop lets a client forge `X-Forwarded-For`
+   * and write whatever address it likes into the audit trail; trusting exactly
+   * the number of proxies actually in front of the app is what makes the value
+   * mean something. Raise it if another hop is added.
+   */
+  app.set("trust proxy", 1);
   app.enableCors({
     origin: config.get("WEB_ORIGIN", { infer: true }),
     credentials: true,

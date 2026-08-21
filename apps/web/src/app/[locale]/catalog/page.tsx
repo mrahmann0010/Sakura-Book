@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { BookCard, BookGrid, CatalogControls, EmptyState, Pagination } from "@/components/domain";
 import { AppNav, PageHeader, PageShell, Shell, SiteFooter } from "@/components/layout";
@@ -9,6 +11,7 @@ import { footerColumns } from "@/lib/books";
 import { toBookSummaries } from "@/lib/book-view";
 import { parseSearchParams, toSearchParams } from "@/lib/catalog";
 import { routes } from "@/lib/routes";
+import { localeAlternates } from "@/lib/site";
 
 /* Catalog, per the Catalog Wireframe (option 1a/1b/1c): page title and count,
    search, genre facets, applied chips beside sort, a 3-across grid, then
@@ -19,6 +22,32 @@ import { routes } from "@/lib/routes";
    shareable link rather than client state. `queryCatalog` over a hardcoded
    array used to sit where `listBooks` now does — that was the seam, and this
    is the API landing on it. */
+
+/**
+ * Filtered and paged views are slices of one shelf, not pages of their own.
+ *
+ * `?q=`/`?genre=`/`?page=` produce an unbounded number of URLs over the same
+ * few dozen books — the textbook crawl-budget sink. Page 1 unfiltered is the
+ * canonical and is indexed; every other slice points its canonical at that one
+ * and is marked noindex,follow, so crawlers still walk through it to the book
+ * pages without indexing the slice itself.
+ */
+export async function generateMetadata({
+  params,
+  searchParams,
+}: PageProps<"/[locale]/catalog">): Promise<Metadata> {
+  const { locale } = (await params) as { locale: Locale };
+  const { t } = await getTranslation(locale);
+  const query = parseSearchParams(await searchParams);
+
+  const isCanonicalView = !query.q && query.genres.length === 0 && query.page === 1;
+
+  return {
+    title: t("catalog.title"),
+    alternates: localeAlternates(locale, "/catalog"),
+    robots: isCanonicalView ? undefined : { index: false, follow: true },
+  };
+}
 
 export default async function Catalog({ params, searchParams }: PageProps<"/[locale]/catalog">) {
   const { locale } = (await params) as { locale: Locale };

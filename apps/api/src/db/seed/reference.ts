@@ -17,23 +17,21 @@ import { categories, deliveryRegions } from "../schema";
  */
 export async function seedReference(db: Database): Promise<void> {
   /**
-   * The five regions the checkout form already offers. Slugs match the values
-   * in apps/web/src/lib/checkout.ts, which is what makes this table a
-   * replacement for that list rather than a second, disagreeing one.
+   * The two zones the checkout form derives from the customer's chosen
+   * division: "Dhaka" division maps to `inside-dhaka`, every other division
+   * maps to `outside-dhaka`. Slugs match apps/web/src/lib/checkout.ts and
+   * apps/web/src/lib/bd-geo.ts, which is what makes this table a replacement
+   * for that list rather than a second, disagreeing one.
    *
-   * All five take the flat national rate today — `deliveryCentsOverride` stays
-   * null. The column exists because a Bangladeshi shop charging the same
-   * inside and outside Dhaka is the exception, and discovering that after
-   * there are live orders would be a migration under load.
+   * Both carry a real `deliveryCentsOverride` — the flat national rate is now
+   * only the fallback for an unrecognised or absent slug, not what either zone
+   * actually charges.
    */
   await db
     .insert(deliveryRegions)
     .values([
-      { slug: "dhaka", name: "Dhaka", sortOrder: 1 },
-      { slug: "chattogram", name: "Chattogram", sortOrder: 2 },
-      { slug: "sylhet", name: "Sylhet", sortOrder: 3 },
-      { slug: "khulna", name: "Khulna", sortOrder: 4 },
-      { slug: "rajshahi", name: "Rajshahi", sortOrder: 5 },
+      { slug: "inside-dhaka", name: "Inside Dhaka", sortOrder: 1, deliveryCentsOverride: 6000 },
+      { slug: "outside-dhaka", name: "Outside Dhaka", sortOrder: 2, deliveryCentsOverride: 12000 },
     ])
     .onConflictDoNothing({ target: deliveryRegions.slug });
 

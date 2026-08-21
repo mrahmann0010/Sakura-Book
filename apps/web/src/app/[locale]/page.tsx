@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { BookCard, BookGrid, HowItWorks, ProofPoints } from "@/components/domain";
@@ -9,6 +10,7 @@ import { listBooks } from "@/lib/api/catalog";
 import { footerColumns } from "@/lib/books";
 import { toBookSummaries } from "@/lib/book-view";
 import { routes } from "@/lib/routes";
+import { localeAlternates } from "@/lib/site";
 import { iconButton } from "@/lib/variants";
 import type { BookSummary } from "@/components/domain";
 
@@ -44,6 +46,14 @@ import type { BookSummary } from "@/components/domain";
  * API exactly as it would under ISR.
  */
 export const dynamic = "force-dynamic";
+
+/** Canonical and hreflang for the landing page. Everything else — the title
+    template, the description, the Open Graph defaults — is inherited from the
+    layout, so this only states what differs per locale. */
+export async function generateMetadata({ params }: PageProps<"/[locale]">): Promise<Metadata> {
+  const { locale } = (await params) as { locale: Locale };
+  return { alternates: localeAlternates(locale) };
+}
 
 /** The wireframe's quick-view control. No modal exists yet, so it goes to the
     book rather than rendering a button that does nothing. */
