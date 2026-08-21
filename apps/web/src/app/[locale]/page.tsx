@@ -81,12 +81,16 @@ function QuickView({ book, label }: { book: BookSummary; label: string }) {
 
 export default async function Home({ params }: PageProps<"/[locale]">) {
   const { locale } = (await params) as { locale: Locale };
-  const { t } = await getTranslation(locale);
 
-  /* One shelf and a count, in a single round trip. The hero's count comes off
-     the list's `total`, so the shop never advertises a number no query would
+  /* Translations and the shelf don't depend on each other — load them
+     together instead of paying for both round trips in sequence. One shelf
+     and a count come off a single list call: the hero's count comes off the
+     list's `total`, so the shop never advertises a number no query would
      return. */
-  const recent = await listBooks({ q: "", genres: [], sort: "recent", page: 1 });
+  const [{ t }, recent] = await Promise.all([
+    getTranslation(locale),
+    listBooks({ q: "", genres: [], sort: "recent", page: 1 }),
+  ]);
 
   const recentlyAdded = toBookSummaries(recent.items, locale);
 

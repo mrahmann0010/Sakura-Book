@@ -77,9 +77,10 @@ export async function generateMetadata({
 
 export default async function BookDetail({ params }: PageProps<"/[locale]/books/[slug]">) {
   const { locale, slug } = (await params) as { locale: Locale; slug: string };
-  const { t } = await getTranslation(locale);
 
-  const book = await loadBook(slug);
+  /* The book fetch is deduped with generateMetadata's (see loadBook above),
+     but translations don't depend on it either way — load both at once. */
+  const [{ t }, book] = await Promise.all([getTranslation(locale), loadBook(slug)]);
   const view = toBookSummary(book, locale);
   const money = (cents: number) => formatMoney(cents, intlLocale(locale));
 

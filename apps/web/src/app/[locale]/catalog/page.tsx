@@ -53,18 +53,18 @@ export async function generateMetadata({
 
 export default async function Catalog({ params, searchParams }: PageProps<"/[locale]/catalog">) {
   const { locale } = (await params) as { locale: Locale };
-  const { t } = await getTranslation(locale);
-
   const query = parseSearchParams(await searchParams);
 
   /* In parallel: the rail does not depend on the shelf, and awaiting them in
      sequence would put the categories round-trip on the critical path of every
      page of every search. The pre-order book rides along the same way — it is
      an independent read that only prepends onto the canonical, unfiltered
-     first page (§ below), so a filtered or later page never pays for it. */
+     first page (§ below), so a filtered or later page never pays for it.
+     Translations join the same batch — they don't depend on any of it either. */
   const isCanonicalView = !query.q && query.genres.length === 0 && query.page === 1;
 
-  const [list, categories, preOrderBook] = await Promise.all([
+  const [{ t }, list, categories, preOrderBook] = await Promise.all([
+    getTranslation(locale),
     listBooks(query),
     getCategories(),
     isCanonicalView ? getActivePreOrderBook() : Promise.resolve(null),
