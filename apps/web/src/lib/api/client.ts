@@ -135,6 +135,8 @@ export type ApiRequest = {
    */
   revalidate?: number | false;
   signal?: AbortSignal;
+  /** Extra request headers — e.g. the Idempotency-Key header on a mutation. */
+  headers?: Record<string, string>;
 };
 
 /**
@@ -148,7 +150,7 @@ export type ApiRequest = {
 export async function apiFetch<T extends z.ZodTypeAny>(
   path: string,
   schema: T,
-  { query, method = "GET", body, revalidate, signal }: ApiRequest = {},
+  { query, method = "GET", body, revalidate, signal, headers }: ApiRequest = {},
 ): Promise<z.infer<T>> {
   const url = `${apiOrigin()}${API_PREFIX}${path}${query ? toSearchParams(query) : ""}`;
 
@@ -158,6 +160,7 @@ export async function apiFetch<T extends z.ZodTypeAny>(
     headers: {
       accept: "application/json",
       ...(body === undefined ? {} : { "content-type": "application/json" }),
+      ...headers,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     /* `revalidate: false` means "do not cache" here rather than "cache

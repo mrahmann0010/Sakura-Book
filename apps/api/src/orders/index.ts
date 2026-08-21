@@ -12,7 +12,7 @@ export { toOrderResponse, type OrderRow } from "./order.mapper";
 // The shared read shape, so the admin detail view cannot assemble an order
 // differently from the way checkout and guest lookup assemble theirs.
 export { findOrder } from "./order.query";
-export { generateOrderNumber } from "./order-number";
+export { generateOrderNumber, ORDER_NUMBER_ATTEMPTS } from "./order-number";
 export { ORDER_STATUS_CHANGED, type OrderStatusChangedEvent } from "./order.events";
 export {
   ORDER_STATUS_TRANSITIONS,

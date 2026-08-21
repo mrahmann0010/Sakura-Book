@@ -15,6 +15,7 @@ import { AdminJwtGuard } from "./auth/admin-jwt.guard";
 import { AdminRolesGuard } from "./auth/admin-roles.guard";
 import { AdminDashboardController, AdminDashboardService } from "./dashboard";
 import { AdminOrdersController, AdminOrdersService } from "./orders";
+import { AdminPreOrderBooksController, AdminPreOrderBooksService } from "./pre-order";
 import { AdminSettingsController, AdminSettingsService } from "./settings";
 
 /**
@@ -93,12 +94,14 @@ import { AdminSettingsController, AdminSettingsService } from "./settings";
     AdminOrdersController,
     AdminSettingsController,
     AdminDashboardController,
+    AdminPreOrderBooksController,
   ],
   providers: [
     AdminAuthService,
     AdminOrdersService,
     AdminSettingsService,
     AdminDashboardService,
+    AdminPreOrderBooksService,
     AuditService,
     { provide: APP_GUARD, useClass: AdminJwtGuard },
     { provide: APP_GUARD, useClass: AdminRolesGuard },

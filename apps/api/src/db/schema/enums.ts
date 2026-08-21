@@ -68,6 +68,11 @@ export const adminRoleEnum = pgEnum("admin_role", ["STAFF", "ADMIN"]);
  * before/after diff, so this column exists to make "show me every deletion" a
  * cheap indexed query rather than to re-describe the change.
  */
+/** The lifecycle of a pre-order — deliberately smaller than orderStatusEnum:
+ * there is no shipping/refund machinery for a pre-order yet, only "we have it"
+ * vs. "we don't, any more". */
+export const preOrderStatusEnum = pgEnum("pre_order_status", ["PENDING", "CONFIRMED", "CANCELLED"]);
+
 export const auditActionEnum = pgEnum("audit_action", [
   "CREATE",
   "UPDATE",

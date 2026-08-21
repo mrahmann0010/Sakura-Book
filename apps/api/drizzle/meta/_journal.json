@@ -57,6 +57,13 @@
       "when": 1787289710661,
       "tag": "0007_fresh_ikaris",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787292291699,
+      "tag": "0008_fast_loa",
+      "breakpoints": true
     }
   ]
 }
