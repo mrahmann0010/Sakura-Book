@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 
-import { AppNav, PageShell, SiteFooter } from "@/components/layout";
+import { AppNav, PageShell, Shell, SiteFooter } from "@/components/layout";
+import { EmptyState } from "@/components/domain";
+import { PreOrderCartView } from "@/components/pre-order/pre-order-cart-view";
 import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
+import { getActivePreOrderBook } from "@/lib/api/pre-order";
 import { footerColumns } from "@/lib/books";
 import { localizeLinks, routes } from "@/lib/routes";
 
@@ -14,6 +17,8 @@ export default async function PreOrderPage({ params }: PageProps<"/[locale]/pre-
   const { locale } = (await params) as { locale: Locale };
   const { t } = await getTranslation(locale);
   const path = routes(locale);
+
+  const book = await getActivePreOrderBook();
 
   return (
     <PageShell
@@ -29,12 +34,17 @@ export default async function PreOrderPage({ params }: PageProps<"/[locale]/pre-
         />
       }
     >
-      <div className="mx-auto max-w-shell px-4 py-24 text-center sm:px-page-tablet">
-        <h1 className="font-serif text-3xl">Pre-orders are coming soon</h1>
-        <p className="text-secondary mt-3">
-          We&apos;re not taking pre-orders yet — check back shortly.
-        </p>
-      </div>
+      {book ? (
+        <PreOrderCartView locale={locale} book={book} />
+      ) : (
+        <Shell className="py-14 lg:py-20">
+          <EmptyState
+            eyebrow="Pre-order"
+            title="Pre-orders are coming soon"
+            description="We're not taking pre-orders yet — check back shortly."
+          />
+        </Shell>
+      )}
     </PageShell>
   );
 }

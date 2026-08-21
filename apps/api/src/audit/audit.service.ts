@@ -1,22 +1,27 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { desc, eq, and, type SQL } from "drizzle-orm";
-import { DbService } from "../../db/db.service";
-import type { Transaction } from "../../db/db.types";
-import { auditLog } from "../../db/schema";
-import type { AccessClaims } from "../auth/tokens";
+import { DbService } from "../db/db.service";
+import type { Transaction } from "../db/db.types";
+import { auditLog } from "../db/schema";
 
 export type AuditAction =
-  | "CREATE"
-  | "UPDATE"
-  | "DELETE"
-  | "LOGIN"
-  | "LOGIN_FAILED"
-  | "LOGOUT"
-  | "TRANSITION"
-  | "ADJUST";
+  "CREATE" | "UPDATE" | "DELETE" | "LOGIN" | "LOGIN_FAILED" | "LOGOUT" | "TRANSITION" | "ADJUST";
+
+/**
+ * Who acted.
+ *
+ * Structurally compatible with the admin token's claims rather than derived
+ * from them, which is the point: the audit log moved out of AdminModule when a
+ * machine gained the ability to accept money, and infrastructure that every
+ * feature writes to must not depend on the shape of one feature's session
+ * token. `sub` is an admin user's id where there is one — omit the actor
+ * entirely for an automatic action, and see the `after` payload conventions in
+ * pre-order-payment-verification.service.ts for how those identify themselves.
+ */
+export type AuditActor = { sub: string; email: string };
 
 export type AuditEntry = {
-  actor?: Pick<AccessClaims, "sub" | "email">;
+  actor?: AuditActor;
   action: AuditAction;
   entityType: string;
   entityId?: string;
@@ -84,7 +89,9 @@ export class AuditService {
     try {
       await this.dbService.db.transaction((tx) => this.record(entry, tx));
     } catch (error) {
-      this.logger.error(`Failed to write audit entry ${entry.action} ${entry.entityType}: ${String(error)}`);
+      this.logger.error(
+        `Failed to write audit entry ${entry.action} ${entry.entityType}: ${String(error)}`,
+      );
     }
   }
 

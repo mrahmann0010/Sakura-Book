@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 
 /** The metadata flags the references draw. At most one shows on a card. */
-export type BookFlag = "editors-pick" | "last-copy" | "signed";
+export type BookFlag = "editors-pick" | "last-copy" | "signed" | "new";
 
 export const flagLabels: Record<BookFlag, string> = {
   "editors-pick": "Editor's pick",
   "last-copy": "Last copy",
   signed: "Signed",
+  new: "New",
 };
 
 /**

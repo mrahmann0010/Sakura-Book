@@ -1,0 +1,1 @@
+ALTER TABLE "pre_order_books" ADD COLUMN "compare_at_price_cents" integer;

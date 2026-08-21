@@ -17,6 +17,6 @@ export { AdminModule } from "./admin.module";
 export { AdminOrdersService, type AdminContext } from "./orders";
 export { AdminSettingsService } from "./settings";
 export { AdminDashboardService } from "./dashboard";
-export { AuditService, type AuditAction, type AuditEntry } from "./audit/audit.service";
+export { AuditService, type AuditAction, type AuditEntry } from "../audit";
 export { CurrentAdmin, Public, Roles } from "./auth/admin-auth.decorators";
 export type { AccessClaims } from "./auth/tokens";

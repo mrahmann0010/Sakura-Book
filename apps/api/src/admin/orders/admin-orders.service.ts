@@ -15,7 +15,7 @@ import { orderItems, orders } from "../../db/schema";
 import { findOrder, type OrderRow } from "../../orders";
 import { OrdersService } from "../../orders";
 import { PaymentsService } from "../../payments";
-import { AuditService } from "../audit/audit.service";
+import { AuditService } from "../../audit";
 import type { AccessClaims } from "../auth/tokens";
 import { adminOrderFilters, adminOrderOrder } from "./admin-order.query";
 import { toAdminOrderDetail, toAdminOrderSummary } from "./admin-order.mapper";

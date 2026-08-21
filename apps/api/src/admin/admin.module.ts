@@ -8,13 +8,18 @@ import { InventoryModule } from "../inventory";
 import { OrdersModule } from "../orders";
 import { PaymentsModule } from "../payments";
 import { ShippingModule } from "../shipping";
-import { AuditService } from "./audit/audit.service";
 import { AdminAuthController } from "./auth/admin-auth.controller";
 import { AdminAuthService } from "./auth/admin-auth.service";
 import { AdminJwtGuard } from "./auth/admin-jwt.guard";
 import { AdminRolesGuard } from "./auth/admin-roles.guard";
 import { AdminDashboardController, AdminDashboardService } from "./dashboard";
 import { AdminOrdersController, AdminOrdersService } from "./orders";
+import {
+  AdminPreOrderBooksController,
+  AdminPreOrderBooksService,
+  AdminPreOrdersController,
+  AdminPreOrdersService,
+} from "./pre-order";
 import { AdminSettingsController, AdminSettingsService } from "./settings";
 
 /**
@@ -93,18 +98,21 @@ import { AdminSettingsController, AdminSettingsService } from "./settings";
     AdminOrdersController,
     AdminSettingsController,
     AdminDashboardController,
+    AdminPreOrderBooksController,
+    AdminPreOrdersController,
   ],
   providers: [
     AdminAuthService,
     AdminOrdersService,
     AdminSettingsService,
     AdminDashboardService,
-    AuditService,
+    AdminPreOrderBooksService,
+    AdminPreOrdersService,
     { provide: APP_GUARD, useClass: AdminJwtGuard },
     { provide: APP_GUARD, useClass: AdminRolesGuard },
   ],
   // Exported for the admin feature modules that follow — orders, catalog,
   // coupons — every one of which needs the audit writer and the claims type.
-  exports: [AdminAuthService, AuditService],
+  exports: [AdminAuthService],
 })
 export class AdminModule {}

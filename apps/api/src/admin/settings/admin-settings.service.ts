@@ -10,7 +10,7 @@ import type {
 import { DbService } from "../../db/db.service";
 import { UnitsSoldReconciler } from "../../inventory";
 import { RegionsService, ShippingTermsService } from "../../shipping";
-import { AuditService } from "../audit/audit.service";
+import { AuditService } from "../../audit";
 import type { AdminContext } from "../orders";
 
 /**

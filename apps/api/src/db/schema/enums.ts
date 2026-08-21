@@ -68,6 +68,37 @@ export const adminRoleEnum = pgEnum("admin_role", ["STAFF", "ADMIN"]);
  * before/after diff, so this column exists to make "show me every deletion" a
  * cheap indexed query rather than to re-describe the change.
  */
+/**
+ * A pre-order's two tracks, one column each.
+ *
+ * Split rather than a single `pre_order_status` because the two answer
+ * different questions on wildly different clocks: payment verification happens
+ * within a day of checkout, fulfilment cannot begin until the print run lands
+ * months later. A single column has to pick one, and every value it holds
+ * leaves the other question unanswerable — "CONFIRMED" says nothing about
+ * whether a parcel exists, and "SHIPPED" says nothing about whether the bKash
+ * transfer was ever verified.
+ *
+ * Neither is orderStatusEnum, and neither should be folded into it: an order
+ * has one clock and one lifecycle, and reusing that enum here would mean
+ * values (PAYMENT_CONFIRMED, PROCESSING) that are legal for a row but mean
+ * something else in the other table.
+ */
+export const preOrderPaymentStatusEnum = pgEnum("pre_order_payment_status", [
+  "PENDING",
+  "ACCEPTED",
+  "REJECTED",
+  "REFUNDED",
+]);
+
+export const preOrderFulfillmentStatusEnum = pgEnum("pre_order_fulfillment_status", [
+  "NOT_STARTED",
+  "PROCESSING",
+  "SHIPPED",
+  "DELIVERED",
+  "CANCELLED",
+]);
+
 export const auditActionEnum = pgEnum("audit_action", [
   "CREATE",
   "UPDATE",

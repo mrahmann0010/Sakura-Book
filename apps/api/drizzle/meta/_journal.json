@@ -57,6 +57,41 @@
       "when": 1787289710661,
       "tag": "0007_fresh_ikaris",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787292291699,
+      "tag": "0008_fast_loa",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787303295537,
+      "tag": "0009_material_maelstrom",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787305152884,
+      "tag": "0010_short_centennial",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787400000000,
+      "tag": "0011_pre_order_status_tracks",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787329642461,
+      "tag": "0012_pre_order_payment_verification",
+      "breakpoints": true
     }
   ]
 }
