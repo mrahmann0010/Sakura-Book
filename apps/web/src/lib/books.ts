@@ -179,7 +179,7 @@ export const footerColumns = [
     links: [
       { href: "/orders", label: "Track an order" },
       { href: "/delivery", label: "Delivery" },
-      { href: "/returns", label: "Returns" },
+      { href: "/refund-policy", label: "Refund policy" },
     ],
   },
   {

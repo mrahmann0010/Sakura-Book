@@ -260,6 +260,52 @@
       "action": "Browse the catalogue"
     }
   },
+  "refundPolicy": {
+    "eyebrow": "Policies",
+    "title": "Refund Policy",
+    "intro": "We strive to deliver every order accurately and within the promised delivery timeframe. However, if an order cannot be delivered for any reason, or is cancelled where applicable, the following refund policy will apply.",
+    "sections": {
+      "cancellation": {
+        "title": "1. Order Cancellation & Refund",
+        "body": [
+          "For prepaid orders, if an order is cancelled before delivery, the amount paid by the customer will be refunded, subject to eligibility.",
+          "If we are unable to fulfill an order for any reason, or fail to deliver the order within the promised timeframe, the amount paid by the customer will be processed for a refund."
+        ]
+      },
+      "afterDelivery": {
+        "title": "2. Cancellation/Return After Delivery",
+        "body": [
+          "Once a book has been delivered, a refund will generally not be applicable solely due to a change of mind or personal preference.",
+          "However, if the customer receives a wrong book, damaged book, torn book, missing pages, or any other product defect, the customer may notify us within the applicable period. After verification, we may provide a replacement or refund, as appropriate."
+        ]
+      },
+      "method": {
+        "title": "3. Refund Method",
+        "body": [
+          "Refunds will generally be made through the same payment method used by the customer to make the payment, including bKash, Nagad, Rocket, card, bank transfer, or other applicable payment methods."
+        ]
+      },
+      "processingTime": {
+        "title": "4. Refund Processing Time",
+        "body": [
+          "Once a refund has been approved, it may generally take 7–10 business days to process. Any additional processing time required by the relevant bank, mobile financial service provider, payment gateway, or other payment service provider will be outside this timeframe."
+        ]
+      },
+      "deliveryCharge": {
+        "title": "5. Delivery & Return Charges",
+        "body": [
+          "If an order has already entered the delivery process and is cancelled at the customer's request, refused at delivery, or returned, applicable delivery and/or return costs may be deducted from the refundable amount, where applicable."
+        ]
+      },
+      "specialCases": {
+        "title": "6. Special Circumstances",
+        "body": [
+          "Each refund request will be reviewed based on the order status, payment information, and reason for the refund. We may request additional information or evidence where necessary to verify the claim."
+        ]
+      }
+    },
+    "note": "Refund eligibility and the refundable amount may vary depending on the type of order, delivery status, and reason for the refund."
+  },
   "errors": {
     "page": {
       "eyebrow": "Something went wrong",

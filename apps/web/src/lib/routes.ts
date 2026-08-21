@@ -21,6 +21,7 @@ export function routes(locale: Locale | string) {
     checkout: `${base}/checkout`,
     order: (id: string) => `${base}/orders/${id}`,
     orders: `${base}/orders`,
+    refundPolicy: `${base}/refund-policy`,
   } as const;
 }
 
