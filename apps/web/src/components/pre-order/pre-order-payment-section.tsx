@@ -1,36 +1,30 @@
 "use client";
 
+import { useState } from "react";
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
-import { PaymentOption, PaymentOptionList } from "@/components/domain";
-import { Eyebrow, Input } from "@/components/ui";
 import {
-  methodNeedsTransferDetails,
-  type AcceptedPaymentMethod,
-  type CheckoutValues,
-  type PaymentMethod,
-} from "@/lib/checkout";
+  MobileMoneyPayment,
+  PaymentOption,
+  PaymentOptionList,
+  type MobileMoneyProviderId,
+} from "@/components/domain";
+import { Eyebrow } from "@/components/ui";
+import type { AcceptedPaymentMethod, CheckoutValues } from "@/lib/checkout";
 
 /* --------------------------------------------------------------------------
    The pre-order's payment step — same building blocks as the real checkout's
-   PaymentSection, over a smaller list.
+   PaymentSection.
 
    Pre-orders are prepaid only: there is no physical stock yet for a courier
-   to collect cash against, so `cash-on-delivery` is left commented out below
-   rather than deleted, the same way `card` stays visible-but-disabled instead
-   of removed. Re-enabling it, if that ever makes sense, is uncommenting one
-   line here and in preOrderPaymentMethods (@sakura/contracts), which is what
-   the API actually enforces.
+   to collect cash against, so `cash-on-delivery` has no place here at all.
+   The only live path is `MobileMoneyPayment` — bKash/Rocket/Nagad, walking
+   the shopper through send-money-then-verify — which fills the same
+   `senderNumber`/`transactionId` pair the API's `manual-transfer` method has
+   always accepted. `card` stays visible-but-disabled rather than removed,
+   same as the real checkout's card option.
    -------------------------------------------------------------------------- */
-
-const preOrderPaymentMethods: readonly PaymentMethod[] = [
-  // "cash-on-delivery",
-  "manual-transfer",
-  "card",
-];
-
-const availablePreOrderPaymentMethods: readonly PaymentMethod[] = ["manual-transfer"];
 
 export function PreOrderPaymentSection({
   register,
@@ -44,54 +38,33 @@ export function PreOrderPaymentSection({
   onMethodChange: (method: AcceptedPaymentMethod) => void;
 }) {
   const { t } = useTranslation();
+  const [provider, setProvider] = useState<MobileMoneyProviderId | null>(null);
 
   return (
     <fieldset className="min-w-0">
       <Eyebrow as="legend">{t("checkout.payment.legend")}</Eyebrow>
 
-      <PaymentOptionList className="mt-3.5" label={t("checkout.payment.legend")}>
-        {preOrderPaymentMethods.map((value) => {
-          const disabled = !availablePreOrderPaymentMethods.includes(value);
+      <MobileMoneyPayment
+        className="mt-3.5"
+        register={register}
+        errors={errors}
+        provider={provider}
+        onProviderChange={(next) => {
+          setProvider(next);
+          if (method !== "manual-transfer") onMethodChange("manual-transfer");
+        }}
+      />
 
-          return (
-            <PaymentOption
-              key={value}
-              name="method"
-              value={value}
-              checked={method === value}
-              disabled={disabled}
-              /* Safe: a disabled option cannot fire onSelect, so `next` is
-                 always the one method this list makes selectable. */
-              onSelect={(next) => onMethodChange(next as AcceptedPaymentMethod)}
-              label={t(`checkout.payment.${value}`)}
-              meta={t(`checkout.payment.${value}Meta`)}
-              description={
-                disabled
-                  ? t("checkout.payment.cardUnavailable")
-                  : methodNeedsTransferDetails(value)
-                    ? t("checkout.payment.manual-transferHint")
-                    : undefined
-              }
-              fields={
-                methodNeedsTransferDetails(value) ? (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <Input
-                      label={t("checkout.payment.senderNumber")}
-                      inputMode="tel"
-                      error={errors.senderNumber?.message}
-                      {...register("senderNumber")}
-                    />
-                    <Input
-                      label={t("checkout.payment.transactionId")}
-                      error={errors.transactionId?.message}
-                      {...register("transactionId")}
-                    />
-                  </div>
-                ) : undefined
-              }
-            />
-          );
-        })}
+      <PaymentOptionList className="mt-2.5" label={t("checkout.payment.legend")}>
+        <PaymentOption
+          name="method"
+          value="card"
+          checked={false}
+          disabled
+          label={t("checkout.payment.card")}
+          meta={t("checkout.payment.cardMeta")}
+          description={t("checkout.payment.cardUnavailable")}
+        />
       </PaymentOptionList>
     </fieldset>
   );
