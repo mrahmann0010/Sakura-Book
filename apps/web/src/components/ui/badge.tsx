@@ -91,14 +91,22 @@ export function Chip({ active = false, as = "button", onClick, children, classNa
 export function CountBadge({
   count,
   max = 99,
+  /** "dot" drops the numeral for a plain indicator — the mobile nav's cart
+   *  item, where the pill list is already tight on width. */
+  variant = "count",
   className,
 }: {
   count: number;
   /** Counts above this render as "99+". */
   max?: number;
+  variant?: "count" | "dot";
   className?: string;
 }) {
   if (count <= 0) return null;
+
+  if (variant === "dot") {
+    return <span aria-hidden className={cn("bg-clay size-1.5 rounded-full", className)} />;
+  }
 
   return <span className={cn(countBadge, className)}>{count > max ? `${max}+` : count}</span>;
 }

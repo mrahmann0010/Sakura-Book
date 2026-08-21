@@ -15,6 +15,7 @@ export function routes(locale: Locale | string) {
   return {
     home: base,
     catalog: `${base}/catalog`,
+    preorder: `${base}/pre-order`,
     book: (id: string) => `${base}/books/${id}`,
     cart: `${base}/cart`,
     checkout: `${base}/checkout`,

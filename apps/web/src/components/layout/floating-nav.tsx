@@ -305,7 +305,11 @@ export function FloatingNav({
       >
         <div
           className={cn(
-            "max-w-shell pointer-events-auto mx-auto flex items-center justify-between gap-1",
+            /* Below sm, the wordmark and actions cluster are both hidden, so
+             justify-between has only the nav item list to place — it pins
+             flush to the start against an invisible 0-width actions div.
+             Centering here instead keeps the pill bar visually balanced. */
+            "max-w-shell pointer-events-auto mx-auto flex items-center justify-center gap-1 sm:justify-between",
             "rounded-pill border sm:gap-6",
             /* Padding shrinks with the viewport; the nav never collapses to a
              hamburger, so every item stays reachable at every width. */

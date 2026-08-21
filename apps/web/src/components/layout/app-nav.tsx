@@ -44,6 +44,7 @@ export function AppNav({ brandHref }: { brandHref?: string } = {}) {
     return [
       { kind: "link", label: "Home", href: base },
       { kind: "link", label: "Books", href: `${base}/catalog` },
+      { kind: "link", label: "Pre-order", href: `${base}/pre-order` },
       { kind: "link", label: "Track Order", href: `${base}/orders` },
       /* Mobile only. Above the tablet floor the cart keeps its place in the
          right-hand actions, where the wordmark and the language switcher give
@@ -53,13 +54,13 @@ export function AppNav({ brandHref }: { brandHref?: string } = {}) {
          /cart lights up the way every other route does. */
       {
         kind: "link",
-        label: "Cart",
+        label: count > 0 ? `Cart, ${count} item${count === 1 ? "" : "s"}` : "Cart",
         href: `${base}/cart`,
         className: "sm:hidden",
         content: (
           <>
             <span>Cart</span>
-            <CountBadge count={count} className={bump ? "animate-bump" : undefined} />
+            <CountBadge count={count} variant="dot" className={bump ? "animate-bump" : undefined} />
           </>
         ),
       },
