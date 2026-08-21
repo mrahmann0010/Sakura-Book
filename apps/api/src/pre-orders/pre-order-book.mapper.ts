@@ -12,6 +12,7 @@ export function toPreOrderBookResponse(row: PreOrderBookRow): PreOrderBook {
     description: row.description,
     pageCount: row.pageCount,
     priceCents: row.priceCents,
+    compareAtPriceCents: row.compareAtPriceCents,
     coverImageUrl: row.coverImageUrl,
     coverImageAlt: row.coverImageAlt,
     isActive: row.isActive,

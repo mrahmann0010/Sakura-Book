@@ -28,6 +28,12 @@ export function PreOrderCartView({ locale, book }: { locale: Locale; book: PreOr
   const unitPrice = formatMoney(book.priceCents, money);
   const total = formatMoney(book.priceCents * quantity, money);
 
+  const hasDiscount = !!book.compareAtPriceCents && book.compareAtPriceCents > book.priceCents;
+  const compareAtPrice = book.compareAtPriceCents ? formatMoney(book.compareAtPriceCents, money) : null;
+  const discountPercent = book.compareAtPriceCents
+    ? Math.round(((book.compareAtPriceCents - book.priceCents) / book.compareAtPriceCents) * 100)
+    : null;
+
   return (
     <Shell className="py-14 lg:py-20">
       <PageHeader size="lg" title="Pre-order" description={`${book.title} — reserve your copy.`} />
@@ -43,7 +49,17 @@ export function PreOrderCartView({ locale, book }: { locale: Locale; book: PreOr
             <p className="text-caption text-secondary mt-2">{book.pageCount} pages</p>
           ) : null}
 
-          <p className="text-19 text-ink mt-6">{unitPrice}</p>
+          <div className="mt-6 flex items-center gap-2.5">
+            <p className="text-19 text-ink">{unitPrice}</p>
+            {hasDiscount ? (
+              <>
+                <span className="text-secondary text-13.5 line-through">{compareAtPrice}</span>
+                <span className="text-13 rounded-full bg-tint px-2 py-0.5 text-ink">
+                  −{discountPercent}%
+                </span>
+              </>
+            ) : null}
+          </div>
 
           <div className="mt-4 flex items-center gap-3.5">
             <Stepper

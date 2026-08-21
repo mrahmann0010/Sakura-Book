@@ -13,6 +13,7 @@ export const preOrderBookSchema = z.object({
   description: z.string(),
   pageCount: z.number().int().positive().nullable(),
   priceCents: z.number().int().nonnegative(),
+  compareAtPriceCents: z.number().int().nonnegative().nullable(),
   coverImageUrl: z.string(),
   coverImageAlt: z.string().nullable(),
   isActive: z.boolean(),

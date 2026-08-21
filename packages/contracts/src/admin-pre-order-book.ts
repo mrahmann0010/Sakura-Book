@@ -10,16 +10,25 @@ import { paginated } from "./pagination";
 
 const required = (fix: string) => z.string().trim().min(1, fix);
 
-export const adminPreOrderBookUpsertRequestSchema = z.object({
-  title: required("Add a title."),
-  authorName: required("Add the author's name."),
-  description: required("Add a description."),
-  pageCount: z.number().int().positive().nullable().optional(),
-  priceCents: z.number().int().nonnegative("Price cannot be negative."),
-  coverImageUrl: required("Add a cover image URL."),
-  coverImageAlt: z.string().trim().optional(),
-  isActive: z.boolean().default(true),
-});
+export const adminPreOrderBookUpsertRequestSchema = z
+  .object({
+    title: required("Add a title."),
+    authorName: required("Add the author's name."),
+    description: required("Add a description."),
+    pageCount: z.number().int().positive().nullable().optional(),
+    priceCents: z.number().int().nonnegative("Price cannot be negative."),
+    compareAtPriceCents: z.number().int().nonnegative().nullable().optional(),
+    coverImageUrl: required("Add a cover image URL."),
+    coverImageAlt: z.string().trim().optional(),
+    isActive: z.boolean().default(true),
+  })
+  .refine(
+    (value) => !value.compareAtPriceCents || value.compareAtPriceCents > value.priceCents,
+    {
+      message: "The original price must be higher than the sale price.",
+      path: ["compareAtPriceCents"],
+    },
+  );
 
 export type AdminPreOrderBookUpsertRequest = z.infer<typeof adminPreOrderBookUpsertRequestSchema>;
 

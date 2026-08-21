@@ -19,6 +19,7 @@ const emptyForm = {
   description: "",
   pageCount: "",
   priceCents: "",
+  compareAtPriceCents: "",
   coverImageUrl: "",
   coverImageAlt: "",
   isActive: true,
@@ -93,6 +94,7 @@ export default function AdminPreOrderBookPage() {
       description: book.description,
       pageCount: book.pageCount ? String(book.pageCount) : "",
       priceCents: String(book.priceCents),
+      compareAtPriceCents: book.compareAtPriceCents ? String(book.compareAtPriceCents) : "",
       coverImageUrl: book.coverImageUrl,
       coverImageAlt: book.coverImageAlt ?? "",
       isActive: book.isActive,
@@ -111,6 +113,7 @@ export default function AdminPreOrderBookPage() {
       description: form.description,
       pageCount: form.pageCount ? Number(form.pageCount) : null,
       priceCents: Number(form.priceCents),
+      compareAtPriceCents: form.compareAtPriceCents ? Number(form.compareAtPriceCents) : null,
       coverImageUrl: form.coverImageUrl,
       coverImageAlt: form.coverImageAlt || undefined,
       isActive: form.isActive,
@@ -209,6 +212,17 @@ export default function AdminPreOrderBookPage() {
             min={0}
             value={form.priceCents}
             onChange={(e) => setForm({ ...form, priceCents: e.target.value })}
+            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+          />
+        </label>
+
+        <label>
+          Original price before discount (cents, optional)
+          <input
+            type="number"
+            min={0}
+            value={form.compareAtPriceCents}
+            onChange={(e) => setForm({ ...form, compareAtPriceCents: e.target.value })}
             style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
           />
         </label>

@@ -23,6 +23,7 @@ export const preOrderBooks = pgTable(
     description: text("description").notNull(),
     pageCount: integer("page_count"),
     priceCents: integer("price_cents").notNull(),
+    compareAtPriceCents: integer("compare_at_price_cents"),
     coverImageUrl: text("cover_image_url").notNull(),
     coverImageAlt: text("cover_image_alt"),
 
