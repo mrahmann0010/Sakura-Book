@@ -22,10 +22,8 @@ import type { BookSummary } from "@/components/domain";
 
    Book titles and authors stay untranslated — they are proper nouns.
 
-   The shelf and the stock count come from GET /books rather than the
-   placeholder arrays that used to sit in lib/books.ts. The count line is the
-   list envelope's `total` — the number of titles the shop actually has, not a
-   constant someone has to remember to change.
+   The shelf comes from GET /books rather than the placeholder arrays that
+   used to sit in lib/books.ts.
 
    The second shelf ("Staff picks") is gone: it was sorted by rating rather
    than curation, because the API has no `featured` filter to ask for, and a
@@ -107,20 +105,6 @@ function QuickView({ book, label }: { book: BookSummary; label: string }) {
 
 type T = Awaited<ReturnType<typeof getTranslation>>["t"];
 
-/* Both call `listBooks` with the same params as the grid below — Next's
-   per-request fetch memoization collapses that to the one call this page
-   used to make with Promise.all, not a second round trip. Split from the
-   grid so the two can sit in their correct DOM positions: the count line is
-   a centred child of the hero's flex column, the grid is a sibling Shell
-   below it, and nesting one Shell inside the other (as a single combined
-   component would need to, to span both) double-applies the container's
-   max-width and gutter. */
-async function HeroCount({ t }: { t: T }) {
-  const recent = await listBooks({ q: "", genres: [], sort: "recent", page: 1 });
-
-  return <span className="eyebrow">{t("home.hero.count", { count: recent.total })}</span>;
-}
-
 async function RecentGrid({ locale, t }: { locale: Locale; t: T }) {
   const recent = await listBooks({ q: "", genres: [], sort: "recent", page: 1 });
   const recentlyAdded = toBookSummaries(recent.items, locale);
@@ -181,7 +165,7 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
         />
       }
     >
-      {/* Hero — headline · subhead, centred; count line streams in below. */}
+      {/* Hero — headline · subhead, centred; tagline sits below. */}
       <Shell
         as="section"
         className="lg:pt-page-desktop lg:pb-block flex flex-col items-center py-20 text-center"
@@ -191,11 +175,9 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
         </h1>
         <p className="max-w-measure-lede text-secondary mt-6">{t("home.hero.subhead")}</p>
 
-        <p className="mt-8 flex items-center gap-3">
+        <p className="text-secondary text-13 mt-8 flex items-center gap-3">
           <span aria-hidden="true" className="bg-rule hidden h-px w-30 sm:block" />
-          <Suspense fallback={<Skeleton className="h-3.5 w-32" />}>
-            <HeroCount t={t} />
-          </Suspense>
+          <span>{t("home.hero.tagline")}</span>
         </p>
       </Shell>
 
@@ -206,14 +188,15 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
         </Suspense>
       </Shell>
 
-      {/* The credibility band, in place of the second shelf: three quiet
-          claims rather than three more covers. Full-bleed so its top rule runs
-          the width of the page — hence no <Shell> around it. */}
+      {/* The credibility band, in place of the second shelf: a metric and a
+          few quiet claims rather than more covers. Full-bleed so its top rule
+          runs the width of the page — hence no <Shell> around it. */}
       <ProofPoints
         className="mt-20 lg:mt-24"
         eyebrow={t("home.proof.eyebrow")}
         metric={t("home.proof.metric")}
         metricLabel={t("home.proof.metricLabel")}
+        metricBody={t("home.proof.metricBody") || undefined}
         points={[
           {
             title: t("home.proof.selected.title"),
@@ -222,6 +205,10 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
           {
             title: t("home.proof.recommended.title"),
             body: t("home.proof.recommended.body"),
+          },
+          {
+            title: t("home.proof.forYou.title"),
+            body: t("home.proof.forYou.body"),
           },
         ]}
       />

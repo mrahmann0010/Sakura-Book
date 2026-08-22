@@ -30,3 +30,5 @@ export { SiteFooter } from "./site-footer";
 export type { FooterColumn, SiteFooterProps } from "./site-footer";
 
 export { LanguageSwitcher } from "./language-switcher";
+
+export { ThemeToggle } from "./theme-toggle";
