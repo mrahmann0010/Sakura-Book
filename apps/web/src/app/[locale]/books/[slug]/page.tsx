@@ -123,14 +123,20 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
 
       <p className="text-13 text-secondary mt-3">
         {book.stockQuantity === 0
-          ? t("book.stock.out")
+          ? t("book.stock.comingSoon")
           : book.stockQuantity <= 5
             ? t("book.stock.low", { count: book.stockQuantity })
             : t("book.stock.in")}
       </p>
 
       <div className="mt-5">
-        <AddToCartButton bookId={book.id} soldOut={view.soldOut} size="md" block />
+        <AddToCartButton
+          bookId={book.id}
+          soldOut={view.soldOut}
+          comingSoon={view.flag === "coming-soon"}
+          size="md"
+          block
+        />
       </div>
 
       {/* Reassurance at the decision moment — the same delivery facts the

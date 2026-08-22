@@ -82,6 +82,25 @@ export const orders = pgTable(
     // answer "how is this order being paid for" for the most common method.
     paymentMethod: paymentMethodEnum("payment_method").notNull(),
 
+    /**
+     * The manual-transfer receipt: the wallet number the money was sent from,
+     * and the transaction ID printed on the bKash/Nagad confirmation.
+     *
+     * Both are already collected and validated by `checkoutSchema` — required
+     * whenever `method` is `manual-transfer` — and until this column existed
+     * the API discarded them at the boundary. That left staff verifying
+     * transfers against nothing: the customer had typed a receipt number the
+     * shop never stored, so an order could only be reconciled by asking them
+     * for it again.
+     *
+     * Nullable because cash on delivery has no receipt to record. The
+     * requiredness is the request schema's job, not the column's — a NOT NULL
+     * here would have to be satisfied with an empty string for every COD
+     * order, which is a worse lie than a null.
+     */
+    senderNumber: text("sender_number"),
+    transactionId: text("transaction_id"),
+
     // Denormalized "current status" for fast reads. The append-only log in
     // orderStatusHistory is the source of truth for how the order got here.
     status: orderStatusEnum("status").notNull().default("PENDING"),
@@ -93,6 +112,13 @@ export const orders = pgTable(
   (table) => [
     index("orders_customer_email_idx").on(table.customerEmail),
     index("orders_customer_phone_idx").on(table.customerPhone),
+
+    /* "Which order is this receipt for?" — the question a member of staff asks
+       with a bKash statement open beside the queue. A lookup, not a scan.
+       Not unique: see pre_order_orders' matching index for why a reuse check
+       belongs in a query that can compare case-insensitively rather than in a
+       constraint that cannot. */
+    index("orders_transaction_id_idx").on(table.transactionId),
 
     /**
      * The admin fulfilment queue's index.

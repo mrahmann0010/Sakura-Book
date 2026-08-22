@@ -111,9 +111,11 @@ export function BookCard({
   className,
 }: BookCardProps) {
   const flag = showFlag ? book.flag : undefined;
-  const priceLine = book.soldOut
-    ? "Out of stock"
-    : formatMoney(book.priceCents, intlLocale(locale));
+  const priceLine = book.flag === "coming-soon"
+    ? "Coming soon"
+    : book.soldOut
+      ? "Out of stock"
+      : formatMoney(book.priceCents, intlLocale(locale));
 
   const title = book.href ? (
     /* The title anchor stretches over the card, so the whole card is one

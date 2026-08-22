@@ -15,7 +15,7 @@ export function routes(locale: Locale | string) {
   return {
     home: base,
     catalog: `${base}/catalog`,
-    preorder: `${base}/pre-order`,
+    // preorder: `${base}/pre-order`, // pre-order stream disabled — single normal flow for all books
     book: (id: string) => `${base}/books/${id}`,
     cart: `${base}/cart`,
     checkout: `${base}/checkout`,

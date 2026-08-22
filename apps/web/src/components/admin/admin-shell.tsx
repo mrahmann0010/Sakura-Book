@@ -10,8 +10,8 @@ import { ADMIN_AUTHED_KEY } from "@/lib/admin-auth";
 const NAV = [
   { href: "", label: "Dashboard" },
   { href: "/books", label: "Books" },
-  { href: "/pre-orders", label: "Pre-orders" },
-  { href: "/pre-order-book", label: "Pre-order book" },
+  // { href: "/pre-orders", label: "Pre-orders" }, // pre-order stream disabled
+  // { href: "/pre-order-book", label: "Pre-order book" }, // pre-order stream disabled
 ] as const;
 
 /**

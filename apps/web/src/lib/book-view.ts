@@ -37,7 +37,8 @@ const LAST_COPY_AT = 1;
  * is a deadline.
  */
 function flagFor(book: ApiBook): BookFlag | undefined {
-  if (book.stockQuantity > 0 && book.stockQuantity <= LAST_COPY_AT) return "last-copy";
+  if (book.stockQuantity === 0) return "coming-soon";
+  if (book.stockQuantity <= LAST_COPY_AT) return "last-copy";
   if (book.isFeatured) return "editors-pick";
   return undefined;
 }

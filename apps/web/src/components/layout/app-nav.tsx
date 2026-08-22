@@ -45,7 +45,7 @@ export function AppNav({ brandHref }: { brandHref?: string } = {}) {
     return [
       { kind: "link", label: "Home", href: base },
       { kind: "link", label: "Books", href: `${base}/catalog` },
-      { kind: "link", label: "Pre-order", href: `${base}/pre-order` },
+      // { kind: "link", label: "Pre-order", href: `${base}/pre-order` }, // pre-order stream disabled — single normal flow for all books
       { kind: "link", label: "Track Order", href: `${base}/orders` },
       /* Mobile only. Above the tablet floor the cart keeps its place in the
          right-hand actions, where the wordmark and the language switcher give

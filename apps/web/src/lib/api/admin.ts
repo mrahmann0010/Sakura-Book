@@ -4,37 +4,38 @@ import {
   adminBookListSchema,
   adminBookUpdateRequestSchema,
   adminLoginRequestSchema,
-  adminPreOrderDetailSchema,
-  adminPreOrderFulfillmentTransitionSchema,
-  adminPreOrderInternalNoteSchema,
-  adminPreOrderListSchema,
-  adminPreOrderPaymentDecisionSchema,
-  adminPreOrderVerificationResultSchema,
-  adminPreOrderBookUpsertRequestSchema,
-  adminPreOrderBookListSchema,
+  // pre-order stream disabled — single normal flow for all books
+  // adminPreOrderDetailSchema,
+  // adminPreOrderFulfillmentTransitionSchema,
+  // adminPreOrderInternalNoteSchema,
+  // adminPreOrderListSchema,
+  // adminPreOrderPaymentDecisionSchema,
+  // adminPreOrderVerificationResultSchema,
+  // adminPreOrderBookUpsertRequestSchema,
+  // adminPreOrderBookListSchema,
   adminSessionSchema,
   adminUploadResultSchema,
   dashboardSchema,
   monthlyReportSchema,
-  preOrderBookSchema,
+  // preOrderBookSchema,
   type AdminBookCreateRequest,
   type AdminBookDetail,
   type AdminBookList,
   type AdminBookQuery,
   type AdminBookUpdateRequest,
   type AdminLoginRequest,
-  type AdminPreOrderBookList,
-  type AdminPreOrderBookUpsertRequest,
-  type AdminPreOrderDetail,
-  type AdminPreOrderFulfillmentTransition,
-  type AdminPreOrderList,
-  type AdminPreOrderPaymentDecision,
-  type AdminPreOrderVerificationResult,
+  // type AdminPreOrderBookList,
+  // type AdminPreOrderBookUpsertRequest,
+  // type AdminPreOrderDetail,
+  // type AdminPreOrderFulfillmentTransition,
+  // type AdminPreOrderList,
+  // type AdminPreOrderPaymentDecision,
+  // type AdminPreOrderVerificationResult,
   type AdminSession,
   type AdminUploadResult,
   type Dashboard,
   type MonthlyReport,
-  type PreOrderBook,
+  // type PreOrderBook,
 } from "@sakura/contracts";
 import { z } from "zod";
 
@@ -151,6 +152,11 @@ export function adminLogout(): Promise<void> {
   return adminFetch("/admin/auth/logout", z.void());
 }
 
+/* --------------------------------------------------------------------------
+   Pre-order stream disabled — single normal flow for all books. Functions
+   below are commented out rather than deleted, in case the pre-order stream
+   comes back.
+
 export function listAdminPreOrderBooks(): Promise<AdminPreOrderBookList> {
   return adminFetch("/admin/pre-order-books", adminPreOrderBookListSchema);
 }
@@ -175,17 +181,6 @@ export function updateAdminPreOrderBook(
     body: validated,
   });
 }
-
-/* --------------------------------------------------------------------------
-   Pre-order queue.
-
-   Two status calls rather than one, mirroring the two columns behind them —
-   verifying a transfer and dispatching a parcel are different jobs, months
-   apart. Both return the whole pre-order, so the panel re-renders the newly
-   allowed moves from the response: accepting a payment is exactly what
-   unlocks the fulfilment buttons, and a client that inferred that for itself
-   would need its own copy of the cross-track rule.
-   -------------------------------------------------------------------------- */
 
 export function listAdminPreOrders(
   params: {
@@ -224,13 +219,6 @@ export function decideAdminPreOrderPayment(
   );
 }
 
-/**
- * Ask the API to check this pre-order's transaction ID against the SMS
- * payment gateway again.
- *
- * No request body: the transaction ID lives on the pre-order, and the
- * endpoint deliberately refuses to take one from the caller.
- */
 export function recheckAdminPreOrderPayment(
   orderNumber: string,
 ): Promise<AdminPreOrderVerificationResult> {
@@ -264,6 +252,8 @@ export function setAdminPreOrderNote(
     { method: "PATCH", body: validated },
   );
 }
+
+*/
 
 /* --------------------------------------------------------------------------
    Dashboard.
