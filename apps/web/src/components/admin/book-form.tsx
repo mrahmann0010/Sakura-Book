@@ -401,8 +401,8 @@ export function BookForm({
 
       {form.availability === "pre_order" ? (
         <p className="text-13.5 text-secondary -mt-4">
-          Published date above doubles as the "ships around" date shown to customers on the book
-          page, cart line, and checkout.
+          Published date above doubles as the &ldquo;ships around&rdquo; date shown to customers on
+          the book page, cart line, and checkout.
         </p>
       ) : null}
 

@@ -50,7 +50,7 @@ export function TrackOrderView() {
     <Shell className="max-w-measure py-14 lg:py-20">
       <p className="eyebrow">Track order</p>
       <h1 className="text-36 lg:text-44 text-ink mt-4 font-serif leading-tight">
-        Where's your order?
+        Where&apos;s your order?
       </h1>
       <p className="text-body mt-5">
         Enter the order ID from your confirmation email, along with the email address you used.
@@ -79,7 +79,7 @@ export function TrackOrderView() {
 
       {notFound ? (
         <Notice tone="error" className="mt-8">
-          We couldn't find an order with that ID and email. Double-check the confirmation email
+          We couldn&apos;t find an order with that ID and email. Double-check the confirmation email
           and try again.
         </Notice>
       ) : null}
