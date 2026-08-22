@@ -10,7 +10,8 @@
     "addToCart": "Add to cart",
     "inCart": "In cart · {{count}}",
     "removeFromCart": "Remove from cart",
-    "soldOut": "Out of stock"
+    "soldOut": "Out of stock",
+    "comingSoon": "Coming soon"
   },
   "language": {
     "label": "Language"
@@ -239,12 +240,14 @@
     "flags": {
       "editors-pick": "Editor's pick",
       "last-copy": "Last copy",
-      "signed": "Signed"
+      "signed": "Signed",
+      "coming-soon": "Coming soon"
     },
     "stock": {
       "in": "In stock, posted next working day",
       "low": "Only {{count}} left",
-      "out": "Out of stock"
+      "out": "Out of stock",
+      "comingSoon": "Coming soon"
     },
     "meta": {
       "pages_one": "{{count}} page",

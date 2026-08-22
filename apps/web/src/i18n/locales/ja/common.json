@@ -10,7 +10,8 @@
     "addToCart": "カートに入れる",
     "inCart": "カート内 · {{count}}",
     "removeFromCart": "カートから削除",
-    "soldOut": "在庫切れ"
+    "soldOut": "在庫切れ",
+    "comingSoon": "近日発売"
   },
   "language": {
     "label": "言語"
@@ -237,12 +238,14 @@
     "flags": {
       "editors-pick": "編集部のおすすめ",
       "last-copy": "残り1冊",
-      "signed": "サイン入り"
+      "signed": "サイン入り",
+      "coming-soon": "近日発売"
     },
     "stock": {
       "in": "在庫あり・翌営業日に発送",
       "low": "残り{{count}}冊",
-      "out": "在庫切れ"
+      "out": "在庫切れ",
+      "comingSoon": "近日発売"
     },
     "meta": {
       "pages_one": "{{count}}ページ",

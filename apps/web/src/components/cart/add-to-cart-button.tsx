@@ -20,6 +20,7 @@ export function AddToCartButton({
   bookId,
   title,
   soldOut = false,
+  comingSoon = false,
   size = "sm",
   variant,
   block = false,
@@ -32,6 +33,8 @@ export function AddToCartButton({
    */
   title?: string;
   soldOut?: boolean;
+  /** Not yet released — same disabled shape as `soldOut`, different words. */
+  comingSoon?: boolean;
   size?: "sm" | "md";
   /**
    * Defaults to the page-primary clay. The catalog passes `secondary`: a grid
@@ -47,6 +50,15 @@ export function AddToCartButton({
   const mounted = useMounted();
   const quantity = useAppSelector(selectQuantityOf(bookId));
   const inCart = mounted && quantity > 0;
+
+  if (comingSoon) {
+    return (
+      <Button variant="secondary" size={size} block={block} disabled>
+        {t("actions.comingSoon")}
+        {title ? <span className="sr-only">{`, ${title}`}</span> : null}
+      </Button>
+    );
+  }
 
   if (soldOut) {
     return (

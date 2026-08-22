@@ -10,7 +10,8 @@
     "addToCart": "কার্টে দিন",
     "inCart": "কার্টে · {{count}}",
     "removeFromCart": "কার্ট থেকে সরান",
-    "soldOut": "স্টকে নেই"
+    "soldOut": "স্টকে নেই",
+    "comingSoon": "শীঘ্রই আসছে"
   },
   "language": {
     "label": "ভাষা"
@@ -239,12 +240,14 @@
     "flags": {
       "editors-pick": "সম্পাদকের পছন্দ",
       "last-copy": "শেষ কপি",
-      "signed": "স্বাক্ষরিত"
+      "signed": "স্বাক্ষরিত",
+      "coming-soon": "শীঘ্রই আসছে"
     },
     "stock": {
       "in": "স্টকে আছে, পরের কর্মদিবসে পাঠানো হবে",
       "low": "আর মাত্র {{count}}টি বাকি",
-      "out": "স্টকে নেই"
+      "out": "স্টকে নেই",
+      "comingSoon": "শীঘ্রই আসছে"
     },
     "meta": {
       "pages_one": "{{count}} পৃষ্ঠা",
