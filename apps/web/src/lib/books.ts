@@ -170,7 +170,6 @@ export const footerColumns = [
     heading: "Shop",
     links: [
       { href: "/catalog", label: "Books" },
-      { href: "/catalog?sort=new", label: "New this month" },
     ],
   },
   {

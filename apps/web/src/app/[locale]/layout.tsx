@@ -7,6 +7,7 @@ import { locales, type Locale } from "@/i18n/settings";
 import { QueryProvider } from "@/lib/api/query-provider";
 import { localeAlternates, siteUrl } from "@/lib/site";
 import { StoreProvider } from "@/store/provider";
+import { ScrollToTop } from "@/components/layout/scroll-to-top";
 
 export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
@@ -68,7 +69,10 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[lo
       <body className="flex min-h-full flex-col">
         <StoreProvider>
           <QueryProvider>
-            <I18nProvider locale={locale}>{children}</I18nProvider>
+            <I18nProvider locale={locale}>
+              <ScrollToTop />
+              {children}
+            </I18nProvider>
           </QueryProvider>
         </StoreProvider>
       </body>
