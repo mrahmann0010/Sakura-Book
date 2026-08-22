@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { cartItemSchema } from "./cart";
+import { paymentProviders } from "./payment-verification";
 
 /* --------------------------------------------------------------------------
    Checkout. Moved here from apps/web/src/lib/checkout.ts, which now re-exports
@@ -45,6 +46,8 @@ export const checkoutSchema = shippingAddressSchema
     method: z.enum(acceptedPaymentMethods),
     /* Transfer details are only asked for when the transfer option is open, so
        they are optional at the field level and required by the refinement. */
+    /** Which wallet the transfer moved through — bKash, Rocket or Nagad. */
+    provider: z.enum(paymentProviders).optional(),
     senderNumber: z.string().trim().optional(),
     transactionId: z.string().trim().optional(),
     notes: z.string().trim().max(500, "Keep delivery notes under 500 characters.").optional(),
@@ -52,6 +55,13 @@ export const checkoutSchema = shippingAddressSchema
   .superRefine((values, ctx) => {
     if (values.method !== "manual-transfer") return;
 
+    if (!values.provider) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["provider"],
+        message: "Choose which wallet you paid with.",
+      });
+    }
     if (!values.senderNumber) {
       ctx.addIssue({
         code: "custom",

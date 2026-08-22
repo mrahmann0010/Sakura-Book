@@ -317,6 +317,11 @@ export function orderValuesFrom(
     idempotencyKey,
     paymentMethod: customer.method,
 
+    /* Which wallet the transfer moved through. undefined (cash on delivery,
+       or a request predating this field) becomes null the same way the
+       receipt fields below do. */
+    provider: customer.provider ?? null,
+
     /* The manual-transfer receipt — the wallet the money came from and the
        transaction ID on the confirmation. Normalised to null rather than
        stored as "" so that "no receipt" is one value, not two: the form posts

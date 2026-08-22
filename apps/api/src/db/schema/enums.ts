@@ -1,4 +1,5 @@
 import { pgEnum } from "drizzle-orm/pg-core";
+import { paymentProviders } from "@sakura/contracts";
 
 export const bookAuthorRoleEnum = pgEnum("book_author_role", [
   "AUTHOR",
@@ -47,6 +48,18 @@ export const paymentMethodEnum = pgEnum("payment_method", [
   "manual-transfer",
   "card",
 ]);
+
+/**
+ * Which wallet a manual-transfer payment moved through — bKash, Rocket or
+ * Nagad. Same source of truth as the payment-verification module's
+ * `paymentProviders`: it names the same three collections the SMS gateway
+ * files receipts under, so an order's stored provider can be handed straight
+ * back to that lookup instead of it scanning all three.
+ *
+ * Null for cash on delivery, and for card once that ships — neither moves
+ * through a wallet.
+ */
+export const paymentProviderEnum = pgEnum("payment_provider", paymentProviders);
 
 export const paymentStatusEnum = pgEnum("payment_status", [
   "PENDING",

@@ -250,6 +250,7 @@ export function CheckoutView({ locale }: { locale: Locale }) {
 
             <PaymentSection
               register={register}
+              setValue={setValue}
               errors={errors}
               method={method}
               onMethodChange={(next) =>

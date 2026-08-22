@@ -200,6 +200,7 @@ export default function AdminOrderDetailPage() {
             <h2 className="text-h4 text-ink font-serif">Payment</h2>
             <dl className="text-13.5 mt-4 flex flex-col gap-2">
               <Row label="Method" value={order.paymentMethod} />
+              {order.paymentProvider ? <Row label="Wallet" value={order.paymentProvider} /> : null}
               <Row label="Total" value={formatMoney(order.totalCents, "en-GB", order.currency)} />
               {order.senderNumber ? <Row label="Sent from" value={order.senderNumber} /> : null}
               <Row label="Transaction ID" value={order.transactionId ?? "No receipt on file"} />

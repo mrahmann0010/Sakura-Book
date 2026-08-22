@@ -92,6 +92,7 @@ export class AdminOrdersService {
           customerPhone: orders.customerPhone,
           shippingAddress: orders.shippingAddress,
           paymentMethod: orders.paymentMethod,
+          provider: orders.provider,
           totalCents: orders.totalCents,
           internalNote: orders.internalNote,
         })
@@ -160,6 +161,11 @@ export class AdminOrdersService {
     const verification = await this.paymentVerificationService.verify({
       transactionId: order.transactionId,
       expectedCents: order.totalCents,
+      // Narrows the gateway lookup to the one collection the customer said
+      // they paid through, instead of walking all three. Undefined for an
+      // order placed before this field existed, which still works — it just
+      // falls back to the scan.
+      provider: order.provider ?? undefined,
     });
 
     return {

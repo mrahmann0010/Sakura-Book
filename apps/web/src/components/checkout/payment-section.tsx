@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { FieldErrors, UseFormRegister } from "react-hook-form";
+import type { FieldErrors, UseFormRegister, UseFormSetValue } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -25,11 +25,13 @@ import type { AcceptedPaymentMethod, CheckoutValues } from "@/lib/checkout";
 
 export function PaymentSection({
   register,
+  setValue,
   errors,
   method,
   onMethodChange,
 }: {
   register: UseFormRegister<CheckoutValues>;
+  setValue: UseFormSetValue<CheckoutValues>;
   errors: FieldErrors<CheckoutValues>;
   method: AcceptedPaymentMethod;
   onMethodChange: (method: AcceptedPaymentMethod) => void;
@@ -45,6 +47,7 @@ export function PaymentSection({
       <MobileMoneyPayment
         className="mt-3.5"
         register={register}
+        setValue={setValue}
         errors={errors}
         provider={provider}
         onProviderChange={(next) => {

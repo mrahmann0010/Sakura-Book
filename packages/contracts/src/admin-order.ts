@@ -2,7 +2,7 @@ import { z } from "zod";
 import { paymentMethods } from "./checkout";
 import { orderSchema, orderStatuses } from "./order";
 import { paginated, pageQuerySchema } from "./pagination";
-import { paymentVerificationRecordSchema } from "./payment-verification";
+import { paymentProviders, paymentVerificationRecordSchema } from "./payment-verification";
 
 /* --------------------------------------------------------------------------
    Order operations, as staff see them.
@@ -84,6 +84,7 @@ export const adminOrderSummarySchema = z.object({
   customerPhone: z.string(),
   region: z.string(),
   paymentMethod: z.enum(paymentMethods),
+  paymentProvider: z.enum(paymentProviders).nullable(),
   currency: z.string().length(3),
   totalCents: z.number().int().nonnegative(),
   /** Distinct titles, and total copies — enough to size a pick list at a glance. */

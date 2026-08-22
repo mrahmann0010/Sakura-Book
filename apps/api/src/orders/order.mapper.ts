@@ -1,4 +1,10 @@
-import type { Order, OrderLine, OrderStatusEvent, PaymentMethod } from "@sakura/contracts";
+import type {
+  Order,
+  OrderLine,
+  OrderStatusEvent,
+  PaymentMethod,
+  PaymentProvider,
+} from "@sakura/contracts";
 import type { InferSelectModel } from "drizzle-orm";
 import type { orderItems, orders, orderStatusHistory } from "../db/schema";
 import type { ShippingAddress } from "../db/schema";
@@ -52,6 +58,7 @@ export function toOrderResponse(row: OrderRow): Order {
     couponCode: row.discountCodeSnapshot,
 
     paymentMethod: row.paymentMethod as PaymentMethod,
+    paymentProvider: row.provider as PaymentProvider | null,
 
     shipping: {
       fullName: row.customerName,
