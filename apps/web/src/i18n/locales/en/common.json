@@ -19,7 +19,7 @@
     "hero": {
       "title": "Books we have actually read",
       "subhead": "A small catalogue, chosen by hand and posted from Bristol. When a title sells out we take it down rather than order more.",
-      "count": "{{count}} titles in stock"
+      "tagline": "Turn the page and start your journey into Japan — with the Nihonova Books Collection."
     },
     "recent": {
       "title": "Recently added",
@@ -50,6 +50,7 @@
       "eyebrow": "Why Nihonova",
       "metric": "2,000+",
       "metricLabel": "Books sold",
+      "metricBody": "",
       "selected": {
         "title": "Carefully selected",
         "body": "Not thousands of titles. Just books we believe deserve your time."
@@ -57,6 +58,10 @@
       "recommended": {
         "title": "Personally recommended",
         "body": "We read, explore, and recommend books we'd genuinely share with a friend."
+      },
+      "forYou": {
+        "title": "Something good, just for you",
+        "body": "The right book can change things — help you learn, grow a skill, or just give you something worth reading. Nihonova wants to put that book in your hands."
       }
     }
   },

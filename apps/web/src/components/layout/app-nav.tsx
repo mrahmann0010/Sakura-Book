@@ -9,6 +9,7 @@ import { useCartCount } from "@/hooks/use-cart";
 
 import { FloatingNav, type FloatingNavItem } from "./floating-nav";
 import { LanguageSwitcher } from "./language-switcher";
+import { ThemeToggle } from "./theme-toggle";
 
 /**
  * FloatingNav with this app's items, its locale prefix and the store wired in.
@@ -73,6 +74,7 @@ export function AppNav({ brandHref }: { brandHref?: string } = {}) {
       brandHref={brandHref ?? `/${locale ?? "en"}`}
       actions={
         <>
+          <ThemeToggle />
           {/* Locale is a settings-shaped choice, not navigation — it stands
               down at mobile, where the width belongs to the nav items. */}
           <span className="hidden sm:block">

@@ -13,6 +13,23 @@ export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
 }
 
+/**
+ * Runs before the browser paints, so a visitor's saved dark preference never
+ * flashes light first (the same no-flash technique `admin/layout.tsx` uses to
+ * force its own dark palette). Absent a saved preference, this forces light
+ * rather than falling through to `prefers-color-scheme` — the storefront's
+ * default is the white theme regardless of the visitor's OS setting; dark is
+ * something `ThemeToggle` lets them opt into.
+ */
+const NO_FLASH_SCRIPT = `
+try {
+  var theme = localStorage.getItem("theme") === "dark" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", theme);
+} catch (e) {
+  document.documentElement.setAttribute("data-theme", "light");
+}
+`;
+
 /* Lora for titles and book names, italic for authors. */
 const lora = Lora({
   variable: "--font-lora",
@@ -67,6 +84,7 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[lo
   return (
     <html lang={locale} className={`${lora.variable} ${publicSans.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
+        <script dangerouslySetInnerHTML={{ __html: NO_FLASH_SCRIPT }} />
         <StoreProvider>
           <QueryProvider>
             <I18nProvider locale={locale}>
