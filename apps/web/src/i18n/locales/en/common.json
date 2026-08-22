@@ -10,6 +10,7 @@
     "addToCart": "Add to cart",
     "inCart": "In cart · {{count}}",
     "removeFromCart": "Remove from cart",
+    "goToCart": "Go to cart",
     "soldOut": "Out of stock",
     "comingSoon": "Coming soon"
   },
@@ -184,8 +185,6 @@
     },
     "payment": {
       "legend": "Payment",
-      "cash-on-delivery": "Cash on delivery",
-      "cash-on-deliveryMeta": "pay the courier",
       "manual-transfer": "bKash or bank transfer",
       "manual-transferMeta": "manual transfer",
       "manual-transferHint": "Send the total, then give us the sender number and transaction ID.",

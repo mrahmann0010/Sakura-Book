@@ -16,12 +16,11 @@ import type { AcceptedPaymentMethod, CheckoutValues } from "@/lib/checkout";
 /* --------------------------------------------------------------------------
    The payment half of the checkout form (wireframe 1d/1e).
 
-   Three shapes of option live side by side: a plain choice (cash on
-   delivery), a disabled one stated in words rather than hidden (card,
-   "later" — principle 03), and the bKash/Rocket/Nagad hand-off, which is
-   its own multi-step control (`MobileMoneyPayment`, shared with the
-   pre-order checkout) rather than a single radio row, because "send money,
-   then prove you sent it" doesn't fit one card.
+   Cash on delivery has been removed from this form — bKash/Rocket/Nagad is
+   the only way to pay. The mobile-money hand-off is its own multi-step
+   control (`MobileMoneyPayment`) rather than a single radio row, because
+   "send money, then prove you sent it" doesn't fit one card. Card stays
+   visible but disabled, stated in words rather than hidden (principle 03).
    -------------------------------------------------------------------------- */
 
 export function PaymentSection({
@@ -37,31 +36,14 @@ export function PaymentSection({
 }) {
   const { t } = useTranslation();
   const [provider, setProvider] = useState<MobileMoneyProviderId | null>(null);
-  const chosen = provider !== null || method === "cash-on-delivery";
+  const chosen = provider !== null;
 
   return (
     <fieldset className="min-w-0">
       <Eyebrow as="legend">{t("checkout.payment.legend")}</Eyebrow>
 
-      <PaymentOptionList className="mt-3.5" label={t("checkout.payment.legend")}>
-        <PaymentOption
-          name="method"
-          value="cash-on-delivery"
-          checked={method === "cash-on-delivery"}
-          onSelect={(next) => {
-            // Picking cash also drops the mobile-money selection: otherwise the
-            // collapsed provider card would sit there looking active under a
-            // method that is no longer chosen.
-            setProvider(null);
-            onMethodChange(next as AcceptedPaymentMethod);
-          }}
-          label={t("checkout.payment.cash-on-delivery")}
-          meta={t("checkout.payment.cash-on-deliveryMeta")}
-        />
-      </PaymentOptionList>
-
       <MobileMoneyPayment
-        className="mt-2.5"
+        className="mt-3.5"
         register={register}
         errors={errors}
         provider={provider}

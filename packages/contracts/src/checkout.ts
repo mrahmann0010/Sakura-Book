@@ -103,7 +103,7 @@ export const checkoutDefaults: CheckoutValues = {
   address: "",
   city: "",
   region: "inside-dhaka",
-  method: "cash-on-delivery",
+  method: "manual-transfer",
   senderNumber: "",
   transactionId: "",
   notes: "",
