@@ -7,7 +7,6 @@ import type { Env } from "../config/env.schema";
 import { InventoryModule } from "../inventory";
 import { OrdersModule } from "../orders";
 import { PaymentsModule } from "../payments";
-import { PreOrdersModule } from "../pre-orders";
 import { ShippingModule } from "../shipping";
 import { StorageModule } from "../storage";
 import { AdminAuthController } from "./auth/admin-auth.controller";
@@ -17,12 +16,6 @@ import { AdminRolesGuard } from "./auth/admin-roles.guard";
 import { AdminBooksController, AdminBooksService, AdminUploadsController } from "./catalog";
 import { AdminDashboardController, AdminDashboardService } from "./dashboard";
 import { AdminOrdersController, AdminOrdersService } from "./orders";
-import {
-  AdminPreOrderBooksController,
-  AdminPreOrderBooksService,
-  AdminPreOrdersController,
-  AdminPreOrdersService,
-} from "./pre-order";
 import { AdminSettingsController, AdminSettingsService } from "./settings";
 
 /**
@@ -59,12 +52,6 @@ import { AdminSettingsController, AdminSettingsService } from "./settings";
     PaymentsModule,
     ShippingModule,
     InventoryModule,
-    /**
-     * For PreOrderPaymentVerificationService, which the desk's "re-check
-     * payment" button runs. Not a cycle: PreOrdersModule imports nothing from
-     * here — the audit writer it needs is global.
-     */
-    PreOrdersModule,
     StorageModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -108,8 +95,6 @@ import { AdminSettingsController, AdminSettingsService } from "./settings";
     AdminOrdersController,
     AdminSettingsController,
     AdminDashboardController,
-    AdminPreOrderBooksController,
-    AdminPreOrdersController,
     AdminBooksController,
     AdminUploadsController,
   ],
@@ -118,8 +103,6 @@ import { AdminSettingsController, AdminSettingsService } from "./settings";
     AdminOrdersService,
     AdminSettingsService,
     AdminDashboardService,
-    AdminPreOrderBooksService,
-    AdminPreOrdersService,
     AdminBooksService,
     { provide: APP_GUARD, useClass: AdminJwtGuard },
     { provide: APP_GUARD, useClass: AdminRolesGuard },

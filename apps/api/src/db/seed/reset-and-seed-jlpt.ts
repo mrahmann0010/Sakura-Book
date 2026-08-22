@@ -15,8 +15,6 @@ import {
   orderStatusHistory,
   orders,
   payments,
-  preOrderBooks,
-  preOrderOrders,
   publishers,
 } from "../schema";
 
@@ -27,10 +25,7 @@ import {
  * books (see `books.availability`) — so the storefront and admin panel have
  * something real to render locally.
  *
- * The separate pre-order stream (`pre_order_books` / `pre_order_orders`) is
- * retired from the frontend; this seed only clears those tables for hygiene
- * and never inserts into them. Every title here goes through the one normal
- * book/cart/checkout flow.
+ * Every title here goes through the one normal book/cart/checkout flow.
  *
  * Not wired into `npm run db:seed`. Run directly:
  *   npx tsx src/db/seed/reset-and-seed-jlpt.ts
@@ -53,15 +48,11 @@ async function main(): Promise<void> {
 
     // Child tables first, respecting FKs. Admin users/sessions, audit log and
     // shop settings are deliberately untouched — those aren't the placeholder
-    // catalog data this was asked to clear. pre_order_orders/pre_order_books
-    // are cleared too even though nothing below repopulates them — the
-    // separate pre-order stream is retired from the frontend.
+    // catalog data this was asked to clear.
     await db.delete(orderStatusHistory);
     await db.delete(payments);
     await db.delete(orderItems);
     await db.delete(orders);
-    await db.delete(preOrderOrders);
-    await db.delete(preOrderBooks);
     await db.delete(bookCategories);
     await db.delete(bookAuthors);
     await db.delete(books);

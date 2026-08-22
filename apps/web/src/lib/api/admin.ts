@@ -3,39 +3,36 @@ import {
   adminBookDetailSchema,
   adminBookListSchema,
   adminBookUpdateRequestSchema,
+  adminConfirmPaymentRequestSchema,
+  adminInternalNoteRequestSchema,
   adminLoginRequestSchema,
-  // pre-order stream disabled — single normal flow for all books
-  // adminPreOrderDetailSchema,
-  // adminPreOrderFulfillmentTransitionSchema,
-  // adminPreOrderInternalNoteSchema,
-  // adminPreOrderListSchema,
-  // adminPreOrderPaymentDecisionSchema,
-  // adminPreOrderVerificationResultSchema,
-  // adminPreOrderBookUpsertRequestSchema,
-  // adminPreOrderBookListSchema,
+  adminOrderDetailSchema,
+  adminOrderListSchema,
+  adminOrderTransitionRequestSchema,
+  adminOrderVerifyPaymentResultSchema,
+  adminRecordRefundRequestSchema,
   adminSessionSchema,
   adminUploadResultSchema,
   dashboardSchema,
   monthlyReportSchema,
-  // preOrderBookSchema,
   type AdminBookCreateRequest,
   type AdminBookDetail,
   type AdminBookList,
   type AdminBookQuery,
   type AdminBookUpdateRequest,
+  type AdminConfirmPaymentRequest,
+  type AdminInternalNoteRequest,
   type AdminLoginRequest,
-  // type AdminPreOrderBookList,
-  // type AdminPreOrderBookUpsertRequest,
-  // type AdminPreOrderDetail,
-  // type AdminPreOrderFulfillmentTransition,
-  // type AdminPreOrderList,
-  // type AdminPreOrderPaymentDecision,
-  // type AdminPreOrderVerificationResult,
+  type AdminOrderDetail,
+  type AdminOrderList,
+  type AdminOrderQuery,
+  type AdminOrderTransitionRequest,
+  type AdminOrderVerifyPaymentResult,
+  type AdminRecordRefundRequest,
   type AdminSession,
   type AdminUploadResult,
   type Dashboard,
   type MonthlyReport,
-  // type PreOrderBook,
 } from "@sakura/contracts";
 import { z } from "zod";
 
@@ -153,107 +150,81 @@ export function adminLogout(): Promise<void> {
 }
 
 /* --------------------------------------------------------------------------
-   Pre-order stream disabled — single normal flow for all books. Functions
-   below are commented out rather than deleted, in case the pre-order stream
-   comes back.
+   Orders — the fulfilment desk. Pending/Accepted/Rejected are views over the
+   same `status[]` filter, not separate endpoints; see admin/orders/page.tsx.
+   -------------------------------------------------------------------------- */
 
-export function listAdminPreOrderBooks(): Promise<AdminPreOrderBookList> {
-  return adminFetch("/admin/pre-order-books", adminPreOrderBookListSchema);
+export function listAdminOrders(query: Partial<AdminOrderQuery> = {}): Promise<AdminOrderList> {
+  const search = new URLSearchParams();
+  for (const status of query.status ?? []) search.append("status", status);
+  if (query.paymentMethod) search.set("paymentMethod", query.paymentMethod);
+  if (query.q) search.set("q", query.q);
+  if (query.placedFrom) search.set("placedFrom", query.placedFrom);
+  if (query.placedTo) search.set("placedTo", query.placedTo);
+  if (query.sort) search.set("sort", query.sort);
+  if (query.page) search.set("page", String(query.page));
+  if (query.pageSize) search.set("pageSize", String(query.pageSize));
+
+  const qs = search.toString();
+  return adminFetch(`/admin/orders${qs ? `?${qs}` : ""}`, adminOrderListSchema);
 }
 
-export function createAdminPreOrderBook(
-  request: AdminPreOrderBookUpsertRequest,
-): Promise<PreOrderBook> {
-  const validated = adminPreOrderBookUpsertRequestSchema.parse(request);
-  return adminFetch("/admin/pre-order-books", preOrderBookSchema, {
+export function getAdminOrder(orderNumber: string): Promise<AdminOrderDetail> {
+  return adminFetch(`/admin/orders/${encodeURIComponent(orderNumber)}`, adminOrderDetailSchema);
+}
+
+export function verifyAdminOrderPayment(orderNumber: string): Promise<AdminOrderVerifyPaymentResult> {
+  return adminFetch(
+    `/admin/orders/${encodeURIComponent(orderNumber)}/verify-payment`,
+    adminOrderVerifyPaymentResultSchema,
+    { method: "POST" },
+  );
+}
+
+export function transitionAdminOrder(
+  orderNumber: string,
+  request: AdminOrderTransitionRequest,
+): Promise<AdminOrderDetail> {
+  const validated = adminOrderTransitionRequestSchema.parse(request);
+  return adminFetch(`/admin/orders/${encodeURIComponent(orderNumber)}/transition`, adminOrderDetailSchema, {
     method: "POST",
     body: validated,
   });
 }
 
-export function updateAdminPreOrderBook(
-  id: string,
-  request: AdminPreOrderBookUpsertRequest,
-): Promise<PreOrderBook> {
-  const validated = adminPreOrderBookUpsertRequestSchema.parse(request);
-  return adminFetch(`/admin/pre-order-books/${encodeURIComponent(id)}`, preOrderBookSchema, {
-    method: "PUT",
+export function confirmAdminOrderPayment(
+  orderNumber: string,
+  request: AdminConfirmPaymentRequest,
+): Promise<AdminOrderDetail> {
+  const validated = adminConfirmPaymentRequestSchema.parse(request);
+  return adminFetch(
+    `/admin/orders/${encodeURIComponent(orderNumber)}/payments/confirm`,
+    adminOrderDetailSchema,
+    { method: "POST", body: validated },
+  );
+}
+
+export function recordAdminOrderRefund(
+  orderNumber: string,
+  request: AdminRecordRefundRequest,
+): Promise<AdminOrderDetail> {
+  const validated = adminRecordRefundRequestSchema.parse(request);
+  return adminFetch(`/admin/orders/${encodeURIComponent(orderNumber)}/refund`, adminOrderDetailSchema, {
+    method: "POST",
     body: validated,
   });
 }
 
-export function listAdminPreOrders(
-  params: {
-    paymentStatus?: readonly string[];
-    fulfillmentStatus?: readonly string[];
-    q?: string;
-    page?: number;
-  } = {},
-): Promise<AdminPreOrderList> {
-  const search = new URLSearchParams();
-  for (const status of params.paymentStatus ?? []) search.append("paymentStatus", status);
-  for (const status of params.fulfillmentStatus ?? []) search.append("fulfillmentStatus", status);
-  if (params.q) search.set("q", params.q);
-  if (params.page) search.set("page", String(params.page));
-
-  const query = search.toString();
-  return adminFetch(`/admin/pre-orders${query ? `?${query}` : ""}`, adminPreOrderListSchema);
-}
-
-export function getAdminPreOrder(orderNumber: string): Promise<AdminPreOrderDetail> {
-  return adminFetch(
-    `/admin/pre-orders/${encodeURIComponent(orderNumber)}`,
-    adminPreOrderDetailSchema,
-  );
-}
-
-export function decideAdminPreOrderPayment(
+export function setAdminOrderNote(
   orderNumber: string,
-  request: AdminPreOrderPaymentDecision,
-): Promise<AdminPreOrderDetail> {
-  const validated = adminPreOrderPaymentDecisionSchema.parse(request);
-  return adminFetch(
-    `/admin/pre-orders/${encodeURIComponent(orderNumber)}/payment`,
-    adminPreOrderDetailSchema,
-    { method: "POST", body: validated },
-  );
+  request: AdminInternalNoteRequest,
+): Promise<AdminOrderDetail> {
+  const validated = adminInternalNoteRequestSchema.parse(request);
+  return adminFetch(`/admin/orders/${encodeURIComponent(orderNumber)}/note`, adminOrderDetailSchema, {
+    method: "PATCH",
+    body: validated,
+  });
 }
-
-export function recheckAdminPreOrderPayment(
-  orderNumber: string,
-): Promise<AdminPreOrderVerificationResult> {
-  return adminFetch(
-    `/admin/pre-orders/${encodeURIComponent(orderNumber)}/verify-payment`,
-    adminPreOrderVerificationResultSchema,
-    { method: "POST" },
-  );
-}
-
-export function transitionAdminPreOrderFulfillment(
-  orderNumber: string,
-  request: AdminPreOrderFulfillmentTransition,
-): Promise<AdminPreOrderDetail> {
-  const validated = adminPreOrderFulfillmentTransitionSchema.parse(request);
-  return adminFetch(
-    `/admin/pre-orders/${encodeURIComponent(orderNumber)}/fulfillment`,
-    adminPreOrderDetailSchema,
-    { method: "POST", body: validated },
-  );
-}
-
-export function setAdminPreOrderNote(
-  orderNumber: string,
-  note: string | null,
-): Promise<AdminPreOrderDetail> {
-  const validated = adminPreOrderInternalNoteSchema.parse({ note });
-  return adminFetch(
-    `/admin/pre-orders/${encodeURIComponent(orderNumber)}/note`,
-    adminPreOrderDetailSchema,
-    { method: "PATCH", body: validated },
-  );
-}
-
-*/
 
 /* --------------------------------------------------------------------------
    Dashboard.

@@ -6,6 +6,7 @@ import type {
   AdminOrderList,
   AdminOrderQuery,
   AdminOrderTransitionRequest,
+  AdminOrderVerifyPaymentResult,
   AdminRecordRefundRequest,
 } from "@sakura/contracts";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -16,6 +17,11 @@ import { findOrder, type OrderRow } from "../../orders";
 import { OrdersService } from "../../orders";
 import { PaymentsService } from "../../payments";
 import { AuditService } from "../../audit";
+import {
+  PaymentVerificationService,
+  toVerificationRecord,
+  type PaymentVerification,
+} from "../../payment-verification";
 import type { AccessClaims } from "../auth/tokens";
 import { adminOrderFilters, adminOrderOrder } from "./admin-order.query";
 import { toAdminOrderDetail, toAdminOrderSummary } from "./admin-order.mapper";
@@ -58,6 +64,7 @@ export class AdminOrdersService {
     private readonly ordersService: OrdersService,
     private readonly paymentsService: PaymentsService,
     private readonly auditService: AuditService,
+    private readonly paymentVerificationService: PaymentVerificationService,
   ) {}
 
   /**
@@ -124,6 +131,41 @@ export class AdminOrdersService {
     const paymentRows = await this.paymentsService.forOrder(row.id);
 
     return toAdminOrderDetail(row, paymentRows);
+  }
+
+  /**
+   * Cross-check the transaction ID the customer gave at checkout against the
+   * SMS gateway, without touching the order.
+   *
+   * Purely informational — unlike the pre-order desk's equivalent, this never
+   * auto-accepts on a match. Acceptance here stays the admin's explicit
+   * `transition`/`confirmPayment` call, per this service's own rule that it
+   * never writes `orders.status` outside those two paths.
+   *
+   * `NO_RECEIPT` short-circuits before calling the verifier: a cash-on-delivery
+   * order, or a manual-transfer order placed before the transaction-id field
+   * was required, has nothing to look up, and reporting that as NOT_FOUND
+   * would misdescribe an absent receipt as an unmatched one.
+   */
+  async verifyPayment(orderNumber: string): Promise<AdminOrderVerifyPaymentResult> {
+    const order = await this.requireOrder(orderNumber);
+
+    if (!order.transactionId) {
+      return {
+        record: { outcome: "NO_RECEIPT" },
+        summary: "No transaction ID is on file for this order.",
+      };
+    }
+
+    const verification = await this.paymentVerificationService.verify({
+      transactionId: order.transactionId,
+      expectedCents: order.totalCents,
+    });
+
+    return {
+      record: toVerificationRecord(verification, order.totalCents),
+      summary: summarizeVerification(verification, order.totalCents),
+    };
   }
 
   /**
@@ -392,6 +434,22 @@ export class AdminOrdersService {
     return new Map(
       rows.map((row) => [row.orderId, { lineCount: row.lineCount, itemCount: row.itemCount }]),
     );
+  }
+}
+
+/** A one-line, human-readable summary of a verification outcome. */
+function summarizeVerification(verification: PaymentVerification, expectedCents: number): string {
+  const amount = (cents: number) => (cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 });
+
+  switch (verification.outcome) {
+    case "MATCHED":
+      return `Matched — ৳${amount(verification.paidCents)} received via ${verification.provider}.`;
+    case "UNDERPAID":
+      return `Underpaid — ৳${amount(verification.paidCents)} received via ${verification.provider}, ৳${amount(expectedCents)} expected.`;
+    case "NOT_FOUND":
+      return "No matching transaction found yet — it may still be arriving.";
+    case "UNAVAILABLE":
+      return `Could not check — ${verification.reason}`;
   }
 }
 

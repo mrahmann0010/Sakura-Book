@@ -1,50 +1,88 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
+import type { Order, OrderStatus } from "@sakura/contracts";
 
 import { OrderStatusTimeline, type OrderStep } from "@/components/domain";
-import { Button, Card, Input, Notice, OrderId } from "@/components/ui";
+import { Button, Card, Input, Notice, OrderId, StatusPill } from "@/components/ui";
 import { Shell } from "@/components/layout";
+import { ApiError } from "@/lib/api/client";
+import { lookupOrder } from "@/lib/api/orders";
 
 /* --------------------------------------------------------------------------
    Track order — utility shell (Page Skeletons sheet 04): a narrow lookup form
    and, once submitted, the same OrderStatusTimeline the confirmation screen
-   uses. There is no lookup API yet, so a submission always resolves to one
-   placeholder order rather than a real query — the shape the real result will
-   fill is what matters here, not the data.
+   uses, now wired to the real GuestOrdersController.lookup endpoint.
+
+   The real OrderStatus is 7-valued; OrderStatusTimeline only knows the four
+   forward steps (pending/paid/shipped/delivered) and its own doc comment says
+   a cancelled order is a StatusPill, not a fifth step — toOrderStep returns
+   null for CANCELLED/REFUNDED so this page can draw that pill instead.
    -------------------------------------------------------------------------- */
 
-const PLACEHOLDER_ORDER = {
-  id: "MG-40718",
-  status: "shipped" as OrderStep,
-  detail: {
-    pending: "12 Aug, 10:04",
-    paid: "12 Aug, 10:06",
-    shipped: "13 Aug, courier: Evri",
-    delivered: "Estimated 16 Aug",
-  },
-};
+function toOrderStep(status: OrderStatus): OrderStep | null {
+  switch (status) {
+    case "PENDING":
+      return "pending";
+    case "PAYMENT_CONFIRMED":
+    case "PROCESSING":
+      return "paid";
+    case "SHIPPED":
+      return "shipped";
+    case "DELIVERED":
+      return "delivered";
+    case "CANCELLED":
+    case "REFUNDED":
+      return null;
+  }
+}
+
+/** Latest timeline entry per display step, so a later status (e.g. PROCESSING
+    after PAYMENT_CONFIRMED) overwrites the earlier one mapped to the same step. */
+function stepDetail(order: Order): Partial<Record<OrderStep, ReactNode>> {
+  const detail: Partial<Record<OrderStep, ReactNode>> = {};
+
+  for (const event of order.timeline) {
+    const step = toOrderStep(event.status);
+    if (!step) continue;
+
+    const when = new Date(event.occurredAt).toLocaleString();
+    detail[step] = event.note ? `${when} — ${event.note}` : when;
+  }
+
+  return detail;
+}
 
 export function TrackOrderView() {
   const [orderId, setOrderId] = useState("");
   const [email, setEmail] = useState("");
-  const [result, setResult] = useState<typeof PLACEHOLDER_ORDER | null>(null);
+  const [result, setResult] = useState<Order | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    /* No backend yet: any input resolves to the placeholder order, except the
-       one id it doesn't recognise, kept so the not-found state is reachable. */
-    if (orderId.trim().toUpperCase() === "NOTFOUND") {
-      setResult(null);
-      setNotFound(true);
-      return;
-    }
-
+    setError(null);
     setNotFound(false);
-    setResult(PLACEHOLDER_ORDER);
+    setResult(null);
+    setLoading(true);
+
+    try {
+      const order = await lookupOrder({ orderNumber: orderId, email });
+      setResult(order);
+    } catch (err) {
+      if (err instanceof ApiError && err.isNotFound) {
+        setNotFound(true);
+      } else {
+        setError("Something went wrong looking up that order. Try again in a moment.");
+      }
+    } finally {
+      setLoading(false);
+    }
   }
+
+  const step = result ? toOrderStep(result.status) : null;
 
   return (
     <Shell className="max-w-measure py-14 lg:py-20">
@@ -56,7 +94,7 @@ export function TrackOrderView() {
         Enter the order ID from your confirmation email, along with the email address you used.
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
+      <form onSubmit={(event) => void handleSubmit(event)} className="mt-8 flex flex-col gap-5">
         <Input
           label="Order ID"
           placeholder="e.g. MG-40718"
@@ -72,7 +110,7 @@ export function TrackOrderView() {
           onChange={(event) => setEmail(event.target.value)}
           required
         />
-        <Button type="submit" className="self-start">
+        <Button type="submit" className="self-start" loading={loading} loadingLabel="Searching">
           Track order
         </Button>
       </form>
@@ -84,14 +122,36 @@ export function TrackOrderView() {
         </Notice>
       ) : null}
 
+      {error ? (
+        <Notice tone="error" className="mt-8">
+          {error}
+        </Notice>
+      ) : null}
+
       {result ? (
         <Card variant="tint" padding="roomy" className="mt-10">
           <p className="eyebrow">Order</p>
-          <OrderId className="mt-2.5 block">{result.id}</OrderId>
+          <OrderId className="mt-2.5 block">{result.orderNumber}</OrderId>
 
-          <OrderStatusTimeline status={result.status} detail={result.detail} className="mt-9" />
+          {step ? (
+            <OrderStatusTimeline status={step} detail={stepDetail(result)} className="mt-9" />
+          ) : (
+            <div className="mt-9">
+              <StatusPill status="cancelled" />
+              {lastNote(result) ? <p className="text-body mt-3">{lastNote(result)}</p> : null}
+            </div>
+          )}
         </Card>
       ) : null}
     </Shell>
   );
+}
+
+/** The most recent timeline note — the reason a cancelled/refunded order shows one. */
+function lastNote(order: Order): string | null {
+  for (let i = order.timeline.length - 1; i >= 0; i--) {
+    const note = order.timeline[i].note;
+    if (note) return note;
+  }
+  return null;
 }

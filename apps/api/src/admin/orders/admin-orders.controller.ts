@@ -8,6 +8,7 @@ import {
   adminRecordRefundRequestSchema,
   type AdminOrderDetail,
   type AdminOrderList,
+  type AdminOrderVerifyPaymentResult,
 } from "@sakura/contracts";
 import type { Request } from "express";
 import { createZodDto } from "nestjs-zod";
@@ -60,6 +61,23 @@ export class AdminOrdersController {
   @ApiOperation({ summary: "Full order, with payments and the transitions it allows." })
   async detail(@Param("orderNumber") orderNumber: string): Promise<AdminOrderDetail> {
     return this.adminOrdersService.detail(orderNumber);
+  }
+
+  /**
+   * Cross-check the transaction ID on file against the SMS gateway.
+   *
+   * No request body, deliberately — the ID is read off the stored order
+   * rather than accepted from the caller, so this can't be used to probe
+   * arbitrary transaction IDs. Purely informational: it never changes the
+   * order's status. See `AdminOrdersService.verifyPayment`.
+   */
+  @Post(":orderNumber/verify-payment")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Re-check the order's transaction ID against the SMS gateway." })
+  async verifyPayment(
+    @Param("orderNumber") orderNumber: string,
+  ): Promise<AdminOrderVerifyPaymentResult> {
+    return this.adminOrdersService.verifyPayment(orderNumber);
   }
 
   /**
