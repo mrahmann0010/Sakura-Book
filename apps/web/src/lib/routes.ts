@@ -19,6 +19,7 @@ export function routes(locale: Locale | string) {
     cart: `${base}/cart`,
     checkout: `${base}/checkout`,
     orders: `${base}/orders`,
+    order: (orderNumber: string) => `${base}/orders/${encodeURIComponent(orderNumber)}`,
     refundPolicy: `${base}/refund-policy`,
     privacyPolicy: `${base}/privacy-policy`,
     terms: `${base}/terms`,
