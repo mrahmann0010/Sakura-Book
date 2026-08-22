@@ -104,6 +104,20 @@ export function bookFilters(query: BookQuery): SQL {
 }
 
 /**
+ * `pre_order` first, ahead of whatever sort the shopper picked.
+ *
+ * The one merchandising rule the shelf enforces regardless of query: a book
+ * open for pre-order is the thing the shop most wants seen, on every sort and
+ * every page 1 — not just under "recent". It is a primary sort key rather
+ * than a filter or a client-side reorder for the same reason the tiebreak
+ * below is: offset pagination needs one total order, and a client that moved
+ * the row itself would duplicate or drop a book across pages.
+ */
+function preOrderFirst(): SQL {
+  return sql`(case when ${books.availability} = 'pre_order' then 0 else 1 end)`;
+}
+
+/**
  * Sort, with a stable tiebreak.
  *
  * Every branch ends in `books.id` because offset pagination over a
@@ -119,14 +133,14 @@ export function bookFilters(query: BookQuery): SQL {
 export function bookOrder(sort: BookQuery["sort"]): SQL[] {
   switch (sort) {
     case "title":
-      return [asc(books.title), asc(books.id)];
+      return [preOrderFirst(), asc(books.title), asc(books.id)];
     case "price-asc":
-      return [asc(books.priceCents), asc(books.id)];
+      return [preOrderFirst(), asc(books.priceCents), asc(books.id)];
     case "rating":
-      return [sql`${ratingAverage()} desc nulls last`, asc(books.id)];
+      return [preOrderFirst(), sql`${ratingAverage()} desc nulls last`, asc(books.id)];
     case "recent":
     default:
-      return [desc(books.createdAt), asc(books.id)];
+      return [preOrderFirst(), desc(books.createdAt), asc(books.id)];
   }
 }
 
