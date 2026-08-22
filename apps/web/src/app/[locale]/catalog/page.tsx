@@ -7,10 +7,10 @@ import { LinkButton } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
 import { getCategories, listBooks } from "@/lib/api/catalog";
-import { getActivePreOrderBook } from "@/lib/api/pre-order";
+// import { getActivePreOrderBook } from "@/lib/api/pre-order"; // pre-order stream disabled — single normal flow for all books
 import { footerColumns } from "@/lib/books";
 import { toBookSummaries } from "@/lib/book-view";
-import type { BookSummary } from "@/components/domain";
+// import type { BookSummary } from "@/components/domain";
 import { parseSearchParams, toSearchParams } from "@/lib/catalog";
 import { routes } from "@/lib/routes";
 import { localeAlternates } from "@/lib/site";
@@ -57,41 +57,20 @@ export default async function Catalog({ params, searchParams }: PageProps<"/[loc
 
   /* In parallel: the rail does not depend on the shelf, and awaiting them in
      sequence would put the categories round-trip on the critical path of every
-     page of every search. The pre-order book rides along the same way — it is
-     an independent read that only prepends onto the canonical, unfiltered
-     first page (§ below), so a filtered or later page never pays for it.
-     Translations join the same batch — they don't depend on any of it either. */
-  const isCanonicalView = !query.q && query.genres.length === 0 && query.page === 1;
-
-  const [{ t }, list, categories, preOrderBook] = await Promise.all([
+     page of every search. Translations join the same batch — they don't
+     depend on any of it either. */
+  const [{ t }, list, categories] = await Promise.all([
     getTranslation(locale),
     listBooks(query),
     getCategories(),
-    isCanonicalView ? getActivePreOrderBook() : Promise.resolve(null),
   ]);
 
   const books = toBookSummaries(list.items, locale);
 
-  /* The pre-order card is not a catalog book: it has no slug, no detail page,
-     and clicking it must skip straight to the pre-order cart rather than a
-     book-detail page. `href` already does exactly that — BookCard's title
-     links wherever `href` points, so pointing it at the pre-order route
-     (instead of `routes(locale).book(slug)`) is the whole adaptation; no
-     wrapper around BookCard's link behaviour is needed. */
-  const preOrderCard: BookSummary | null = preOrderBook
-    ? {
-        id: `pre-order-${preOrderBook.id}`,
-        title: preOrderBook.title,
-        author: preOrderBook.authorName,
-        priceCents: preOrderBook.priceCents,
-        href: routes(locale).preorder,
-        coverUrl: preOrderBook.coverImageUrl,
-        flag: "new",
-      }
-    : null;
-
-  const gridBooks = preOrderCard ? [preOrderCard, ...books] : books;
-  const total = preOrderCard ? list.total + 1 : list.total;
+  /* Pre-order stream disabled — single normal flow for all books. See
+     git history for the pre-order card that used to prepend here. */
+  const gridBooks = books;
+  const total = list.total;
 
   return (
     <PageShell
@@ -127,19 +106,15 @@ export default async function Catalog({ params, searchParams }: PageProps<"/[loc
                     key={book.id}
                     book={book}
                     locale={locale}
-                    /* The pre-order card has nothing to add to the cart — its
-                       whole card is a link straight to the pre-order page
-                       (see `preOrderCard.href` above). */
                     footerAction={
-                      book === preOrderCard ? undefined : (
-                        <AddToCartButton
-                          bookId={book.id}
-                          title={book.title}
-                          soldOut={book.soldOut}
-                          variant="secondary"
-                          block
-                        />
-                      )
+                      <AddToCartButton
+                        bookId={book.id}
+                        title={book.title}
+                        soldOut={book.soldOut}
+                        comingSoon={book.flag === "coming-soon"}
+                        variant="secondary"
+                        block
+                      />
                     }
                   />
                 ))}
