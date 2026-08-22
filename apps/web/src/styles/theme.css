@@ -74,9 +74,13 @@
    OS — `[data-theme]` on <html> is the class strategy, and its absence falls
    back to prefers-color-scheme.
 
-   The ramp is inverted, not merely darkened: --page becomes the darkest value
-   and the text ramp runs light. Clay is lifted slightly because the reference
-   accent is too dense to read as an accent on a dark ground.
+   The ramp is inverted, not merely darkened, and it is a navy ramp rather than
+   a warm near-black: --page becomes a deep blue rather than a charcoal, and
+   globals.css layers a subtle vertical gradient across those same stops on
+   `body` (`--page` alone stays the flat colour every `bg-page` surface reads,
+   so panels and cards keep a solid, predictable ground). Clay is lifted
+   slightly because the reference accent is too dense to read as an accent on
+   a dark ground.
    -------------------------------------------------------------------------- */
 
 @media (prefers-color-scheme: dark) {
@@ -84,21 +88,21 @@
     --clay: #e08260;
     --clay-deep: #c96442;
 
-    --page: #171614;
-    --surface: #201f1c;
-    --tint: #2a2825;
-    --rule: #37342f;
-    --node: #4d4941;
+    --page: #0b1220;
+    --surface: #121a2e;
+    --tint: #1a2440;
+    --rule: #26314f;
+    --node: #38456b;
 
-    --ink: #f7f6f2;
-    --body: #ddd9d0;
-    --secondary: #a8a297;
-    --muted: #7d786e;
+    --ink: #f2f4fa;
+    --body: #d7dced;
+    --secondary: #9aa3c0;
+    --muted: #6b7396;
 
-    --overlay: rgb(0 0 0 / 0.5);
+    --overlay: rgb(0 0 0 / 0.55);
     --clay-ring: rgb(224 130 96 / 0.22);
-    --frost: rgb(23 22 20 / 0.72);
-    --hatch: #2f2c28;
+    --frost: rgb(11 18 32 / 0.72);
+    --hatch: #182036;
   }
 }
 
@@ -106,21 +110,21 @@
   --clay: #e08260;
   --clay-deep: #c96442;
 
-  --page: #171614;
-  --surface: #201f1c;
-  --tint: #2a2825;
-  --rule: #37342f;
-  --node: #4d4941;
+  --page: #0b1220;
+  --surface: #121a2e;
+  --tint: #1a2440;
+  --rule: #26314f;
+  --node: #38456b;
 
-  --ink: #f7f6f2;
-  --body: #ddd9d0;
-  --secondary: #a8a297;
-  --muted: #7d786e;
+  --ink: #f2f4fa;
+  --body: #d7dced;
+  --secondary: #9aa3c0;
+  --muted: #6b7396;
 
-  --overlay: rgb(0 0 0 / 0.5);
+  --overlay: rgb(0 0 0 / 0.55);
   --clay-ring: rgb(224 130 96 / 0.22);
-  --frost: rgb(23 22 20 / 0.72);
-  --hatch: #2f2c28;
+  --frost: rgb(11 18 32 / 0.72);
+  --hatch: #182036;
 }
 
 /* --------------------------------------------------------------------------
@@ -299,6 +303,15 @@
      Reuses --duration-slide rather than a new constant. */
   --animate-bump: bump var(--duration-slide) var(--ease-standard);
 
+  /* The hero's one-time entrance beat — title first, subtitle a step behind.
+     `both` holds the pre-animation (opacity 0) state until the animation
+     starts and the post-animation state after, so there is no flash of the
+     final state before the delay elapses. Neutralised globally under
+     `prefers-reduced-motion` (see globals.css), same as every other motion
+     here. */
+  --animate-hero-title: hero-fade-up var(--duration-slide) var(--ease-standard) both;
+  --animate-hero-subtitle: hero-fade-up var(--duration-slide) var(--ease-standard) 90ms both;
+
   --ease-standard: ease-in-out;
 }
 
@@ -321,5 +334,16 @@
   }
   100% {
     transform: scale(1);
+  }
+}
+
+@keyframes hero-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

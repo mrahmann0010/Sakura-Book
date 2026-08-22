@@ -18,22 +18,6 @@ export const config = {
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };
 
-function detectLocale(request: NextRequest): string {
-  const acceptLanguage = request.headers.get("accept-language");
-  if (!acceptLanguage) return defaultLocale;
-
-  const preferred = acceptLanguage
-    .split(",")
-    .map((part) => part.split(";")[0].trim().toLowerCase());
-
-  for (const lang of preferred) {
-    const match = locales.find((locale) => lang === locale || lang.startsWith(`${locale}-`));
-    if (match) return match;
-  }
-
-  return defaultLocale;
-}
-
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -49,8 +33,13 @@ export function proxy(request: NextRequest) {
     return NextResponse.next({ request: { headers } });
   }
 
-  const locale = detectLocale(request);
+  /* A locale-less request (a bare `/`, or any path with no `/en`, `/bn`, `/ja`
+     prefix) always lands on `defaultLocale` — the shop's storefront is
+     Bangladeshi and Bangla-first regardless of the visitor's browser
+     language. This is only the *first* landing: the language switcher, or a
+     direct `/en`/`/ja` link, still moves a visitor to another locale from
+     there. */
   const url = request.nextUrl.clone();
-  url.pathname = `/${locale}${pathname}`;
+  url.pathname = `/${defaultLocale}${pathname}`;
   return NextResponse.redirect(url);
 }

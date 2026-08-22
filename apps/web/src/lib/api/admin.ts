@@ -278,6 +278,11 @@ export function updateAdminBook(
   });
 }
 
+/** Refused with a 409 `AdminApiError` if the book has any order history. */
+export function deleteAdminBook(id: string): Promise<void> {
+  return adminFetch(`/admin/books/${encodeURIComponent(id)}`, z.void(), { method: "DELETE" });
+}
+
 /* --------------------------------------------------------------------------
    Uploads. See admin-uploads.controller.ts — both return a public URL to put
    straight into the book form's coverImageUrl/pdfUrl fields.

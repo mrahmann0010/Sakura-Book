@@ -95,7 +95,11 @@ export function toBookSummary(
        the empty string. */
     coverUrl: book.coverImageUrl || undefined,
     flag: flagFor(book),
-    soldOut: book.stockQuantity === 0,
+    /* A coming-soon book always carries zero stock by design (enforced
+       server-side) but is not "sold out" — it was never orderable to begin
+       with, and dimming it the same way a genuinely depleted title is dimmed
+       reads as a broken image rather than a merchandising signal. */
+    soldOut: book.availability !== "coming_soon" && book.stockQuantity === 0,
     rating: book.rating ?? undefined,
     ratingCount: book.ratingCount ?? undefined,
     expectedShipDate:

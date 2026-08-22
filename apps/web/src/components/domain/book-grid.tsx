@@ -12,6 +12,10 @@ import { cn } from "@/lib/utils";
  * landing wireframe draws for its two shelves of panel cards. Catalog and
  * search keep the 4-up default.
  *
+ * `columns={6}` is the landing shelf's best-sellers rail: 2 up through tablet,
+ * jumping straight to 6 up at desktop — the caller hides everything past the
+ * second card below that breakpoint, so the intermediate step is unused.
+ *
  * Takes children rather than a `books` array so a page can drop a skeleton, an
  * ad slot or a "load more" cell into the same flow.
  */
@@ -21,12 +25,13 @@ export function BookGrid({
   className,
 }: {
   children: ReactNode;
-  columns?: 3 | 4;
+  columns?: 3 | 4 | 6;
   className?: string;
 }) {
-  return (
-    <div className={cn(columns === 3 ? "grid-books-3" : "grid-books", className)}>{children}</div>
-  );
+  const gridClass =
+    columns === 3 ? "grid-books-3" : columns === 6 ? "grid-books-6" : "grid-books";
+
+  return <div className={cn(gridClass, className)}>{children}</div>;
 }
 
 /**
@@ -128,7 +133,7 @@ export function BookGridSkeleton({
   className,
 }: {
   count?: number;
-  columns?: 3 | 4;
+  columns?: 3 | 4 | 6;
   footer?: boolean;
   className?: string;
 }) {

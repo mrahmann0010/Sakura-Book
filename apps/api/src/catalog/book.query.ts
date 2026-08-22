@@ -104,17 +104,23 @@ export function bookFilters(query: BookQuery): SQL {
 }
 
 /**
- * `pre_order` first, ahead of whatever sort the shopper picked.
+ * What's actually buyable first, ahead of whatever sort the shopper picked.
  *
- * The one merchandising rule the shelf enforces regardless of query: a book
- * open for pre-order is the thing the shop most wants seen, on every sort and
- * every page 1 — not just under "recent". It is a primary sort key rather
- * than a filter or a client-side reorder for the same reason the tiebreak
- * below is: offset pagination needs one total order, and a client that moved
- * the row itself would duplicate or drop a book across pages.
+ * The one merchandising rule the shelf enforces regardless of query: a title
+ * you can buy right now outranks one you can only reserve, which outranks one
+ * you cannot order at all yet. `in_stock` and `pre_order` both go through the
+ * same cart and checkout; `coming_soon` is never orderable (enforced
+ * server-side) and sinks to the bottom of every sort and every page 1. It is a
+ * primary sort key rather than a filter or a client-side reorder for the same
+ * reason the tiebreak below is: offset pagination needs one total order, and a
+ * client that moved the row itself would duplicate or drop a book across
+ * pages.
  */
-function preOrderFirst(): SQL {
-  return sql`(case when ${books.availability} = 'pre_order' then 0 else 1 end)`;
+function orderableBucket(): SQL {
+  return sql`(case ${books.availability}
+        when 'in_stock' then 0
+        when 'pre_order' then 1
+        else 2 end)`;
 }
 
 /**
@@ -129,18 +135,23 @@ function preOrderFirst(): SQL {
  * reviews in the database yet, every book's average is null, so ascending
  * nulls would make the "top rated" sort return the shelf in an arbitrary
  * order and look broken.
+ *
+ * The default/`"recent"` branch ranks by `unitsSold` within the orderable
+ * bucket, ahead of recency — the shelf leads with what's selling, not merely
+ * what was added last. An explicit sort the shopper picked (title, price,
+ * rating) is left alone: popularity should not override a choice they made.
  */
 export function bookOrder(sort: BookQuery["sort"]): SQL[] {
   switch (sort) {
     case "title":
-      return [preOrderFirst(), asc(books.title), asc(books.id)];
+      return [orderableBucket(), asc(books.title), asc(books.id)];
     case "price-asc":
-      return [preOrderFirst(), asc(books.priceCents), asc(books.id)];
+      return [orderableBucket(), asc(books.priceCents), asc(books.id)];
     case "rating":
-      return [preOrderFirst(), sql`${ratingAverage()} desc nulls last`, asc(books.id)];
+      return [orderableBucket(), sql`${ratingAverage()} desc nulls last`, asc(books.id)];
     case "recent":
     default:
-      return [preOrderFirst(), desc(books.createdAt), asc(books.id)];
+      return [orderableBucket(), desc(books.unitsSold), desc(books.createdAt), asc(books.id)];
   }
 }
 

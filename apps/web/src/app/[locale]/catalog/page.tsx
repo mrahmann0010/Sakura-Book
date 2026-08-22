@@ -2,7 +2,14 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { AddToCartButton } from "@/components/cart/add-to-cart-button";
-import { BookCard, BookGrid, BookGridSkeleton, EmptyState, Pagination } from "@/components/domain";
+import {
+  BookCard,
+  BookGrid,
+  BookGridSkeleton,
+  CatalogControls,
+  EmptyState,
+  Pagination,
+} from "@/components/domain";
 import { AppNav, PageHeader, PageShell, Shell, SiteFooter } from "@/components/layout";
 import { LinkButton } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
@@ -55,7 +62,13 @@ export async function generateMetadata({
 export default async function Catalog({ params, searchParams }: PageProps<"/[locale]/catalog">) {
   const { locale } = (await params) as { locale: Locale };
   const query = parseSearchParams(await searchParams);
-  const { t } = await getTranslation(locale);
+  const [{ t }, categories] = await Promise.all([getTranslation(locale), getCategories()]);
+
+  /* JLPT-skill facets only (vocabulary/kanji/grammar/reading/listening) — the
+     shop no longer sells across the seeded "genre" group (fiction/essays/...),
+     and that facet must never resurface here even though the data still
+     exists in the categories table. */
+  const skillFacets = categories.filter((group) => group.group === "skill");
 
   return (
     <PageShell
@@ -73,8 +86,7 @@ export default async function Catalog({ params, searchParams }: PageProps<"/[loc
             books fetch. The count (below) does, so it waits with the grid. */}
         <PageHeader size="lg" title={t("catalog.title")} />
 
-        {/* Filter/search/sort controls temporarily disabled. URL params
-            (?q=/?genre=/?sort=) still work server-side if hit directly. */}
+        <CatalogControls query={query} facets={skillFacets} />
 
         <div className="mt-10">
           <Suspense fallback={<BookGridSkeleton footer />}>
@@ -86,12 +98,9 @@ export default async function Catalog({ params, searchParams }: PageProps<"/[loc
   );
 }
 
-/* Isolated so its data fetch (`listBooks`/`getCategories`) can be caught by
-   the `Suspense` boundary above, streaming in once resolved instead of
-   blocking the header. `categories` is fetched here too, not above, even
-   though nothing renders it yet — keeping both catalog fetches on one
-   boundary avoids a second, unrelated Suspense fallback if a facet UI
-   returns. */
+/* Isolated so its data fetch (`listBooks`) can be caught by the `Suspense`
+   boundary above, streaming in once resolved instead of blocking the header
+   and the (already-rendered) filter controls. */
 async function CatalogResults({
   locale,
   query,
@@ -99,11 +108,7 @@ async function CatalogResults({
   locale: Locale;
   query: ReturnType<typeof parseSearchParams>;
 }) {
-  const [{ t }, list] = await Promise.all([
-    getTranslation(locale),
-    listBooks(query),
-    getCategories(),
-  ]);
+  const [{ t }, list] = await Promise.all([getTranslation(locale), listBooks(query)]);
 
   const books = toBookSummaries(list.items, locale);
 

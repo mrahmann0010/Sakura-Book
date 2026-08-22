@@ -105,21 +105,36 @@ function QuickView({ book, label }: { book: BookSummary; label: string }) {
 
 type T = Awaited<ReturnType<typeof getTranslation>>["t"];
 
+/* Shown past the top 2 — the mobile/tablet shelf shows one row of the two
+   best-sellers; desktop (`lg:`) reveals the full 2×6.
+
+   Two variants because the two things being hidden have different native
+   `display`: the panel card's own layout is `flex flex-col` (it seats
+   `footerAction`/actions with `mt-auto`), so it must come back as `lg:flex`,
+   not `lg:block` — the skeleton's wrapper `<div>` has no such requirement and
+   stacks fine as a block. */
+const CARD_BEYOND_MOBILE_ROW = "hidden lg:flex";
+const SKELETON_BEYOND_MOBILE_ROW = "hidden lg:block";
+
 async function RecentGrid({ locale, t }: { locale: Locale; t: T }) {
-  const recent = await listBooks({ q: "", genres: [], sort: "recent", page: 1 });
-  const recentlyAdded = toBookSummaries(recent.items, locale);
+  const recent = await listBooks(
+    { q: "", genres: [], sort: "recent", page: 1 },
+    { pageSize: 12 },
+  );
+  const bestSellers = toBookSummaries(recent.items, locale);
 
   return (
     <>
       <h2 className="sr-only">{t("home.recent.title")}</h2>
-      <BookGrid columns={3}>
-        {recentlyAdded.map((book) => (
+      <BookGrid columns={6}>
+        {bestSellers.map((book, index) => (
           <BookCard
             key={book.id}
             book={book}
             locale={locale}
             variant="panel"
             inlineMeta
+            className={index >= 2 ? CARD_BEYOND_MOBILE_ROW : undefined}
             action={<QuickView book={book} label={t("home.quickView", { title: book.title })} />}
           />
         ))}
@@ -134,13 +149,13 @@ async function RecentGrid({ locale, t }: { locale: Locale; t: T }) {
   );
 }
 
-/* Mirrors RecentGrid's 3-up grid of panel cards so nothing shifts when the
-   real content lands (§9, same convention as the pre-order page's skeleton). */
+/* Mirrors RecentGrid's 2×6 grid so nothing shifts when the real content lands
+   (§9, same convention as the pre-order page's skeleton). */
 function RecentGridSkeleton() {
   return (
-    <div className="grid-books-3">
-      {Array.from({ length: 6 }, (_, i) => (
-        <div key={i}>
+    <div className="grid-books-6">
+      {Array.from({ length: 12 }, (_, i) => (
+        <div key={i} className={i >= 2 ? SKELETON_BEYOND_MOBILE_ROW : undefined}>
           <Skeleton className="aspect-2/3 w-full rounded-md" index={i} />
           <Skeleton className="mt-3 h-4 w-3/4" index={i} />
           <Skeleton className="mt-2 h-3.5 w-1/2" index={i} />
@@ -165,17 +180,22 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
         />
       }
     >
-      {/* Hero — just the tagline, centred. */}
+      {/* Hero — tagline and subtitle, centred, fading up on load. */}
       <Shell
         as="section"
         className="lg:pt-page-desktop lg:pb-block flex flex-col items-center py-20 text-center"
       >
-        <h1 className="max-w-measure-intro text-36 text-ink sm:text-48 lg:text-64 font-serif leading-[1.04]">
+        <h1 className="animate-hero-title max-w-measure-intro text-36 text-ink sm:text-48 lg:text-64 font-serif leading-[1.04]">
           {t("home.hero.tagline")}
         </h1>
+        <p className="animate-hero-subtitle text-15 text-secondary max-w-measure-lede sm:text-17 lg:text-19 mt-4">
+          {t("home.hero.subhead")}
+        </p>
       </Shell>
 
-      {/* Recently added — 6 panel cards, 3-up, then the way through to the catalogue. */}
+      {/* Best-selling, buyable-now books — 12 panel cards, 2 up on mobile
+          (the top 2 sellers), 6 up on desktop, then the way through to the
+          catalogue. */}
       <Shell>
         <Suspense fallback={<RecentGridSkeleton />}>
           <RecentGrid locale={locale} t={t} />
