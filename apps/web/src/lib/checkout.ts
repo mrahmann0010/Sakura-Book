@@ -7,9 +7,8 @@
    API validates with this exact object.
 
    This file stays as the import site so components keep importing
-   "@/lib/checkout" — and because the two things below are genuinely local:
-   placeholder data the API does not serve yet, and a stand-in for an id only
-   the server can mint.
+   "@/lib/checkout" — and because `regions` below is genuinely local: display
+   labels for zones the API validates by slug, not the source of truth.
    -------------------------------------------------------------------------- */
 
 export {
@@ -48,12 +47,3 @@ export const regions = [
 ] as const;
 
 export type Region = (typeof regions)[number]["value"];
-
-/**
- * Placeholder order id, in the shape the design system's `OrderId` renders and
- * the "Order IDs are eight characters, like MG-40718" copy promises.
- * Replaced by the `orderNumber` the API returns.
- */
-export function draftOrderId(): string {
-  return `MG-${Math.floor(10000 + Math.random() * 89999)}`;
-}

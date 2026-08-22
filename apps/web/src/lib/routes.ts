@@ -18,7 +18,6 @@ export function routes(locale: Locale | string) {
     book: (id: string) => `${base}/books/${id}`,
     cart: `${base}/cart`,
     checkout: `${base}/checkout`,
-    order: (id: string) => `${base}/orders/${id}`,
     orders: `${base}/orders`,
     refundPolicy: `${base}/refund-policy`,
     privacyPolicy: `${base}/privacy-policy`,

@@ -18,26 +18,40 @@ export const orderStatuses = [
 export type OrderStatus = (typeof orderStatuses)[number];
 
 /**
- * Lookup is authenticated by possession of the order number *plus* a matching
- * email. A mismatch returns NOT_FOUND, never 403 — a "wrong email" response
- * would confirm the order number is real and turn this into an enumeration
- * oracle. POST rather than GET so the email stays out of URLs and access logs.
+ * Lookup by any one of order number, email, or phone — deliberately
+ * single-factor, so a customer who has forgotten their order ID can still
+ * find it. Giving the order number returns that one order; giving email
+ * and/or phone returns every order matching either one, since a returning
+ * customer may have placed more than one. At least one field is required.
+ *
+ * This is a real trade against the two-factor design cancel() still uses
+ * below: anyone who knows a customer's phone or email can see their order
+ * history. `StrictThrottle` stays on the route as scraping resistance, and a
+ * miss is always an empty list — never a signal about which field, if any,
+ * came close.
  */
-export const orderLookupRequestSchema = z.object({
-  orderNumber: z.string().trim().min(1, "Enter the order ID from your confirmation."),
-  email: z.string().trim().email("Enter the email address you ordered with."),
-});
+export const orderLookupRequestSchema = z
+  .object({
+    orderNumber: z.string().trim().min(1).optional(),
+    email: z.string().trim().email().optional(),
+    phone: z.string().trim().min(1).optional(),
+  })
+  .refine((value) => value.orderNumber || value.email || value.phone, {
+    message: "Enter your order ID, email, or phone number.",
+  });
 
 /**
  * Cancelling an order.
  *
- * Authenticated exactly like lookup — order number plus a matching email — for
- * the same reason and with the same NOT_FOUND-on-mismatch rule. The difference
- * is that this one writes, so it is rate-limited harder still and refused
- * outright once the parcel is with the courier: after that the only way back is
- * a refund, which moves money and is not a customer self-service action.
+ * Its own schema, not built on the (now single-factor) lookup schema above:
+ * this one writes, so it keeps the stronger two-factor requirement — order
+ * number *and* a matching email, exactly as lookup used to work. A mismatch
+ * returns NOT_FOUND, never 403 — a "wrong email" response would confirm the
+ * order number is real and turn this into an enumeration oracle.
  */
-export const orderCancelRequestSchema = orderLookupRequestSchema.extend({
+export const orderCancelRequestSchema = z.object({
+  orderNumber: z.string().trim().min(1, "Enter the order ID from your confirmation."),
+  email: z.string().trim().email("Enter the email address you ordered with."),
   /**
    * Optional, and free text the customer typed. Stored on the status history
    * entry so the shop can read why orders are being dropped — which is the
@@ -113,7 +127,11 @@ export const orderSchema = z.object({
   timeline: z.array(orderStatusEventSchema),
 });
 
+/** Zero, one, or many matches — see orderLookupRequestSchema. */
+export const orderLookupResponseSchema = z.array(orderSchema);
+
 export type OrderLookupRequest = z.infer<typeof orderLookupRequestSchema>;
 export type OrderLine = z.infer<typeof orderLineSchema>;
 export type OrderStatusEvent = z.infer<typeof orderStatusEventSchema>;
 export type Order = z.infer<typeof orderSchema>;
+export type OrderLookupResponse = z.infer<typeof orderLookupResponseSchema>;

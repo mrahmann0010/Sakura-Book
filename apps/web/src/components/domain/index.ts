@@ -51,6 +51,9 @@ export type { OrderRecapProps, RecapLine, RecapRow } from "./order-recap";
 export { ORDER_STEPS, OrderStatusTimeline } from "./order-status-timeline";
 export type { OrderStatusTimelineProps, OrderStep } from "./order-status-timeline";
 
+export { ORDER_PROGRESS_STEPS, OrderProgress } from "./order-progress";
+export type { OrderProgressProps, OrderProgressStep } from "./order-progress";
+
 export { OrderLine, SummaryCard, SummaryRow } from "./summary-card";
 export type { OrderLineProps, SummaryRowProps } from "./summary-card";
 

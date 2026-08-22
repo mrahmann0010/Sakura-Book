@@ -1,14 +1,14 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { EventEmitter2 } from "@nestjs/event-emitter";
 import type { Order, OrderCancelRequest, OrderLookupRequest } from "@sakura/contracts";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { ResourceNotFoundError } from "../common/errors";
 import { DbService } from "../db/db.service";
 import type { Executor, Transaction } from "../db/db.types";
 import { orders, orderStatusHistory } from "../db/schema";
 import { InventoryService } from "../inventory";
 import { toOrderResponse } from "./order.mapper";
-import { findOrder } from "./order.query";
+import { findOrder, findOrders } from "./order.query";
 import {
   STOCK_HELD_STATUSES,
   canTransition,
@@ -38,46 +38,57 @@ export class OrdersService {
   ) {}
 
   /**
-   * Guest order lookup: order number *plus* a matching email.
+   * Guest order lookup: any one of order number, email, or phone.
    *
-   * There are no accounts, so possession of both is the authentication. The
-   * comparison is case-insensitive on the email because nobody remembers
-   * whether they capitalised it, and order numbers are normalised upward
-   * because they are read off a printed confirmation.
+   * There are no accounts, and no order-ID-plus-email pairing either — a
+   * customer who cannot find their confirmation email should still be able to
+   * find their order. Order number, when given, is authoritative on its own
+   * and returns that one order. Otherwise this matches on email and/or phone,
+   * whichever were given, and returns every order either one touches — a
+   * repeat customer has more than one.
    *
-   * **A mismatch returns NOT_FOUND, never 403.** This is the whole security
-   * property of the endpoint: a "wrong email for that order" response confirms
-   * the order number is real, which turns an eight-character number space into
-   * an enumeration oracle for anyone willing to iterate it. The same answer
-   * for "no such order" and "not your order" is what makes the number space
-   * worth having. Throttling is the other half — see the controller.
+   * This is deliberately single-factor: knowing a customer's email or phone is
+   * now enough to see their order history. `StrictThrottle` on the controller
+   * is the mitigation, not a second required field. An empty result is the
+   * only "not found" signal there is — it never distinguishes "no such order"
+   * from "nothing matched that email/phone", for the same enumeration reason
+   * the old two-factor design collapsed both into NOT_FOUND.
    */
-  async lookup(request: OrderLookupRequest): Promise<Order> {
-    const orderNumber = request.orderNumber.trim().toUpperCase();
-
-    const row = await findOrder(
-      this.dbService.db,
-      and(
-        eq(orders.orderNumber, orderNumber),
-        // lower() on both sides rather than citext or a stored normalised
-        // column: the volume is one lookup per customer per order, and adding
-        // a column would mean a second thing that can fall out of step with
-        // the address the confirmation email was actually sent to.
-        sql`lower(${orders.customerEmail}) = lower(${request.email.trim()})`,
-      )!,
-    );
-
-    if (!row) {
-      // Logged without the email, and at debug: a failed lookup is either a
-      // typo or someone probing, and neither is worth an alert. The pair is
-      // deliberately not recorded together — a log line holding both halves of
-      // the credential would defeat the design above.
-      this.logger.debug(`Order lookup miss for ${orderNumber}`);
-
-      throw new ResourceNotFoundError("Order", orderNumber);
+  async lookup(request: OrderLookupRequest): Promise<Order[]> {
+    if (request.orderNumber) {
+      const order = await this.byNumber(request.orderNumber.trim().toUpperCase());
+      return order ? [order] : [];
     }
 
-    return toOrderResponse(row);
+    const conditions = [];
+
+    if (request.email) {
+      // lower() on both sides rather than citext or a stored normalised
+      // column: the volume is one lookup per customer, and adding a column
+      // would mean a second thing that can fall out of step with the address
+      // the confirmation email was actually sent to.
+      conditions.push(sql`lower(${orders.customerEmail}) = lower(${request.email.trim()})`);
+    }
+
+    if (request.phone) {
+      // Neither checkout nor the schema normalises phone format, so "01711
+      // 111111", "01711-111111" and "+8801711111111" are all real stored
+      // values for the same number. Comparing on digits only is what makes
+      // any of them find the order.
+      conditions.push(
+        sql`regexp_replace(${orders.customerPhone}, '[^0-9]', '', 'g') = regexp_replace(${request.phone.trim()}, '[^0-9]', '', 'g')`,
+      );
+    }
+
+    // Unreachable via the controller — orderLookupRequestSchema requires at
+    // least one field — but a bare `or()` with nothing to OR would compile to
+    // no WHERE clause at all and return every order in the shop, so this stays
+    // as the guard against that rather than trusting the caller.
+    if (conditions.length === 0) return [];
+
+    const rows = await findOrders(this.dbService.db, or(...conditions)!);
+
+    return rows.map(toOrderResponse);
   }
 
   /**
@@ -246,7 +257,10 @@ export class OrdersService {
     // rollup consumes exactly this event to un-count an order it had counted.
     this.emitStatusChange({ orderId: existing.id, orderNumber, from, to: "CANCELLED" });
 
-    return this.lookup({ orderNumber, email: request.email });
+    const order = await this.byNumber(orderNumber);
+    if (!order) throw new ResourceNotFoundError("Order", orderNumber);
+
+    return order;
   }
 
   /**

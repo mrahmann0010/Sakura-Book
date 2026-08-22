@@ -14,18 +14,19 @@ import {
   type RecapLine,
 } from "@/components/domain";
 import { CheckoutProgress, PageHeader, RailLayout, Shell, StickyBar } from "@/components/layout";
-import { Button, Card, LinkButton, Notice, OrderId, Skeleton } from "@/components/ui";
+import { Button, Card, CopyButton, LinkButton, Notice, OrderId, Skeleton } from "@/components/ui";
 import { useCart } from "@/hooks/use-cart";
 import type { Locale } from "@/i18n/settings";
+import { ApiError } from "@/lib/api/client";
+import { placeOrder as placeOrderRequest } from "@/lib/api/orders";
 import { titlesInStock } from "@/lib/books";
-import { FREE_DELIVERY_THRESHOLD, summaryLines } from "@/lib/cart";
 import {
   checkoutDefaults,
   checkoutSchema,
-  draftOrderId,
   type CheckoutValues,
   type AcceptedPaymentMethod,
 } from "@/lib/checkout";
+import { FREE_DELIVERY_THRESHOLD, summaryLines } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 
@@ -48,6 +49,7 @@ export function CheckoutView({ locale }: { locale: Locale }) {
   const path = routes(locale);
 
   const [placedOrder, setPlacedOrder] = useState<{ id: string; email: string } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const {
     control,
@@ -71,12 +73,20 @@ export function CheckoutView({ locale }: { locale: Locale }) {
   const cart = useCart(region || undefined);
 
   async function placeOrder(values: CheckoutValues) {
-    /* The seam the API takes over: POST the validated values plus the cart
-       entries, and take the order id back. Until then an id is drafted here so
-       the confirmation state is real and reviewable. */
-    const id = draftOrderId();
-    setPlacedOrder({ id, email: values.email });
-    cart.clear();
+    setSubmitError(null);
+
+    try {
+      const order = await placeOrderRequest(
+        { items: cart.entries, customer: values },
+        crypto.randomUUID(),
+      );
+      setPlacedOrder({ id: order.orderNumber, email: values.email });
+      cart.clear();
+    } catch (err) {
+      setSubmitError(
+        err instanceof ApiError ? err.message : t("checkout.submitError"),
+      );
+    }
   }
 
   if (!cart.hydrated || cart.quoting) return <CheckoutSkeleton />;
@@ -97,13 +107,17 @@ export function CheckoutView({ locale }: { locale: Locale }) {
           </p>
 
           <Card variant="tint" padding="roomy" className="mt-8">
-            <p className="eyebrow">{t("checkout.placed.orderId")}</p>
+            <div className="flex items-baseline justify-between gap-4">
+              <p className="eyebrow">{t("checkout.placed.orderId")}</p>
+              <CopyButton value={placedOrder.id} />
+            </div>
             <OrderId className="mt-2.5 block">{placedOrder.id}</OrderId>
+            <p className="text-caption text-secondary mt-2.5">{t("checkout.placed.copyPrompt")}</p>
           </Card>
 
           <div className="mt-8 flex flex-wrap gap-3">
             <LinkButton href={path.catalog}>{t("checkout.placed.action")}</LinkButton>
-            <LinkButton href={path.order(placedOrder.id)} variant="secondary">
+            <LinkButton href={path.orders} variant="secondary">
               {t("checkout.placed.track")}
             </LinkButton>
           </div>
@@ -248,6 +262,8 @@ export function CheckoutView({ locale }: { locale: Locale }) {
             {isSubmitted && !isValid ? (
               <Notice tone="error">{t("checkout.errorSummary")}</Notice>
             ) : null}
+
+            {submitError ? <Notice tone="error">{submitError}</Notice> : null}
 
             <div className="hidden lg:block">
               {submitAction}

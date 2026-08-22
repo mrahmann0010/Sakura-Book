@@ -5,7 +5,7 @@ import type { FieldErrors, UseFormRegister } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
 import { PaymentOption, PaymentOptionList } from "@/components/domain";
-import { Button, Input } from "@/components/ui";
+import { Button, CopyButton, Input } from "@/components/ui";
 import type { CheckoutValues } from "@/lib/checkout";
 import { input, paymentOption } from "@/lib/variants";
 import { cn } from "@/lib/utils";
@@ -338,61 +338,6 @@ function VerifyStep({
         </button>
       </div>
     </div>
-  );
-}
-
-function CopyButton({ value }: { value: string }) {
-  const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      // Clipboard access can be denied by the browser; the number is still
-      // selectable text, so there is nothing to recover from here.
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={copy}
-      className="text-caption text-clay hover:text-clay-deep inline-flex shrink-0 items-center gap-1.5 font-semibold"
-    >
-      {copied ? (
-        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden>
-          <path
-            d="M4 10.5l3.5 3.5L16 5.5"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      ) : (
-        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden>
-          <rect
-            x="7"
-            y="7"
-            width="9.5"
-            height="9.5"
-            rx="1.5"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          />
-          <path
-            d="M13 6.5V4.75A1.25 1.25 0 0 0 11.75 3.5h-7A1.25 1.25 0 0 0 3.5 4.75v7c0 .69.56 1.25 1.25 1.25H6.5"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          />
-        </svg>
-      )}
-      {copied ? t("checkout.payment.copied") : t("checkout.payment.copy")}
-    </button>
   );
 }
 

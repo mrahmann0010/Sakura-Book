@@ -17,10 +17,10 @@ class OrderCancelDto extends createZodDto(orderCancelRequestSchema) {}
  *
  * A separate controller from OrdersController even though both sit under
  * `/orders`, because the two have different threat models: placing an order
- * needs no prior knowledge, while everything here is authenticated by an order
- * number plus a matching email and is therefore an enumeration target. Keeping
- * them apart means the hard throttle on these cannot be loosened by a change
- * aimed at checkout.
+ * needs no prior knowledge, while lookup here is single-factor (any one of
+ * order number, email, or phone) and cancel is two-factor (order number plus
+ * a matching email) — both are enumeration targets. Keeping them apart means
+ * the hard throttle on these cannot be loosened by a change aimed at checkout.
  */
 @ApiTags("orders")
 @Controller("orders")
@@ -30,19 +30,23 @@ export class GuestOrdersController {
   /**
    * POST for a read, and not for the usual "the body is the query" reason.
    *
-   * The email is the credential here. A GET would put it in the URL, and so
-   * into browser history, `Referer` headers, and every access log between the
-   * customer and us — for a value that, paired with an order number, is the
-   * entire authentication of this endpoint. 200 rather than 201 because
-   * nothing is created.
+   * Email/phone are the credential here, same as an order number would be
+   * alone — a GET would put any of them in the URL, and so into browser
+   * history, `Referer` headers, and every access log between the customer and
+   * us. 200 rather than 201 because nothing is created.
+   *
+   * Returns an array — zero, one, or many orders — never 404. See
+   * `OrdersService.lookup` for why a miss is an empty list rather than a
+   * status code: there is no "wrong credential" response to give when a
+   * single field is the whole credential.
    */
   @Post("lookup")
   @HttpCode(HttpStatus.OK)
-  // The hard one. This endpoint is the enumeration oracle the NOT_FOUND-on-
-  // mismatch rule exists to close, and that rule only works if guessing is slow.
   @StrictThrottle()
-  @ApiOperation({ summary: "Look up an order by number and email. Mismatch returns 404." })
-  async lookup(@Body() body: OrderLookupDto): Promise<Order> {
+  @ApiOperation({
+    summary: "Look up orders by order number, email, or phone. A miss is an empty array.",
+  })
+  async lookup(@Body() body: OrderLookupDto): Promise<Order[]> {
     return this.ordersService.lookup(body);
   }
 

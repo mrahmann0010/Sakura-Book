@@ -222,6 +222,7 @@
     "place": "Place order",
     "placing": "Placing order",
     "errorSummary": "Check the fields marked below, then place the order again.",
+    "submitError": "Something went wrong placing your order. Please try again.",
     "empty": {
       "eyebrow": "Checkout",
       "title": "There is nothing to check out",
@@ -233,6 +234,7 @@
       "title": "Thank you — your order is in",
       "description": "We have emailed a confirmation to {{email}}. Keep the order ID for tracking.",
       "orderId": "Order ID",
+      "copyPrompt": "Save this somewhere — you'll need it to track your order.",
       "action": "Continue shopping",
       "track": "Track this order"
     },

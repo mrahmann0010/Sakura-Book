@@ -24,3 +24,20 @@ export async function findOrder(executor: Executor, where: SQL): Promise<OrderRo
     },
   });
 }
+
+/**
+ * The same shape as `findOrder`, for a lookup that may legitimately match more
+ * than one order — a customer's email or phone can be on several. Newest
+ * first and capped, since this backs a customer-facing list, not a report.
+ */
+export async function findOrders(executor: Executor, where: SQL): Promise<OrderRow[]> {
+  return executor.query.orders.findMany({
+    where,
+    with: {
+      items: { with: { book: { columns: { slug: true, coverImageUrl: true } } } },
+      statusHistory: true,
+    },
+    orderBy: (row, { desc }) => [desc(row.createdAt)],
+    limit: 20,
+  });
+}

@@ -3,148 +3,69 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import type { Order, OrderStatus } from "@sakura/contracts";
 
-import { OrderStatusTimeline, type OrderStep } from "@/components/domain";
+import { OrderProgress, type OrderProgressStep } from "@/components/domain";
 import { Button, Card, Input, Notice, OrderId, StatusPill } from "@/components/ui";
 import { Shell } from "@/components/layout";
-import { ApiError } from "@/lib/api/client";
+import { formatMoney } from "@/lib/money";
 import { lookupOrder } from "@/lib/api/orders";
 
 /* --------------------------------------------------------------------------
-   Track order — utility shell (Page Skeletons sheet 04): a narrow lookup form
-   and, once submitted, the same OrderStatusTimeline the confirmation screen
-   uses, now wired to the real GuestOrdersController.lookup endpoint.
+   Track order — no accounts, and no order-ID-plus-email pairing either. Any
+   one of order ID, email, or phone is enough: an order ID goes straight to
+   that one order, while email/phone return every order matching either one,
+   since a returning customer may have placed more than one.
 
-   The real OrderStatus is 7-valued; OrderStatusTimeline only knows the four
-   forward steps (pending/paid/shipped/delivered) and its own doc comment says
-   a cancelled order is a StatusPill, not a fifth step — toOrderStep returns
-   null for CANCELLED/REFUNDED so this page can draw that pill instead.
+   The real OrderStatus is 7-valued; OrderProgress only knows three forward
+   stages (placed/verified/shipped) and cancelled/refunded is a StatusPill,
+   not a fourth stage — toOrderProgressStep returns null for those two.
    -------------------------------------------------------------------------- */
 
-function toOrderStep(status: OrderStatus): OrderStep | null {
+function toOrderProgressStep(status: OrderStatus): OrderProgressStep | null {
   switch (status) {
     case "PENDING":
-      return "pending";
+      return "placed";
     case "PAYMENT_CONFIRMED":
     case "PROCESSING":
-      return "paid";
+      return "verified";
     case "SHIPPED":
-      return "shipped";
     case "DELIVERED":
-      return "delivered";
+      return "shipped";
     case "CANCELLED":
     case "REFUNDED":
       return null;
   }
 }
 
-/** Latest timeline entry per display step, so a later status (e.g. PROCESSING
-    after PAYMENT_CONFIRMED) overwrites the earlier one mapped to the same step. */
-function stepDetail(order: Order): Partial<Record<OrderStep, ReactNode>> {
-  const detail: Partial<Record<OrderStep, ReactNode>> = {};
+/** Latest timeline entry per display stage, so a later status (e.g.
+    DELIVERED after SHIPPED) overwrites the earlier one mapped to the same stage. */
+function progressDetail(order: Order): Partial<Record<OrderProgressStep, ReactNode>> {
+  const detail: Partial<Record<OrderProgressStep, ReactNode>> = {};
 
   for (const event of order.timeline) {
-    const step = toOrderStep(event.status);
+    const step = toOrderProgressStep(event.status);
     if (!step) continue;
 
     const when = new Date(event.occurredAt).toLocaleString();
     detail[step] = event.note ? `${when} — ${event.note}` : when;
   }
 
-  return detail;
-}
-
-export function TrackOrderView() {
-  const [orderId, setOrderId] = useState("");
-  const [email, setEmail] = useState("");
-  const [result, setResult] = useState<Order | null>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setNotFound(false);
-    setResult(null);
-    setLoading(true);
-
-    try {
-      const order = await lookupOrder({ orderNumber: orderId, email });
-      setResult(order);
-    } catch (err) {
-      if (err instanceof ApiError && err.isNotFound) {
-        setNotFound(true);
-      } else {
-        setError("Something went wrong looking up that order. Try again in a moment.");
-      }
-    } finally {
-      setLoading(false);
-    }
+  if (order.status === "SHIPPED") {
+    detail.shipped = (
+      <>
+        <span className="block">{detail.shipped}</span>
+        <span className="block">Arriving in 4-5 working days.</span>
+      </>
+    );
+  } else if (order.status === "DELIVERED") {
+    detail.shipped = (
+      <>
+        <span className="block">{detail.shipped}</span>
+        <span className="text-ink block font-medium">Delivered.</span>
+      </>
+    );
   }
 
-  const step = result ? toOrderStep(result.status) : null;
-
-  return (
-    <Shell className="max-w-measure py-14 lg:py-20">
-      <p className="eyebrow">Track order</p>
-      <h1 className="text-36 lg:text-44 text-ink mt-4 font-serif leading-tight">
-        Where&apos;s your order?
-      </h1>
-      <p className="text-body mt-5">
-        Enter the order ID from your confirmation email, along with the email address you used.
-      </p>
-
-      <form onSubmit={(event) => void handleSubmit(event)} className="mt-8 flex flex-col gap-5">
-        <Input
-          label="Order ID"
-          placeholder="e.g. MG-40718"
-          value={orderId}
-          onChange={(event) => setOrderId(event.target.value)}
-          required
-        />
-        <Input
-          label="Email"
-          type="email"
-          placeholder="you@example.com"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          required
-        />
-        <Button type="submit" className="self-start" loading={loading} loadingLabel="Searching">
-          Track order
-        </Button>
-      </form>
-
-      {notFound ? (
-        <Notice tone="error" className="mt-8">
-          We couldn&apos;t find an order with that ID and email. Double-check the confirmation email
-          and try again.
-        </Notice>
-      ) : null}
-
-      {error ? (
-        <Notice tone="error" className="mt-8">
-          {error}
-        </Notice>
-      ) : null}
-
-      {result ? (
-        <Card variant="tint" padding="roomy" className="mt-10">
-          <p className="eyebrow">Order</p>
-          <OrderId className="mt-2.5 block">{result.orderNumber}</OrderId>
-
-          {step ? (
-            <OrderStatusTimeline status={step} detail={stepDetail(result)} className="mt-9" />
-          ) : (
-            <div className="mt-9">
-              <StatusPill status="cancelled" />
-              {lastNote(result) ? <p className="text-body mt-3">{lastNote(result)}</p> : null}
-            </div>
-          )}
-        </Card>
-      ) : null}
-    </Shell>
-  );
+  return detail;
 }
 
 /** The most recent timeline note — the reason a cancelled/refunded order shows one. */
@@ -154,4 +75,154 @@ function lastNote(order: Order): string | null {
     if (note) return note;
   }
   return null;
+}
+
+/** Short status word for the picker list — the same three-stage vocabulary
+    the progress bar uses, plus the two terminal states it doesn't draw. */
+function pickerStatusLabel(status: OrderStatus): string {
+  const step = toOrderProgressStep(status);
+  if (step === "placed") return "Placed";
+  if (step === "verified") return "Verified";
+  if (step === "shipped") return status === "DELIVERED" ? "Delivered" : "Shipped";
+  return status === "CANCELLED" ? "Cancelled" : "Refunded";
+}
+
+export function TrackOrderView() {
+  const [orderId, setOrderId] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const [results, setResults] = useState<Order[] | null>(null);
+  const [selected, setSelected] = useState<Order | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const canSubmit = orderId.trim() || email.trim() || phone.trim();
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSubmit) return;
+
+    setError(null);
+    setResults(null);
+    setSelected(null);
+    setLoading(true);
+
+    try {
+      const orders = await lookupOrder({ orderNumber: orderId, email, phone });
+      setResults(orders);
+      setSelected(orders.length === 1 ? orders[0] : null);
+    } catch {
+      setError("Something went wrong looking up your order. Try again in a moment.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const step = selected ? toOrderProgressStep(selected.status) : null;
+
+  return (
+    <Shell className="max-w-measure py-14 lg:py-20">
+      <p className="eyebrow">Track order</p>
+      <h1 className="text-36 lg:text-44 text-ink mt-4 font-serif leading-tight">
+        Where&apos;s your order?
+      </h1>
+      <p className="text-body mt-5">
+        Enter your order ID, or the email or phone number you ordered with — whichever you have.
+      </p>
+
+      <form onSubmit={(event) => void handleSubmit(event)} className="mt-8 flex flex-col gap-5">
+        <Input
+          label="Order ID"
+          placeholder="e.g. MG-40718"
+          value={orderId}
+          onChange={(event) => setOrderId(event.target.value)}
+        />
+        <Input
+          label="Email"
+          type="email"
+          placeholder="you@example.com"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+        />
+        <Input
+          label="Phone"
+          type="tel"
+          placeholder="01XXXXXXXXX"
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+        />
+        <Button
+          type="submit"
+          className="self-start"
+          disabled={!canSubmit}
+          loading={loading}
+          loadingLabel="Searching"
+        >
+          Track order
+        </Button>
+      </form>
+
+      {error ? (
+        <Notice tone="error" className="mt-8">
+          {error}
+        </Notice>
+      ) : null}
+
+      {results && results.length === 0 ? (
+        <Notice tone="error" className="mt-8">
+          We couldn&apos;t find any orders matching that. Double-check what you entered and try
+          again.
+        </Notice>
+      ) : null}
+
+      {results && results.length > 1 ? (
+        <Card variant="tint" padding="roomy" className="mt-10">
+          <p className="eyebrow">{results.length} orders found</p>
+          <ul className="mt-4 flex flex-col gap-1">
+            {results.map((order) => (
+              <li key={order.orderNumber}>
+                <button
+                  type="button"
+                  onClick={() => setSelected(order)}
+                  className={`hairline flex w-full items-center justify-between gap-4 py-3 text-left transition-colors ${
+                    selected?.orderNumber === order.orderNumber ? "text-ink" : "text-secondary hover:text-ink"
+                  }`}
+                >
+                  <span>
+                    <OrderId>{order.orderNumber}</OrderId>
+                    <span className="text-caption text-muted ml-3">
+                      {new Date(order.placedAt).toLocaleDateString()}
+                    </span>
+                  </span>
+                  <span className="text-13.5 flex items-center gap-4">
+                    {pickerStatusLabel(order.status)}
+                    <span>{formatMoney(order.totalCents, "en-GB", order.currency)}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
+      {selected ? (
+        <Card variant="tint" padding="roomy" className="mt-10">
+          <p className="eyebrow">Order</p>
+          <OrderId className="mt-2.5 block">{selected.orderNumber}</OrderId>
+
+          {step ? (
+            <OrderProgress status={step} detail={progressDetail(selected)} className="mt-9" />
+          ) : (
+            <div className="mt-9">
+              <StatusPill status="cancelled">
+                {selected.status === "REFUNDED" ? "Refunded" : "Cancelled"}
+              </StatusPill>
+              {lastNote(selected) ? <p className="text-body mt-3">{lastNote(selected)}</p> : null}
+            </div>
+          )}
+        </Card>
+      ) : null}
+    </Shell>
+  );
 }
