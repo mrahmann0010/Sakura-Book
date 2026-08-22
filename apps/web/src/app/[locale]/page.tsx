@@ -68,8 +68,8 @@ export const dynamic = "force-dynamic";
    across concurrent requests), so the per-request cost is a React render of
    the whole tree waiting on the shelf's fetch to resolve before anything can
    stream. Isolating the shelf below its own `await` inside <Suspense> — same
-   pattern as the pre-order page — lets the hero title/subhead, proof band, and
-   how-it-works section paint immediately instead of blocking on `listBooks`. */
+   pattern as the pre-order page — lets the hero, proof band, and how-it-works
+   section paint immediately instead of blocking on `listBooks`. */
 
 /** Canonical and hreflang for the landing page. Everything else — the title
     template, the description, the Open Graph defaults — is inherited from the
@@ -165,20 +165,14 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
         />
       }
     >
-      {/* Hero — headline · subhead, centred; tagline sits below. */}
+      {/* Hero — just the tagline, centred. */}
       <Shell
         as="section"
         className="lg:pt-page-desktop lg:pb-block flex flex-col items-center py-20 text-center"
       >
         <h1 className="max-w-measure-intro text-36 text-ink sm:text-48 lg:text-64 font-serif leading-[1.04]">
-          {t("home.hero.title")}
+          {t("home.hero.tagline")}
         </h1>
-        <p className="max-w-measure-lede text-secondary mt-6">{t("home.hero.subhead")}</p>
-
-        <p className="text-secondary text-13 mt-8 flex items-center gap-3">
-          <span aria-hidden="true" className="bg-rule hidden h-px w-30 sm:block" />
-          <span>{t("home.hero.tagline")}</span>
-        </p>
       </Shell>
 
       {/* Recently added — 6 panel cards, 3-up, then the way through to the catalogue. */}
