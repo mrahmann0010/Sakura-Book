@@ -48,6 +48,7 @@
     "@nestjs/testing": "^11.2.1",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.3",
+    "@types/multer": "^1.4.12",
     "@types/node": "^20.19.11",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.35.0",

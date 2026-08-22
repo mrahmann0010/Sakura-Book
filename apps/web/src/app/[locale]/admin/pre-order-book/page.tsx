@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 
+import { AdminShell } from "@/components/admin/admin-shell";
 import {
   AdminApiError,
   createAdminPreOrderBook,
@@ -111,134 +112,134 @@ export default function AdminPreOrderBookPage() {
     }
   }
 
-  if (checking) return <p style={{ padding: 40 }}>Checking session…</p>;
-
   return (
-    <main style={{ maxWidth: 560, margin: "40px auto", fontFamily: "system-ui, sans-serif" }}>
-      <h1 style={{ fontSize: 20, marginBottom: 8 }}>Pre-order book</h1>
-      <p style={{ color: "#555", marginBottom: 24 }}>
-        Create or edit the title the storefront is taking pre-orders for.
-      </p>
+    <AdminShell checking={checking}>
+      <main style={{ maxWidth: 560, margin: "40px auto", fontFamily: "system-ui, sans-serif" }}>
+        <h1 style={{ fontSize: 20, marginBottom: 8 }}>Pre-order book</h1>
+        <p style={{ color: "#555", marginBottom: 24 }}>
+          Create or edit the title the storefront is taking pre-orders for.
+        </p>
 
-      {books.length > 0 ? (
-        <label style={{ display: "block", marginBottom: 20 }}>
-          Existing books
-          <select
-            value={selectedId}
-            onChange={(e) => selectBook(e.target.value)}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-          >
-            <option value="">— New book —</option>
-            {books.map((book) => (
-              <option key={book.id} value={book.id}>
-                {book.title} {book.isActive ? "(active)" : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
+        {books.length > 0 ? (
+          <label style={{ display: "block", marginBottom: 20 }}>
+            Existing books
+            <select
+              value={selectedId}
+              onChange={(e) => selectBook(e.target.value)}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            >
+              <option value="">— New book —</option>
+              {books.map((book) => (
+                <option key={book.id} value={book.id}>
+                  {book.title} {book.isActive ? "(active)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
-      <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <label>
-          Title
-          <input
-            required
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-          />
-        </label>
+        <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <label>
+            Title
+            <input
+              required
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
 
-        <label>
-          Author
-          <input
-            required
-            value={form.authorName}
-            onChange={(e) => setForm({ ...form, authorName: e.target.value })}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-          />
-        </label>
+          <label>
+            Author
+            <input
+              required
+              value={form.authorName}
+              onChange={(e) => setForm({ ...form, authorName: e.target.value })}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
 
-        <label>
-          Description
-          <textarea
-            required
-            rows={4}
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-          />
-        </label>
+          <label>
+            Description
+            <textarea
+              required
+              rows={4}
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
 
-        <label>
-          Page count
-          <input
-            type="number"
-            min={1}
-            value={form.pageCount}
-            onChange={(e) => setForm({ ...form, pageCount: e.target.value })}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-          />
-        </label>
+          <label>
+            Page count
+            <input
+              type="number"
+              min={1}
+              value={form.pageCount}
+              onChange={(e) => setForm({ ...form, pageCount: e.target.value })}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
 
-        <label>
-          Price (cents)
-          <input
-            required
-            type="number"
-            min={0}
-            value={form.priceCents}
-            onChange={(e) => setForm({ ...form, priceCents: e.target.value })}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-          />
-        </label>
+          <label>
+            Price (cents)
+            <input
+              required
+              type="number"
+              min={0}
+              value={form.priceCents}
+              onChange={(e) => setForm({ ...form, priceCents: e.target.value })}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
 
-        <label>
-          Original price before discount (cents, optional)
-          <input
-            type="number"
-            min={0}
-            value={form.compareAtPriceCents}
-            onChange={(e) => setForm({ ...form, compareAtPriceCents: e.target.value })}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-          />
-        </label>
+          <label>
+            Original price before discount (cents, optional)
+            <input
+              type="number"
+              min={0}
+              value={form.compareAtPriceCents}
+              onChange={(e) => setForm({ ...form, compareAtPriceCents: e.target.value })}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
 
-        <label>
-          Cover image URL
-          <input
-            required
-            value={form.coverImageUrl}
-            onChange={(e) => setForm({ ...form, coverImageUrl: e.target.value })}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-          />
-        </label>
+          <label>
+            Cover image URL
+            <input
+              required
+              value={form.coverImageUrl}
+              onChange={(e) => setForm({ ...form, coverImageUrl: e.target.value })}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
 
-        <label>
-          Cover image alt text
-          <input
-            value={form.coverImageAlt}
-            onChange={(e) => setForm({ ...form, coverImageAlt: e.target.value })}
-            style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
-          />
-        </label>
+          <label>
+            Cover image alt text
+            <input
+              value={form.coverImageAlt}
+              onChange={(e) => setForm({ ...form, coverImageAlt: e.target.value })}
+              style={{ display: "block", width: "100%", padding: 8, marginTop: 4 }}
+            />
+          </label>
 
-        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <input
-            type="checkbox"
-            checked={form.isActive}
-            onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-          />
-          Active (shown on the storefront)
-        </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={form.isActive}
+              onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+            />
+            Active (shown on the storefront)
+          </label>
 
-        {message ? <p style={{ color: "green" }}>{message}</p> : null}
-        {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
+          {message ? <p style={{ color: "green" }}>{message}</p> : null}
+          {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
 
-        <button type="submit" disabled={saving} style={{ padding: 10 }}>
-          {saving ? "Saving…" : selectedId ? "Save changes" : "Create pre-order book"}
-        </button>
-      </form>
-    </main>
+          <button type="submit" disabled={saving} style={{ padding: 10 }}>
+            {saving ? "Saving…" : selectedId ? "Save changes" : "Create pre-order book"}
+          </button>
+        </form>
+      </main>
+    </AdminShell>
   );
 }

@@ -1,6 +1,6 @@
 {
-  "id": "cf6332b2-5e1d-4a3a-9076-9867108ffd03",
-  "prevId": "ea0dcb37-24cb-4574-9ae0-371ecda47bd4",
+  "id": "b41e77a2-9c30-4d8e-8f16-3e5b90c7a418",
+  "prevId": "cf6332b2-5e1d-4a3a-9076-9867108ffd03",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1559,6 +1559,18 @@
           "primaryKey": false,
           "notNull": true
         },
+        "sender_number": {
+          "name": "sender_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "transaction_id": {
+          "name": "transaction_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "status": {
           "name": "status",
           "type": "order_status",
@@ -1674,6 +1686,21 @@
           "isUnique": false,
           "concurrently": false,
           "method": "gin",
+          "with": {}
+        },
+        "orders_transaction_id_idx": {
+          "name": "orders_transaction_id_idx",
+          "columns": [
+            {
+              "expression": "transaction_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
           "with": {}
         }
       },

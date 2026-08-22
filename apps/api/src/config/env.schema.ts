@@ -275,6 +275,25 @@ export const envSchema = z.object({
    * note that a parent domain here shares the cookie with every subdomain.
    */
   ADMIN_COOKIE_DOMAIN: z.string().optional(),
+
+  /**
+   * Supabase project URL and service-role key, for the admin panel's cover
+   * image / PDF uploads (StorageService, apps/api/src/storage).
+   *
+   * Optional, and its absence is a closed door rather than an open one:
+   * StorageService throws StorageNotConfiguredError rather than silently
+   * writing nowhere. Everything else — login, the dashboard, book CRUD with a
+   * manually-typed cover URL — works without these; only the upload buttons
+   * need them.
+   *
+   * The service-role key bypasses row-level security, which is why it lives
+   * only in this API process and is never sent to the browser.
+   */
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(20).optional(),
+
+  /** Bucket the uploads above are written to. Must be public — see StorageService. */
+  SUPABASE_STORAGE_BUCKET: z.string().min(1).default("book-assets"),
 });
 
 /**

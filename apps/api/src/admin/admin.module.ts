@@ -9,10 +9,12 @@ import { OrdersModule } from "../orders";
 import { PaymentsModule } from "../payments";
 import { PreOrdersModule } from "../pre-orders";
 import { ShippingModule } from "../shipping";
+import { StorageModule } from "../storage";
 import { AdminAuthController } from "./auth/admin-auth.controller";
 import { AdminAuthService } from "./auth/admin-auth.service";
 import { AdminJwtGuard } from "./auth/admin-jwt.guard";
 import { AdminRolesGuard } from "./auth/admin-roles.guard";
+import { AdminBooksController, AdminBooksService, AdminUploadsController } from "./catalog";
 import { AdminDashboardController, AdminDashboardService } from "./dashboard";
 import { AdminOrdersController, AdminOrdersService } from "./orders";
 import {
@@ -63,6 +65,7 @@ import { AdminSettingsController, AdminSettingsService } from "./settings";
      * here — the audit writer it needs is global.
      */
     PreOrdersModule,
+    StorageModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env, true>) => ({
@@ -107,6 +110,8 @@ import { AdminSettingsController, AdminSettingsService } from "./settings";
     AdminDashboardController,
     AdminPreOrderBooksController,
     AdminPreOrdersController,
+    AdminBooksController,
+    AdminUploadsController,
   ],
   providers: [
     AdminAuthService,
@@ -115,6 +120,7 @@ import { AdminSettingsController, AdminSettingsService } from "./settings";
     AdminDashboardService,
     AdminPreOrderBooksService,
     AdminPreOrdersService,
+    AdminBooksService,
     { provide: APP_GUARD, useClass: AdminJwtGuard },
     { provide: APP_GUARD, useClass: AdminRolesGuard },
   ],

@@ -54,6 +54,14 @@ export const books = pgTable(
     coverImageAlt: text("cover_image_alt"),
     galleryImageUrls: jsonb("gallery_image_urls").$type<string[]>(),
 
+    // A sample/preview PDF the admin panel attaches — a few chapters, not the
+    // full manuscript. Nullable: most rows will never have one, and unlike
+    // coverImageUrl there is no storefront rule requiring it.
+    pdfUrl: text("pdf_url"),
+    // The uploaded file's original name, shown back in the admin panel next to
+    // the preview — pdfUrl alone is a generated storage key, not a readable label.
+    pdfFileName: text("pdf_file_name"),
+
     isActive: boolean("is_active").notNull().default(true),
     isFeatured: boolean("is_featured").notNull().default(false),
 

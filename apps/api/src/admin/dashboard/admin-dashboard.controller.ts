@@ -1,7 +1,10 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Query } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
-import type { Dashboard } from "@sakura/contracts";
+import { monthlyReportQuerySchema, type Dashboard, type MonthlyReport } from "@sakura/contracts";
+import { createZodDto } from "nestjs-zod";
 import { AdminDashboardService } from "./admin-dashboard.service";
+
+class MonthlyReportQueryDto extends createZodDto(monthlyReportQuerySchema) {}
 
 @ApiTags("admin-dashboard")
 @Controller("admin/dashboard")
@@ -22,8 +25,17 @@ export class AdminDashboardController {
    * sends two people to the same order.
    */
   @Get()
-  @ApiOperation({ summary: "Revenue windows, order queue depth, low stock, top sellers." })
+  @ApiOperation({
+    summary: "Revenue windows, order queue depth, low stock, top sellers, 12-month trend.",
+  })
   async load(): Promise<Dashboard> {
     return this.dashboardService.load();
+  }
+
+  /** The daily drill-down behind one point on the trend chart. */
+  @Get("report")
+  @ApiOperation({ summary: "Daily orders and revenue for one calendar month (YYYY-MM)." })
+  async report(@Query() query: MonthlyReportQueryDto): Promise<MonthlyReport> {
+    return this.dashboardService.monthlyReport(query.month);
   }
 }

@@ -1,4 +1,8 @@
 import {
+  adminBookCreateRequestSchema,
+  adminBookDetailSchema,
+  adminBookListSchema,
+  adminBookUpdateRequestSchema,
   adminLoginRequestSchema,
   adminPreOrderDetailSchema,
   adminPreOrderFulfillmentTransitionSchema,
@@ -9,7 +13,15 @@ import {
   adminPreOrderBookUpsertRequestSchema,
   adminPreOrderBookListSchema,
   adminSessionSchema,
+  adminUploadResultSchema,
+  dashboardSchema,
+  monthlyReportSchema,
   preOrderBookSchema,
+  type AdminBookCreateRequest,
+  type AdminBookDetail,
+  type AdminBookList,
+  type AdminBookQuery,
+  type AdminBookUpdateRequest,
   type AdminLoginRequest,
   type AdminPreOrderBookList,
   type AdminPreOrderBookUpsertRequest,
@@ -19,6 +31,9 @@ import {
   type AdminPreOrderPaymentDecision,
   type AdminPreOrderVerificationResult,
   type AdminSession,
+  type AdminUploadResult,
+  type Dashboard,
+  type MonthlyReport,
   type PreOrderBook,
 } from "@sakura/contracts";
 import { z } from "zod";
@@ -85,6 +100,42 @@ async function adminFetch<T extends z.ZodTypeAny>(
 
   const payload: unknown = await response.json();
   return schema.parse(payload);
+}
+
+/**
+ * A `FormData` sibling to `adminFetch`, for the two upload routes. Everything
+ * else — cookies, no caching, the error envelope — is identical; the only
+ * difference is that a file body must not carry a JSON `content-type`, which
+ * `fetch` sets correctly on its own once given a `FormData`.
+ */
+async function adminUpload<T extends z.ZodTypeAny>(
+  path: string,
+  schema: T,
+  file: File,
+): Promise<z.infer<T>> {
+  const body = new FormData();
+  body.append("file", file);
+
+  const response = await fetch(`${apiOrigin()}${API_PREFIX}${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { accept: "application/json" },
+    body,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    let message = `Upload failed with ${response.status}`;
+    try {
+      const payload: unknown = await response.json();
+      if (isErrorResponse(payload)) message = (payload as ErrorResponse).error.message;
+    } catch {
+      // best-effort — fall back to the generic message above
+    }
+    throw new AdminApiError(response.status, message);
+  }
+
+  return schema.parse(await response.json());
 }
 
 export function adminLogin(request: AdminLoginRequest): Promise<AdminSession> {
@@ -213,3 +264,70 @@ export function setAdminPreOrderNote(
     { method: "PATCH", body: validated },
   );
 }
+
+/* --------------------------------------------------------------------------
+   Dashboard.
+   -------------------------------------------------------------------------- */
+
+export function getAdminDashboard(): Promise<Dashboard> {
+  return adminFetch("/admin/dashboard", dashboardSchema);
+}
+
+/** Daily orders/revenue for one calendar month — the trend chart's drill-down. */
+export function getAdminMonthlyReport(month: string): Promise<MonthlyReport> {
+  return adminFetch(
+    `/admin/dashboard/report?month=${encodeURIComponent(month)}`,
+    monthlyReportSchema,
+  );
+}
+
+/* --------------------------------------------------------------------------
+   Books.
+   -------------------------------------------------------------------------- */
+
+export function listAdminBooks(
+  params: { q?: string; page?: number; isActive?: boolean } = {},
+): Promise<AdminBookList> {
+  const search = new URLSearchParams();
+  if (params.q) search.set("q", params.q);
+  if (params.page) search.set("page", String(params.page));
+  if (params.isActive !== undefined) search.set("isActive", String(params.isActive));
+
+  const query = search.toString();
+  return adminFetch(`/admin/books${query ? `?${query}` : ""}`, adminBookListSchema);
+}
+
+export function getAdminBook(id: string): Promise<AdminBookDetail> {
+  return adminFetch(`/admin/books/${encodeURIComponent(id)}`, adminBookDetailSchema);
+}
+
+export function createAdminBook(request: AdminBookCreateRequest): Promise<AdminBookDetail> {
+  const validated = adminBookCreateRequestSchema.parse(request);
+  return adminFetch("/admin/books", adminBookDetailSchema, { method: "POST", body: validated });
+}
+
+export function updateAdminBook(
+  id: string,
+  request: AdminBookUpdateRequest,
+): Promise<AdminBookDetail> {
+  const validated = adminBookUpdateRequestSchema.parse(request);
+  return adminFetch(`/admin/books/${encodeURIComponent(id)}`, adminBookDetailSchema, {
+    method: "PATCH",
+    body: validated,
+  });
+}
+
+/* --------------------------------------------------------------------------
+   Uploads. See admin-uploads.controller.ts — both return a public URL to put
+   straight into the book form's coverImageUrl/pdfUrl fields.
+   -------------------------------------------------------------------------- */
+
+export function uploadAdminCover(file: File): Promise<AdminUploadResult> {
+  return adminUpload("/admin/uploads/cover", adminUploadResultSchema, file);
+}
+
+export function uploadAdminPdf(file: File): Promise<AdminUploadResult> {
+  return adminUpload("/admin/uploads/pdf", adminUploadResultSchema, file);
+}
+
+export type { AdminBookQuery };

@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { slugify } from "../../common/slugify";
 import type { Database } from "../db.types";
 import { authors, bookAuthors, bookCategories, books, coupons, publishers } from "../schema";
 
@@ -117,16 +118,6 @@ export async function seedSampleCatalog(db: Database): Promise<void> {
       },
     ])
     .onConflictDoNothing({ target: coupons.code });
-}
-
-/** Lowercase, hyphenated, accents stripped — the same shape as the web slugs. */
-function slugify(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
 }
 
 const SAMPLE_BOOKS = [

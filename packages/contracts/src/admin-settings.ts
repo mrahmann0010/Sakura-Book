@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { monthlyTrendPointSchema } from "./admin-dashboard";
 import { orderStatuses } from "./order";
 
 /* --------------------------------------------------------------------------
@@ -209,6 +210,9 @@ export const dashboardSchema = z.object({
 
   lowStock: z.array(lowStockBookSchema),
   topSellers: z.array(topSellerSchema),
+
+  /** Last 12 months, oldest first, zero-filled — the trend chart's spine. */
+  monthlyTrend: z.array(monthlyTrendPointSchema),
 });
 
 export type Dashboard = z.infer<typeof dashboardSchema>;
