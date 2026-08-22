@@ -7,7 +7,8 @@ import { useForm, useWatch } from "react-hook-form";
 
 import { ShippingFields } from "@/components/checkout/shipping-fields";
 import { PreOrderPaymentSection } from "@/components/pre-order/pre-order-payment-section";
-import { PageHeader, Shell } from "@/components/layout";
+import { PageHeader, RailLayout, Shell } from "@/components/layout";
+import { OrderRecap } from "@/components/domain/order-recap";
 import { Button, Card, Notice, OrderId } from "@/components/ui";
 import type { Locale } from "@/i18n/settings";
 import {
@@ -100,7 +101,7 @@ export function PreOrderCheckoutView({ locale, book }: { locale: Locale; book: P
   if (placed) {
     return (
       <Shell className="py-14 lg:py-20">
-        <div className="max-w-measure">
+        <div className="max-w-measure mx-auto">
           <p className="eyebrow">Pre-order placed</p>
           <h1 className="text-36 lg:text-44 text-ink mt-4 font-serif leading-tight">
             Thanks — your pre-order is in.
@@ -122,36 +123,71 @@ export function PreOrderCheckoutView({ locale, book }: { locale: Locale; book: P
 
   const total = formatMoney(book.priceCents * quantity, money);
 
+  /* The same rail the real checkout carries, for the same reason: the shopper
+     needs the title, the quantity and the amount in view while they type an
+     address. Without it the form was a narrow column stranded against the left
+     edge of a 1280px shell, with nothing opposite it. */
+  const recap = (
+    <OrderRecap
+      title="Your pre-order"
+      lines={[
+        {
+          book: {
+            id: book.id,
+            title: book.title,
+            author: book.authorName,
+            priceCents: book.priceCents,
+            coverUrl: book.coverImageUrl,
+          },
+          quantity,
+          amount: total,
+        },
+      ]}
+      rows={[
+        {
+          key: "subtotal",
+          label: "Subtotal",
+          value: total,
+        },
+      ]}
+      note="Prepaid — delivery is arranged when the book ships."
+      totalLabel="Total"
+      totalValue={total}
+    />
+  );
+
   return (
     <Shell className="py-10 lg:py-16">
-      <PageHeader size="md" title="Pre-order checkout" description={`${book.title} × ${quantity} — ${total}`} />
-
-      <form
-        noValidate
-        onSubmit={handleSubmit(submit)}
-        className="mt-9 flex max-w-measure flex-col gap-10"
-      >
-        <ShippingFields register={register} errors={errors} setValue={setValue} />
-
-        <PreOrderPaymentSection
-          register={register}
-          errors={errors}
-          method={method}
-          onMethodChange={(next) =>
-            setValue("method", next, { shouldValidate: true, shouldDirty: true })
-          }
+      <RailLayout stickyRail rail={recap}>
+        <PageHeader
+          size="md"
+          title="Pre-order checkout"
+          description={`${book.title} × ${quantity}`}
         />
 
-        {isSubmitted && !isValid ? (
-          <Notice tone="error">Check the highlighted fields above.</Notice>
-        ) : null}
+        <form noValidate onSubmit={handleSubmit(submit)} className="mt-9 flex flex-col gap-10">
+          <ShippingFields register={register} errors={errors} setValue={setValue} />
 
-        {submitError ? <Notice tone="error">{submitError}</Notice> : null}
+          <PreOrderPaymentSection
+            register={register}
+            errors={errors}
+            method={method}
+            onMethodChange={(next) =>
+              setValue("method", next, { shouldValidate: true, shouldDirty: true })
+            }
+          />
 
-        <Button type="submit" loading={isSubmitting} loadingLabel="Placing pre-order…">
-          Place pre-order
-        </Button>
-      </form>
+          {isSubmitted && !isValid ? (
+            <Notice tone="error">Check the highlighted fields above.</Notice>
+          ) : null}
+
+          {submitError ? <Notice tone="error">{submitError}</Notice> : null}
+
+          <Button type="submit" loading={isSubmitting} loadingLabel="Placing pre-order…">
+            Place pre-order
+          </Button>
+        </form>
+      </RailLayout>
     </Shell>
   );
 }

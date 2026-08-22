@@ -32,3 +32,6 @@ coverage/
 .claude/settings.local.json
 .claude/skills/
 .github/skills/
+
+# Agent critique notes — generated commentary about the code, not the code.
+.impeccable/
