@@ -30,9 +30,7 @@ export async function generateMetadata({
   };
 }
 
-export default async function PrivacyPolicyPage({
-  params,
-}: PageProps<"/[locale]/privacy-policy">) {
+export default async function PrivacyPolicyPage({ params }: PageProps<"/[locale]/privacy-policy">) {
   const { locale } = (await params) as { locale: Locale };
   const { t } = await getTranslation(locale);
   const path = routes(locale);
@@ -62,8 +60,7 @@ export default async function PrivacyPolicyPage({
         <div className="mt-12 flex flex-col gap-10">
           {sectionKeys.map((key) => {
             const body = t(`privacyPolicy.sections.${key}.body`, { returnObjects: true }) as
-              | string[]
-              | string;
+              string[] | string;
             const paragraphs = Array.isArray(body) ? body : [body];
 
             return (
@@ -73,7 +70,7 @@ export default async function PrivacyPolicyPage({
                 </h2>
                 <div className="mt-3 flex flex-col gap-3">
                   {paragraphs.map((paragraph, index) => (
-                    <p key={index} className="text-body max-w-measure-lede text-secondary">
+                    <p key={index} className="text-body text-secondary max-w-measure">
                       {paragraph}
                     </p>
                   ))}
@@ -84,9 +81,7 @@ export default async function PrivacyPolicyPage({
         </div>
 
         <Section tint className="mt-12">
-          <p className="text-caption text-secondary max-w-measure-lede">
-            {t("privacyPolicy.note")}
-          </p>
+          <p className="text-caption text-secondary max-w-measure">{t("privacyPolicy.note")}</p>
         </Section>
       </Shell>
     </PageShell>

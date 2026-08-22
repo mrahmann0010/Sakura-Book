@@ -59,8 +59,7 @@ export default async function TermsPage({ params }: PageProps<"/[locale]/terms">
         <div className="mt-12 flex flex-col gap-10">
           {sectionKeys.map((key) => {
             const body = t(`terms.sections.${key}.body`, { returnObjects: true }) as
-              | string[]
-              | string;
+              string[] | string;
             const paragraphs = Array.isArray(body) ? body : [body];
 
             return (
@@ -70,7 +69,7 @@ export default async function TermsPage({ params }: PageProps<"/[locale]/terms">
                 </h2>
                 <div className="mt-3 flex flex-col gap-3">
                   {paragraphs.map((paragraph, index) => (
-                    <p key={index} className="text-body max-w-measure-lede text-secondary">
+                    <p key={index} className="text-body text-secondary max-w-measure">
                       {paragraph}
                     </p>
                   ))}
@@ -81,7 +80,7 @@ export default async function TermsPage({ params }: PageProps<"/[locale]/terms">
         </div>
 
         <Section tint className="mt-12">
-          <p className="text-caption text-secondary max-w-measure-lede">{t("terms.note")}</p>
+          <p className="text-caption text-secondary max-w-measure">{t("terms.note")}</p>
         </Section>
       </Shell>
     </PageShell>
