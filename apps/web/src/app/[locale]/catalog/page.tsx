@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { AddToCartButton } from "@/components/cart/add-to-cart-button";
-import { BookCard, BookGrid, CatalogControls, EmptyState, Pagination } from "@/components/domain";
+import { BookCard, BookGrid, BookGridSkeleton, EmptyState, Pagination } from "@/components/domain";
 import { AppNav, PageHeader, PageShell, Shell, SiteFooter } from "@/components/layout";
 import { LinkButton } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
@@ -54,23 +55,7 @@ export async function generateMetadata({
 export default async function Catalog({ params, searchParams }: PageProps<"/[locale]/catalog">) {
   const { locale } = (await params) as { locale: Locale };
   const query = parseSearchParams(await searchParams);
-
-  /* In parallel: the rail does not depend on the shelf, and awaiting them in
-     sequence would put the categories round-trip on the critical path of every
-     page of every search. Translations join the same batch — they don't
-     depend on any of it either. */
-  const [{ t }, list, categories] = await Promise.all([
-    getTranslation(locale),
-    listBooks(query),
-    getCategories(),
-  ]);
-
-  const books = toBookSummaries(list.items, locale);
-
-  /* Pre-order stream disabled — single normal flow for all books. See
-     git history for the pre-order card that used to prepend here. */
-  const gridBooks = books;
-  const total = list.total;
+  const { t } = await getTranslation(locale);
 
   return (
     <PageShell
@@ -84,69 +69,103 @@ export default async function Catalog({ params, searchParams }: PageProps<"/[loc
       }
     >
       <Shell className="py-14 lg:py-20">
-        <PageHeader
-          size="lg"
-          title={t("catalog.title")}
-          /* `total` is the count before pagination — the number the API sends
-             for exactly this line, not `books.length`, which is one page. */
-          description={t("catalog.count", { count: total })}
-        />
+        {/* Title renders instantly on navigation — it doesn't depend on the
+            books fetch. The count (below) does, so it waits with the grid. */}
+        <PageHeader size="lg" title={t("catalog.title")} />
 
-        <CatalogControls query={query} facets={categories} />
+        {/* Filter/search/sort controls temporarily disabled. URL params
+            (?q=/?genre=/?sort=) still work server-side if hit directly. */}
 
         <div className="mt-10">
-          {gridBooks.length > 0 ? (
-            <>
-              {/* No `splitMeta`: it renders `book.rating` / `ratingCount`, which
-                  are placeholder values invented in `lib/books.ts`. Nothing goes
-                  in front of a buyer as social proof until real data backs it. */}
-              <BookGrid>
-                {gridBooks.map((book) => (
-                  <BookCard
-                    key={book.id}
-                    book={book}
-                    locale={locale}
-                    footerAction={
-                      <AddToCartButton
-                        bookId={book.id}
-                        title={book.title}
-                        soldOut={book.soldOut}
-                        comingSoon={book.flag === "coming-soon"}
-                        variant="secondary"
-                        block
-                      />
-                    }
-                  />
-                ))}
-              </BookGrid>
-
-              <Pagination
-                className="mt-14"
-                page={list.page}
-                totalPages={list.totalPages}
-                label={t("catalog.pagination.label")}
-                statusFor={(value) =>
-                  t("catalog.pagination.page", { page: value, totalPages: list.totalPages })
-                }
-                hrefFor={(value) =>
-                  `${routes(locale).catalog}${toSearchParams({ ...query, page: value })}`
-                }
-              />
-            </>
-          ) : (
-            <EmptyState
-              eyebrow={t("catalog.empty.eyebrow")}
-              title={t("catalog.empty.title")}
-              description={t("catalog.empty.description")}
-              action={
-                <LinkButton href={routes(locale).catalog} variant="secondary">
-                  {t("catalog.empty.action")}
-                </LinkButton>
-              }
-            />
-          )}
+          <Suspense fallback={<BookGridSkeleton footer />}>
+            <CatalogResults locale={locale} query={query} />
+          </Suspense>
         </div>
       </Shell>
     </PageShell>
+  );
+}
+
+/* Isolated so its data fetch (`listBooks`/`getCategories`) can be caught by
+   the `Suspense` boundary above, streaming in once resolved instead of
+   blocking the header. `categories` is fetched here too, not above, even
+   though nothing renders it yet — keeping both catalog fetches on one
+   boundary avoids a second, unrelated Suspense fallback if a facet UI
+   returns. */
+async function CatalogResults({
+  locale,
+  query,
+}: {
+  locale: Locale;
+  query: ReturnType<typeof parseSearchParams>;
+}) {
+  const [{ t }, list] = await Promise.all([
+    getTranslation(locale),
+    listBooks(query),
+    getCategories(),
+  ]);
+
+  const books = toBookSummaries(list.items, locale);
+
+  /* Pre-order stream disabled — single normal flow for all books. See
+     git history for the pre-order card that used to prepend here. */
+  const gridBooks = books;
+  const total = list.total;
+
+  if (gridBooks.length === 0) {
+    return (
+      <EmptyState
+        eyebrow={t("catalog.empty.eyebrow")}
+        title={t("catalog.empty.title")}
+        description={t("catalog.empty.description")}
+        action={
+          <LinkButton href={routes(locale).catalog} variant="secondary">
+            {t("catalog.empty.action")}
+          </LinkButton>
+        }
+      />
+    );
+  }
+
+  return (
+    <>
+      {/* `total` is the count before pagination — the number the API sends
+          for exactly this line, not `books.length`, which is one page. */}
+      <p className="max-w-measure-lede text-body mb-6">{t("catalog.count", { count: total })}</p>
+
+      {/* No `splitMeta`: it renders `book.rating` / `ratingCount`, which
+          are placeholder values invented in `lib/books.ts`. Nothing goes
+          in front of a buyer as social proof until real data backs it. */}
+      <BookGrid>
+        {gridBooks.map((book) => (
+          <BookCard
+            key={book.id}
+            book={book}
+            locale={locale}
+            footerAction={
+              <AddToCartButton
+                bookId={book.id}
+                title={book.title}
+                soldOut={book.soldOut}
+                comingSoon={book.flag === "coming-soon"}
+                variant="secondary"
+                block
+              />
+            }
+          />
+        ))}
+      </BookGrid>
+
+      <Pagination
+        className="mt-14"
+        page={list.page}
+        totalPages={list.totalPages}
+        label={t("catalog.pagination.label")}
+        statusFor={(value) =>
+          t("catalog.pagination.page", { page: value, totalPages: list.totalPages })
+        }
+        hrefFor={(value) => `${routes(locale).catalog}${toSearchParams({ ...query, page: value })}`}
+      />
+    </>
   );
 }
