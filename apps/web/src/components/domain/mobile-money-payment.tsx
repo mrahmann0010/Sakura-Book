@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import type { FieldErrors, UseFormRegister } from "react-hook-form";
+import type { FieldErrors, UseFormRegister, UseFormSetValue } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
+import type { PaymentProvider } from "@sakura/contracts";
 import { PaymentOption, PaymentOptionList } from "@/components/domain";
 import { Button, CopyButton, Input } from "@/components/ui";
 import type { CheckoutValues } from "@/lib/checkout";
@@ -39,26 +40,39 @@ import { cn } from "@/lib/utils";
    one generic "bKash or bank transfer" option.
    -------------------------------------------------------------------------- */
 
-/** Placeholders until real numbers land in env — always non-empty, so the
-    copy/edit affordances always have something to work with. */
-export const mobileMoneyProviders = [
+/**
+ * Placeholders until real numbers land in env — always non-empty, so the
+ * copy/edit affordances always have something to work with.
+ *
+ * `id` is `PaymentProvider` from @sakura/contracts, not a locally invented
+ * union: it is the same value that travels to the API as `customer.provider`
+ * and lands in `orders.provider`, and the SMS gateway files receipts under
+ * exactly these three collection names.
+ */
+export const mobileMoneyProviders: readonly { id: PaymentProvider; number: string }[] = [
   { id: "bkash", number: process.env.NEXT_PUBLIC_BKASH_NUMBER || "01712-345678" },
   { id: "rocket", number: process.env.NEXT_PUBLIC_ROCKET_NUMBER || "01812-345678" },
   { id: "nagad", number: process.env.NEXT_PUBLIC_NAGAD_NUMBER || "01912-345678" },
-] as const;
+];
 
-export type MobileMoneyProviderId = (typeof mobileMoneyProviders)[number]["id"];
+export type MobileMoneyProviderId = PaymentProvider;
 
 type Phase = "pay" | "verify";
 
 export function MobileMoneyPayment({
   register,
+  setValue,
   errors,
   provider,
   onProviderChange,
   className,
 }: {
   register: UseFormRegister<CheckoutValues>;
+  /** Writes the chosen wallet onto the form as `provider`, the field
+      `checkoutSchema` requires whenever `method` is `manual-transfer` — see
+      the module comment on why this travels as an explicit field rather than
+      being inferred from the transaction ID. */
+  setValue: UseFormSetValue<CheckoutValues>;
   errors: FieldErrors<CheckoutValues>;
   provider: MobileMoneyProviderId | null;
   onProviderChange: (provider: MobileMoneyProviderId | null) => void;
@@ -69,11 +83,13 @@ export function MobileMoneyPayment({
 
   function selectProvider(id: MobileMoneyProviderId) {
     if (id !== provider) setPhase("pay");
+    setValue("provider", id, { shouldValidate: true, shouldDirty: true });
     onProviderChange(id);
   }
 
   function clearProvider() {
     setPhase("pay");
+    setValue("provider", undefined, { shouldValidate: true, shouldDirty: true });
     onProviderChange(null);
   }
 

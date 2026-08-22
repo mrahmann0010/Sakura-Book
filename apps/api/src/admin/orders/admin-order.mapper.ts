@@ -3,6 +3,7 @@ import type {
   AdminOrderSummary,
   AdminPayment,
   PaymentMethod,
+  PaymentProvider,
 } from "@sakura/contracts";
 import type { InferSelectModel } from "drizzle-orm";
 import type { orders, payments, ShippingAddress } from "../../db/schema";
@@ -34,6 +35,7 @@ type OrderListRow = Pick<
   | "customerPhone"
   | "shippingAddress"
   | "paymentMethod"
+  | "provider"
   | "totalCents"
   | "internalNote"
 >;
@@ -51,6 +53,7 @@ export function toAdminOrderSummary(
     customerPhone: row.customerPhone,
     region: (row.shippingAddress as ShippingAddress).region,
     paymentMethod: row.paymentMethod as PaymentMethod,
+    paymentProvider: row.provider as PaymentProvider | null,
     currency: CURRENCY_OF_RECORD,
     totalCents: row.totalCents,
     // Absent from the counts map means an order with no items, which should be

@@ -134,7 +134,9 @@ export default function AdminOrdersPage() {
                   <td className="text-secondary px-4 py-3">
                     {new Date(order.placedAt).toLocaleString()}
                   </td>
-                  <td className="text-secondary px-4 py-3">{order.paymentMethod}</td>
+                  <td className="text-secondary px-4 py-3">
+                    {order.paymentProvider ?? order.paymentMethod}
+                  </td>
                   <td className="text-ink px-4 py-3">
                     {formatMoney(order.totalCents, "en-GB", order.currency)}
                   </td>

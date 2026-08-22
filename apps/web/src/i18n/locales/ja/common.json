@@ -10,6 +10,7 @@
     "addToCart": "カートに入れる",
     "inCart": "カート内 · {{count}}",
     "removeFromCart": "カートから削除",
+    "goToCart": "カートへ進む",
     "soldOut": "在庫切れ",
     "comingSoon": "近日発売"
   },
@@ -182,8 +183,6 @@
     },
     "payment": {
       "legend": "お支払い方法",
-      "cash-on-delivery": "代金引換",
-      "cash-on-deliveryMeta": "配達時にお支払い",
       "manual-transfer": "bKash・銀行振込",
       "manual-transferMeta": "手動振込",
       "manual-transferHint": "合計額をお振込みのうえ、送金番号と取引IDをご記入ください。",

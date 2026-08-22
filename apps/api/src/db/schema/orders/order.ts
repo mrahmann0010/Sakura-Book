@@ -1,6 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
-import { orderStatusEnum, paymentMethodEnum } from "../enums";
+import { orderStatusEnum, paymentMethodEnum, paymentProviderEnum } from "../enums";
 import { coupons } from "../marketing/coupon";
 import { timestamps } from "../timestamps";
 import { orderItems } from "./order-item";
@@ -81,6 +81,16 @@ export const orders = pgTable(
     // produces no payments row until delivery, so the payments table cannot
     // answer "how is this order being paid for" for the most common method.
     paymentMethod: paymentMethodEnum("payment_method").notNull(),
+
+    /**
+     * Which wallet a manual-transfer payment moved through — bKash, Rocket or
+     * Nagad. Collected explicitly at checkout rather than left to be inferred
+     * from `transactionId`, whose format alone does not name a wallet.
+     *
+     * Nullable for the same reason `senderNumber`/`transactionId` are: cash on
+     * delivery moves through no wallet at all.
+     */
+    provider: paymentProviderEnum("provider"),
 
     /**
      * The manual-transfer receipt: the wallet number the money was sent from,

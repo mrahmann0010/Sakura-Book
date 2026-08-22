@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { paymentMethods } from "./checkout";
+import { paymentProviders } from "./payment-verification";
 
 /* --------------------------------------------------------------------------
    Orders — confirmation, and guest lookup.
@@ -110,6 +111,8 @@ export const orderSchema = z.object({
   couponCode: z.string().nullable(),
 
   paymentMethod: z.enum(paymentMethods),
+  /** Which wallet a manual-transfer payment moved through. Null otherwise. */
+  paymentProvider: z.enum(paymentProviders).nullable(),
 
   shipping: z.object({
     fullName: z.string(),

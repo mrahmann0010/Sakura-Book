@@ -10,6 +10,7 @@
     "addToCart": "কার্টে দিন",
     "inCart": "কার্টে · {{count}}",
     "removeFromCart": "কার্ট থেকে সরান",
+    "goToCart": "কার্টে যান",
     "soldOut": "স্টকে নেই",
     "comingSoon": "শীঘ্রই আসছে"
   },
@@ -184,8 +185,6 @@
     },
     "payment": {
       "legend": "পেমেন্ট",
-      "cash-on-delivery": "ক্যাশ অন ডেলিভারি",
-      "cash-on-deliveryMeta": "কুরিয়ারকে দিন",
       "manual-transfer": "বিকাশ বা ব্যাংক ট্রান্সফার",
       "manual-transferMeta": "ম্যানুয়াল ট্রান্সফার",
       "manual-transferHint": "মোট টাকা পাঠিয়ে সেন্ডার নম্বর ও ট্রানজেকশন আইডি দিন।",
