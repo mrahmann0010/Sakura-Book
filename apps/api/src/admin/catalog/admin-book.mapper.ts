@@ -1,4 +1,4 @@
-import type { AdminBookDetail, AdminBookSummary } from "@sakura/contracts";
+import type { AdminBookDetail, AdminBookSummary, BookAvailability } from "@sakura/contracts";
 
 /**
  * Database rows → the shapes in @sakura/contracts, admin side.
@@ -27,6 +27,7 @@ export type AdminBookSummaryRow = {
   unitsSold: number;
   isActive: boolean;
   isFeatured: boolean;
+  availability: BookAvailability;
   authors: AuthorLink[];
 };
 
@@ -44,6 +45,7 @@ export function toAdminBookSummary(row: AdminBookSummaryRow): AdminBookSummary {
     unitsSold: row.unitsSold,
     isActive: row.isActive,
     isFeatured: row.isFeatured,
+    availability: row.availability,
   };
 }
 

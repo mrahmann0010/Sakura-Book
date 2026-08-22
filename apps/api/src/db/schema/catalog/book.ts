@@ -3,6 +3,7 @@ import {
   index,
   integer,
   jsonb,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -15,6 +16,23 @@ import { timestamps } from "../timestamps";
 import { bookAuthors } from "./book-author";
 import { bookCategories } from "./book-category";
 import { publishers } from "./publisher";
+
+/**
+ * Whether a title can be bought right now, and if not, why.
+ *
+ * `pre_order` is a normal catalog book — same cart, same checkout, same
+ * payment — that ships later; it is not the separate pre-order stream (see
+ * `db/schema/pre-order/*`), which was retired from the frontend. `stockQuantity`
+ * still governs whether a `pre_order`/`in_stock` book can actually be added to
+ * the cart (zero means sold out or none printed yet); `coming_soon` books are
+ * never orderable regardless of stock — admin-books.service.ts enforces that a
+ * `coming_soon` row always carries zero stock.
+ */
+export const bookAvailabilityEnum = pgEnum("book_availability", [
+  "in_stock",
+  "coming_soon",
+  "pre_order",
+]);
 
 export const books = pgTable(
   "books",
@@ -41,6 +59,7 @@ export const books = pgTable(
 
     stockQuantity: integer("stock_quantity").notNull().default(0),
     lowStockThreshold: integer("low_stock_threshold").notNull().default(5),
+    availability: bookAvailabilityEnum("availability").notNull().default("in_stock"),
     weightGrams: integer("weight_grams"),
     // {l, w, h} — captured now, unused until shipping model is decided
     dimensions: jsonb("dimensions").$type<{ l: number; w: number; h: number }>(),

@@ -122,11 +122,20 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
       </p>
 
       <p className="text-13 text-secondary mt-3">
-        {book.stockQuantity === 0
+        {view.flag === "coming-soon"
           ? t("book.stock.comingSoon")
-          : book.stockQuantity <= 5
-            ? t("book.stock.low", { count: book.stockQuantity })
-            : t("book.stock.in")}
+          : book.stockQuantity === 0
+            ? t("book.stock.out")
+            : view.expectedShipDate
+              ? t("book.preOrder.shipsAround", {
+                  date: new Intl.DateTimeFormat(intlLocale(locale), {
+                    year: "numeric",
+                    month: "long",
+                  }).format(new Date(view.expectedShipDate)),
+                })
+              : book.stockQuantity <= 5
+                ? t("book.stock.low", { count: book.stockQuantity })
+                : t("book.stock.in")}
       </p>
 
       <div className="mt-5">

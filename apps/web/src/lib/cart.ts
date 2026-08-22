@@ -93,6 +93,8 @@ export function cartFromQuote(quote: CartQuote): Cart {
       priceCents: line.unitPriceCents,
       href: `/books/${line.slug}`,
       coverUrl: line.coverImageUrl,
+      flag: line.availability === "pre_order" ? "pre-order" : undefined,
+      expectedShipDate: line.expectedShipDate ?? undefined,
     },
     quantity: line.quantity,
     unitPrice: line.unitPriceCents,

@@ -59,6 +59,7 @@ function createColumns(request: AdminBookCreateRequest): CreateColumns {
     pdfFileName: request.pdfFileName ?? null,
     isActive: request.isActive,
     isFeatured: request.isFeatured,
+    availability: request.availability,
     metaTitle: request.metaTitle ?? null,
     metaDescription: request.metaDescription ?? null,
   };
@@ -96,9 +97,19 @@ function updateColumns(request: AdminBookUpdateRequest): BookColumns {
   if (request.pdfFileName !== undefined) columns.pdfFileName = request.pdfFileName ?? null;
   if (request.isActive !== undefined) columns.isActive = request.isActive;
   if (request.isFeatured !== undefined) columns.isFeatured = request.isFeatured;
+  if (request.availability !== undefined) columns.availability = request.availability;
   if (request.metaTitle !== undefined) columns.metaTitle = request.metaTitle ?? null;
   if (request.metaDescription !== undefined) {
     columns.metaDescription = request.metaDescription ?? null;
+  }
+
+  /* The request-level refine only catches a PATCH that sets both fields at
+     once. Flipping a book to `coming_soon` without also repeating
+     `stockQuantity: 0` is still a request that must not leave the row
+     carrying stock a `coming_soon` book can never sell — so force it here,
+     the one place that sees the existing row too. */
+  if (columns.availability === "coming_soon" && columns.stockQuantity === undefined) {
+    columns.stockQuantity = 0;
   }
 
   return columns;

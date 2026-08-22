@@ -92,6 +92,20 @@ export function CartItem({
           {book.format ? <> · {book.format}</> : null}
         </p>
 
+        {/* Pre-order lines ship later — a normal cart line otherwise, just
+            with this one extra fact so the shopper isn't surprised at
+            delivery. */}
+        {book.flag === "pre-order" && book.expectedShipDate ? (
+          <p className="text-caption text-muted mt-1">
+            {t("book.preOrder.shipsAround", {
+              date: new Intl.DateTimeFormat(undefined, {
+                year: "numeric",
+                month: "long",
+              }).format(new Date(book.expectedShipDate)),
+            })}
+          </p>
+        ) : null}
+
         <div className="mt-4 flex flex-wrap items-center gap-3.5">
           <Stepper
             value={quantity}

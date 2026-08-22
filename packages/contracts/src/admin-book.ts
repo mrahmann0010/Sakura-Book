@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { bookAvailabilityValues } from "./catalog";
 import { pageQuerySchema, paginated } from "./pagination";
 
 /* --------------------------------------------------------------------------
@@ -19,6 +20,7 @@ export const adminBookQuerySchema = pageQuerySchema({ defaultPageSize: 20 }).ext
   q: z.string().trim().min(1).optional(),
   isActive: z.coerce.boolean().optional(),
   isFeatured: z.coerce.boolean().optional(),
+  availability: z.enum(bookAvailabilityValues).optional(),
   sort: adminBookSortSchema,
 });
 
@@ -37,6 +39,7 @@ export const adminBookSummarySchema = z.object({
   unitsSold: z.number().int().nonnegative(),
   isActive: z.boolean(),
   isFeatured: z.boolean(),
+  availability: z.enum(bookAvailabilityValues),
 });
 
 export type AdminBookSummary = z.infer<typeof adminBookSummarySchema>;
@@ -114,6 +117,14 @@ const adminBookFieldsSchema = z.object({
   lowStockThreshold: z.number().int().nonnegative().optional(),
   weightGrams: z.number().int().positive().optional(),
 
+  /**
+   * `in_stock` unless set. `pre_order` is a normal catalog book that ships
+   * later — same cart, same checkout — not the retired pre-order stream.
+   * `coming_soon` must carry zero stock; see `aboveCompareAtPrice`'s sibling
+   * refine below.
+   */
+  availability: z.enum(bookAvailabilityValues).optional(),
+
   coverImageUrl: z.string().trim().min(1, "Add a cover image."),
   coverImageAlt: z.string().trim().optional(),
   galleryImageUrls: z.array(z.string()).optional(),
@@ -150,10 +161,28 @@ function aboveCompareAtPrice<T extends { priceCents?: number; compareAtPriceCent
   );
 }
 
+/**
+ * A `coming_soon` row is never orderable, and a stock count on one would be a
+ * standing lie — either checkout would sell against it (contradicting "not
+ * released yet") or the shop would carry stock that inventory can never move.
+ * Only fires when both fields are actually present in the request: a PATCH
+ * that only changes, say, the price must not fail because it didn't also
+ * repeat `stockQuantity: 0`.
+ */
+function comingSoonHasNoStock<T extends { availability?: string; stockQuantity?: number }>(
+  value: T,
+): boolean {
+  return !(value.availability === "coming_soon" && (value.stockQuantity ?? 0) > 0);
+}
+
 export const adminBookCreateRequestSchema = adminBookFieldsSchema
   .refine(aboveCompareAtPrice, {
     message: "Compare-at price must be higher than the price.",
     path: ["compareAtPriceCents"],
+  })
+  .refine(comingSoonHasNoStock, {
+    message: "A coming-soon book must have zero stock.",
+    path: ["stockQuantity"],
   })
   /**
    * Defaults applied here, once, after validation — not with `.default()` on
@@ -167,6 +196,7 @@ export const adminBookCreateRequestSchema = adminBookFieldsSchema
     galleryImageUrls: value.galleryImageUrls ?? [],
     isActive: value.isActive ?? true,
     isFeatured: value.isFeatured ?? false,
+    availability: value.availability ?? "in_stock",
     categorySlugs: value.categorySlugs ?? [],
   }));
 
@@ -184,6 +214,10 @@ export const adminBookUpdateRequestSchema = adminBookFieldsSchema
   .refine(aboveCompareAtPrice, {
     message: "Compare-at price must be higher than the price.",
     path: ["compareAtPriceCents"],
+  })
+  .refine(comingSoonHasNoStock, {
+    message: "A coming-soon book must have zero stock.",
+    path: ["stockQuantity"],
   });
 
 export type AdminBookUpdateRequest = z.infer<typeof adminBookUpdateRequestSchema>;

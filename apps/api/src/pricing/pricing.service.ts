@@ -204,5 +204,8 @@ function toLine(book: PriceableBook, quantity: number): PricedLine {
     // never becomes a float anywhere in this codebase (§3.7).
     lineTotalCents: book.priceCents * quantity,
     stockQuantity: book.stockQuantity,
+    availability: book.availability,
+    expectedShipDate:
+      book.availability === "pre_order" ? (book.publishedDate?.toISOString() ?? null) : null,
   };
 }

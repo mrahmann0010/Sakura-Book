@@ -239,7 +239,11 @@
       "editors-pick": "編集部のおすすめ",
       "last-copy": "残り1冊",
       "signed": "サイン入り",
-      "coming-soon": "近日発売"
+      "coming-soon": "近日発売",
+      "pre-order": "予約注文"
+    },
+    "preOrder": {
+      "shipsAround": "予約注文受付中 — 発送予定 {{date}}"
     },
     "stock": {
       "in": "在庫あり・翌営業日に発送",
