@@ -194,31 +194,7 @@ export class CheckoutService {
     idempotencyKey: string,
     tx: Transaction,
   ): Promise<string> {
-    const { customer } = request;
-
-    const values = {
-      customerName: customer.fullName,
-      customerEmail: customer.email,
-      customerPhone: customer.phone,
-      shippingAddress: {
-        address: customer.address,
-        city: customer.city,
-        region: customer.region,
-      },
-
-      subtotalCents: priced.subtotalCents,
-      shippingCents: priced.deliveryCents,
-
-      couponId: priced.coupon?.id ?? null,
-      discountCodeSnapshot: priced.coupon?.code ?? null,
-      discountCents: priced.coupon?.discountCents ?? 0,
-
-      totalCents: priced.totalCents,
-
-      customerNote: customer.notes ?? null,
-      idempotencyKey,
-      paymentMethod: customer.method,
-    };
+    const values = orderValuesFrom(request, priced, idempotencyKey);
 
     for (let attempt = 1; attempt <= ORDER_NUMBER_ATTEMPTS; attempt++) {
       try {
@@ -300,6 +276,68 @@ export class CheckoutService {
 /** Drizzle names a column-level unique constraint `<table>_<column>_unique`. */
 const IDEMPOTENCY_CONSTRAINT = "orders_idempotency_key_unique";
 const ORDER_NUMBER_CONSTRAINT = "orders_order_number_unique";
+
+/**
+ * The `orders` row a request and its pricing produce, minus the order number.
+ *
+ * Exported and pure so it can be asserted directly. It was extracted after a
+ * silent bug: `checkoutSchema` required the manual-transfer receipt fields,
+ * the API validated them, and this object simply never mentioned them — so
+ * every bKash order stored no transaction ID and nothing anywhere failed.
+ * Buried inside the insert there was no seam to test; out here, "does a
+ * collected field reach the row?" is one assertion.
+ */
+export function orderValuesFrom(
+  request: PlaceOrderRequest,
+  priced: PricedCart,
+  idempotencyKey: string,
+) {
+  const { customer } = request;
+
+  return {
+    customerName: customer.fullName,
+    customerEmail: customer.email,
+    customerPhone: customer.phone,
+    shippingAddress: {
+      address: customer.address,
+      city: customer.city,
+      region: customer.region,
+    },
+
+    subtotalCents: priced.subtotalCents,
+    shippingCents: priced.deliveryCents,
+
+    couponId: priced.coupon?.id ?? null,
+    discountCodeSnapshot: priced.coupon?.code ?? null,
+    discountCents: priced.coupon?.discountCents ?? 0,
+
+    totalCents: priced.totalCents,
+
+    customerNote: customer.notes ?? null,
+    idempotencyKey,
+    paymentMethod: customer.method,
+
+    /* The manual-transfer receipt — the wallet the money came from and the
+       transaction ID on the confirmation. Normalised to null rather than
+       stored as "" so that "no receipt" is one value, not two: the form posts
+       empty strings for these whenever cash on delivery is chosen. */
+    senderNumber: emptyToNull(customer.senderNumber),
+    transactionId: emptyToNull(customer.transactionId),
+  };
+}
+
+/**
+ * "" and "   " mean the same thing as absent, and must not become three
+ * different stored values.
+ *
+ * The form posts empty strings for the transfer fields whenever the customer
+ * picked cash on delivery — see `checkoutDefaults` — so without this every COD
+ * order would carry two empty strings where a null belongs, and any later
+ * "was a receipt given?" check would have to know about both.
+ */
+function emptyToNull(value: string | undefined): string | null {
+  return value?.trim() || null;
+}
 
 const UNIQUE_VIOLATION = "23505";
 

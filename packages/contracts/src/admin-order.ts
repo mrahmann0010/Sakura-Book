@@ -121,6 +121,21 @@ export const adminOrderDetailSchema = orderSchema.extend({
   /** Staff-only. Never returned by any storefront endpoint. */
   internalNote: z.string().nullable(),
 
+  /**
+   * The manual-transfer receipt the customer gave at checkout: the wallet the
+   * money came from, and the transaction ID on their confirmation.
+   *
+   * Both null for cash on delivery, and for every manual-transfer order placed
+   * before the columns existed — the API validated these fields and then
+   * discarded them, so historic orders genuinely have no receipt on file and
+   * the panel has to say so rather than render an empty box.
+   *
+   * On the detail schema only. The queue is a table of fifty rows and a
+   * transaction ID is not something to spray across a list view.
+   */
+  senderNumber: z.string().nullable(),
+  transactionId: z.string().nullable(),
+
   payments: z.array(adminPaymentSchema),
 
   /**

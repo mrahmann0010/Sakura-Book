@@ -81,6 +81,9 @@ export function toAdminOrderDetail(
     customerNote: row.customerNote,
     internalNote: row.internalNote,
 
+    senderNumber: row.senderNumber,
+    transactionId: row.transactionId,
+
     payments: paymentRows.map(toAdminPayment),
 
     /**
