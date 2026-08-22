@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { AdminShell } from "@/components/admin/admin-shell";
 import {
   AdminApiError,
   decideAdminPreOrderPayment,
@@ -141,130 +142,130 @@ export default function AdminPreOrdersPage() {
     }
   }
 
-  if (checking) return <p style={{ padding: 40 }}>Checking session…</p>;
-
   return (
-    <main
-      style={{
-        maxWidth: 1080,
-        margin: "40px auto",
-        padding: "0 20px",
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
-      <h1 style={{ fontSize: 20, marginBottom: 8 }}>Pre-orders</h1>
-      <p style={{ color: "#555", marginBottom: 20 }}>
-        Payment and delivery are tracked separately — a pre-order can be paid for months before
-        there is anything to ship.
-      </p>
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {(Object.keys(presets) as PresetKey[]).map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setPreset(key)}
-            style={{
-              padding: "6px 12px",
-              cursor: "pointer",
-              border: "1px solid #ccc",
-              borderRadius: 4,
-              background: preset === key ? "#222" : "#fff",
-              color: preset === key ? "#fff" : "#222",
-            }}
-          >
-            {presets[key].label}
-          </button>
-        ))}
-      </div>
-
-      {error ? (
-        <p style={{ color: "#a00", border: "1px solid #a00", padding: 10, marginBottom: 16 }}>
-          {error}
+    <AdminShell checking={checking}>
+      <main
+        style={{
+          maxWidth: 1080,
+          margin: "40px auto",
+          padding: "0 20px",
+          fontFamily: "system-ui, sans-serif",
+        }}
+      >
+        <h1 style={{ fontSize: 20, marginBottom: 8 }}>Pre-orders</h1>
+        <p style={{ color: "#555", marginBottom: 20 }}>
+          Payment and delivery are tracked separately — a pre-order can be paid for months before
+          there is anything to ship.
         </p>
-      ) : null}
 
-      <p style={{ color: "#555", marginBottom: 8, fontSize: 13 }}>
-        {total} {total === 1 ? "pre-order" : "pre-orders"}
-      </p>
-
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-        <thead>
-          <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
-            <th style={cell}>Order</th>
-            <th style={cell}>Customer</th>
-            <th style={cell}>Book</th>
-            <th style={cell}>Total</th>
-            <th style={cell}>Payment</th>
-            <th style={cell}>Gateway</th>
-            <th style={cell}>Delivery</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr
-              key={row.orderNumber}
-              onClick={() => void open(row.orderNumber)}
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+          {(Object.keys(presets) as PresetKey[]).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setPreset(key)}
               style={{
-                borderBottom: "1px solid #eee",
+                padding: "6px 12px",
                 cursor: "pointer",
-                background: selected?.orderNumber === row.orderNumber ? "#f4f4f4" : undefined,
+                border: "1px solid #ccc",
+                borderRadius: 4,
+                background: preset === key ? "#222" : "#fff",
+                color: preset === key ? "#fff" : "#222",
               }}
             >
-              <td style={cell}>
-                <code>{row.orderNumber}</code>
-                {/* A marker, not the reference — the digits are on the detail
+              {presets[key].label}
+            </button>
+          ))}
+        </div>
+
+        {error ? (
+          <p style={{ color: "#a00", border: "1px solid #a00", padding: 10, marginBottom: 16 }}>
+            {error}
+          </p>
+        ) : null}
+
+        <p style={{ color: "#555", marginBottom: 8, fontSize: 13 }}>
+          {total} {total === 1 ? "pre-order" : "pre-orders"}
+        </p>
+
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+          <thead>
+            <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
+              <th style={cell}>Order</th>
+              <th style={cell}>Customer</th>
+              <th style={cell}>Book</th>
+              <th style={cell}>Total</th>
+              <th style={cell}>Payment</th>
+              <th style={cell}>Gateway</th>
+              <th style={cell}>Delivery</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.orderNumber}
+                onClick={() => void open(row.orderNumber)}
+                style={{
+                  borderBottom: "1px solid #eee",
+                  cursor: "pointer",
+                  background: selected?.orderNumber === row.orderNumber ? "#f4f4f4" : undefined,
+                }}
+              >
+                <td style={cell}>
+                  <code>{row.orderNumber}</code>
+                  {/* A marker, not the reference — the digits are on the detail
                     panel, because a table of transaction IDs is a screenshot
                     waiting to happen. */}
-                {row.hasPaymentReference ? " ✓" : ""}
-                {row.hasInternalNote ? " ✱" : ""}
-              </td>
-              <td style={cell}>
-                {row.customerName}
-                <br />
-                <span style={{ color: "#777", fontSize: 12 }}>{row.customerPhone}</span>
-              </td>
-              <td style={cell}>
-                {row.bookTitle} × {row.quantity}
-              </td>
-              <td style={cell}>{formatMoney(row.totalCents)}</td>
-              <td style={cell}>{row.paymentStatus}</td>
-              <td style={{ ...cell, color: outcomeColour(row.verificationOutcome) }}>
-                {row.verificationOutcome ?? "—"}
-              </td>
-              <td style={cell}>{row.fulfillmentStatus}</td>
-            </tr>
-          ))}
-          {rows.length === 0 ? (
-            <tr>
-              <td style={{ ...cell, color: "#777" }} colSpan={7}>
-                Nothing in this list.
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
+                  {row.hasPaymentReference ? " ✓" : ""}
+                  {row.hasInternalNote ? " ✱" : ""}
+                </td>
+                <td style={cell}>
+                  {row.customerName}
+                  <br />
+                  <span style={{ color: "#777", fontSize: 12 }}>{row.customerPhone}</span>
+                </td>
+                <td style={cell}>
+                  {row.bookTitle} × {row.quantity}
+                </td>
+                <td style={cell}>{formatMoney(row.totalCents)}</td>
+                <td style={cell}>{row.paymentStatus}</td>
+                <td style={{ ...cell, color: outcomeColour(row.verificationOutcome) }}>
+                  {row.verificationOutcome ?? "—"}
+                </td>
+                <td style={cell}>{row.fulfillmentStatus}</td>
+              </tr>
+            ))}
+            {rows.length === 0 ? (
+              <tr>
+                <td style={{ ...cell, color: "#777" }} colSpan={7}>
+                  Nothing in this list.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
 
-      {selected ? (
-        <PreOrderPanel
-          /* Per order number, so opening a different pre-order starts with
+        {selected ? (
+          <PreOrderPanel
+            /* Per order number, so opening a different pre-order starts with
              empty note fields rather than the last one's text. */
-          key={selected.orderNumber}
-          preOrder={selected}
-          busy={busy}
-          verdict={verdict}
-          onClose={() => setSelected(null)}
-          onRecheck={() => void recheck(selected.orderNumber)}
-          onDecidePayment={(status, note) =>
-            act(() => decideAdminPreOrderPayment(selected.orderNumber, { status, note }))
-          }
-          onTransitionFulfillment={(status, note) =>
-            act(() => transitionAdminPreOrderFulfillment(selected.orderNumber, { status, note }))
-          }
-          onSaveNote={(note) => act(() => setAdminPreOrderNote(selected.orderNumber, note))}
-        />
-      ) : null}
-    </main>
+            key={selected.orderNumber}
+            preOrder={selected}
+            busy={busy}
+            verdict={verdict}
+            onClose={() => setSelected(null)}
+            onRecheck={() => void recheck(selected.orderNumber)}
+            onDecidePayment={(status, note) =>
+              act(() => decideAdminPreOrderPayment(selected.orderNumber, { status, note }))
+            }
+            onTransitionFulfillment={(status, note) =>
+              act(() => transitionAdminPreOrderFulfillment(selected.orderNumber, { status, note }))
+            }
+            onSaveNote={(note) => act(() => setAdminPreOrderNote(selected.orderNumber, note))}
+          />
+        ) : null}
+      </main>
+    </AdminShell>
   );
 }
 

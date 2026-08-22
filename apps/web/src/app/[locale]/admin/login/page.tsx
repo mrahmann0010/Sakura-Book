@@ -32,7 +32,7 @@ export default function AdminLoginPage() {
       // page knows to check, rather than always attempting a request. The
       // actual gate is the API's 401 on a missing/expired cookie.
       window.localStorage.setItem(ADMIN_AUTHED_KEY, "1");
-      router.push(`/${locale}/admin/pre-order-book`);
+      router.push(`/${locale}/admin`);
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Sign-in failed.");
     } finally {

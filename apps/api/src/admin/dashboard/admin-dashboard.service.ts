@@ -3,11 +3,14 @@ import { ConfigService } from "@nestjs/config";
 import type {
   Dashboard,
   LowStockBook,
+  MonthlyReport,
+  MonthlyTrendPoint,
+  OrderStatus,
   RevenueWindow,
   StatusBucket,
   TopSeller,
 } from "@sakura/contracts";
-import { and, asc, desc, eq, gt, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import type { Env } from "../../config/env.schema";
 import { DbService } from "../../db/db.service";
 import { books, orders } from "../../db/schema";
@@ -55,7 +58,7 @@ export class AdminDashboardService {
      * `for...of` exists because those statements *do* contend, and these do
      * not.
      */
-    const [today, last7Days, last30Days, statusBuckets, lowStock, topSellers, terms] =
+    const [today, last7Days, last30Days, statusBuckets, lowStock, topSellers, terms, monthlyTrend] =
       await Promise.all([
         this.revenueSince(0, timezone),
         this.revenueSince(6, timezone),
@@ -64,6 +67,7 @@ export class AdminDashboardService {
         this.lowStock(),
         this.topSellers(),
         this.shippingTermsService.current(),
+        this.monthlyTrend(timezone),
       ]);
 
     return {
@@ -78,7 +82,98 @@ export class AdminDashboardService {
         .reduce((sum, bucket) => sum + bucket.count, 0),
       lowStock,
       topSellers,
+      monthlyTrend,
     };
+  }
+
+  /**
+   * The selected month's daily breakdown — the "pick a month" drill-down
+   * behind the trend chart. A separate call from `load()` rather than folded
+   * into it: computing a daily series for a month nobody has picked yet would
+   * be work the dashboard's first paint does not need.
+   */
+  async monthlyReport(month: string): Promise<MonthlyReport> {
+    const timezone = this.config.get("SHOP_TIMEZONE", { infer: true });
+    const terms = await this.shippingTermsService.current();
+
+    const result = (await this.dbService.db.execute(sql`
+      with bounds as (
+        select to_date(${month}, 'YYYY-MM') as month_start
+      ),
+      days as (
+        select generate_series(
+          (select month_start from bounds),
+          (select (month_start + interval '1 month - 1 day')::date from bounds),
+          interval '1 day'
+        )::date as day
+      )
+      select
+        to_char(d.day, 'YYYY-MM-DD') as day,
+        coalesce(count(${orders.id}), 0)::int as order_count,
+        coalesce(sum(${orders.totalCents}), 0)::int as revenue_cents
+      from days d
+      left join ${orders}
+        on (${orders.createdAt} at time zone ${timezone})::date = d.day
+        and ${inArray(orders.status, REVENUE_STATUSES)}
+      group by d.day
+      order by d.day
+    `)) as unknown as { day: string; order_count: number; revenue_cents: number }[];
+
+    const daily = (Array.isArray(result) ? result : []).map((row) => ({
+      date: row.day,
+      orderCount: Number(row.order_count),
+      revenueCents: Number(row.revenue_cents),
+    }));
+
+    const totalOrders = daily.reduce((sum, point) => sum + point.orderCount, 0);
+    const totalRevenueCents = daily.reduce((sum, point) => sum + point.revenueCents, 0);
+
+    return {
+      month,
+      currency: terms.currency,
+      timezone,
+      totalOrders,
+      totalRevenueCents,
+      averageOrderValueCents: totalOrders > 0 ? Math.round(totalRevenueCents / totalOrders) : 0,
+      daily,
+    };
+  }
+
+  /**
+   * Last 12 months including the current one, oldest first, zero-filled.
+   *
+   * `generate_series` builds the calendar spine so a quiet month reports zero
+   * rather than being absent — the same reasoning `lowStock`/`topSellers`
+   * apply in reverse (omit rows that would just say zero); a *trend* chart
+   * needs the opposite, because a gap in the x-axis reads as missing data
+   * rather than as "nothing sold".
+   */
+  private async monthlyTrend(timezone: string): Promise<MonthlyTrendPoint[]> {
+    const result = (await this.dbService.db.execute(sql`
+      with months as (
+        select generate_series(
+          date_trunc('month', (now() at time zone ${timezone})) - interval '11 months',
+          date_trunc('month', (now() at time zone ${timezone})),
+          interval '1 month'
+        )::date as month_start
+      )
+      select
+        to_char(m.month_start, 'YYYY-MM') as month,
+        coalesce(count(${orders.id}), 0)::int as order_count,
+        coalesce(sum(${orders.totalCents}), 0)::int as revenue_cents
+      from months m
+      left join ${orders}
+        on date_trunc('month', (${orders.createdAt} at time zone ${timezone}))::date = m.month_start
+        and ${inArray(orders.status, REVENUE_STATUSES)}
+      group by m.month_start
+      order by m.month_start
+    `)) as unknown as { month: string; order_count: number; revenue_cents: number }[];
+
+    return (Array.isArray(result) ? result : []).map((row) => ({
+      month: row.month,
+      orderCount: Number(row.order_count),
+      revenueCents: Number(row.revenue_cents),
+    }));
   }
 
   /**
@@ -100,7 +195,7 @@ export class AdminDashboardService {
       .from(orders)
       .where(
         and(
-          sql`${orders.status} = any(${REVENUE_STATUSES})`,
+          inArray(orders.status, REVENUE_STATUSES),
           sql`(${orders.createdAt} at time zone ${timezone})::date
               >= ((now() at time zone ${timezone})::date - ${daysBack}::int)`,
         ),
@@ -148,18 +243,20 @@ export class AdminDashboardService {
    * problem to solve, and including them would bury the ones that are.
    */
   private async lowStock(): Promise<LowStockBook[]> {
-    return this.dbService.db
-      .select({
-        slug: books.slug,
-        title: books.title,
-        stockQuantity: books.stockQuantity,
-        lowStockThreshold: books.lowStockThreshold,
-      })
-      .from(books)
-      .where(and(eq(books.isActive, true), lte(books.stockQuantity, books.lowStockThreshold)))
-      // Most urgent first: what is already at zero outranks what is merely low.
-      .orderBy(asc(books.stockQuantity), asc(books.title))
-      .limit(20);
+    return (
+      this.dbService.db
+        .select({
+          slug: books.slug,
+          title: books.title,
+          stockQuantity: books.stockQuantity,
+          lowStockThreshold: books.lowStockThreshold,
+        })
+        .from(books)
+        .where(and(eq(books.isActive, true), lte(books.stockQuantity, books.lowStockThreshold)))
+        // Most urgent first: what is already at zero outranks what is merely low.
+        .orderBy(asc(books.stockQuantity), asc(books.title))
+        .limit(20)
+    );
   }
 
   /**
@@ -198,7 +295,7 @@ export class AdminDashboardService {
  * would be a coincidence to depend on. Revenue is about whether payment has
  * been confirmed and not since reversed.
  */
-const REVENUE_STATUSES: readonly string[] = Object.freeze([
+const REVENUE_STATUSES: readonly OrderStatus[] = Object.freeze([
   "PAYMENT_CONFIRMED",
   "PROCESSING",
   "SHIPPED",
