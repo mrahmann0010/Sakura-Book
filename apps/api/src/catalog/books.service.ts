@@ -59,6 +59,8 @@ export class BooksService {
         priceCents: true,
         stockQuantity: true,
         isActive: true,
+        availability: true,
+        publishedDate: true,
       },
       with: {
         authors: {
@@ -85,6 +87,8 @@ export class BooksService {
           priceCents: row.priceCents,
           stockQuantity: row.stockQuantity,
           isActive: row.isActive,
+          availability: row.availability,
+          publishedDate: row.publishedDate,
         },
       ]),
     );
@@ -193,6 +197,7 @@ export class BooksService {
           coverImageAlt: true,
           isFeatured: true,
           stockQuantity: true,
+          availability: true,
         },
         with: {
           authors: { columns: { sortOrder: true }, with: { author: { columns: { name: true } } } },

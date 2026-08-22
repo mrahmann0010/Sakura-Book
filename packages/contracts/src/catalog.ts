@@ -13,6 +13,16 @@ export const CATALOG_PAGE_SIZE = 6;
 export const bookSortValues = ["recent", "title", "price-asc", "rating"] as const;
 export type BookSort = (typeof bookSortValues)[number];
 
+/**
+ * Whether a title can be bought right now, and if not, why.
+ *
+ * `pre_order` is a normal catalog book that ships later — same cart, same
+ * checkout — not the separate pre-order stream that was retired from the
+ * frontend. See the column comment on `books.availability` in the API schema.
+ */
+export const bookAvailabilityValues = ["in_stock", "coming_soon", "pre_order"] as const;
+export type BookAvailability = (typeof bookAvailabilityValues)[number];
+
 export const bookQuerySchema = pageQuerySchema({ defaultPageSize: CATALOG_PAGE_SIZE }).extend({
   /** Free text over title and author name — pg_trgm, per §3.16. */
   q: z.string().trim().max(120).optional(),
@@ -72,6 +82,7 @@ export const bookSummarySchema = z.object({
   isFeatured: z.boolean(),
   /** Remaining stock, so the client can draw "last copy" and clamp steppers. */
   stockQuantity: z.number().int().nonnegative(),
+  availability: z.enum(bookAvailabilityValues),
 
   /**
    * OPEN DECISION (§7.2): there is no reviews or ratings table. Nullable here

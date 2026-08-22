@@ -46,6 +46,7 @@ export function toBookSummary(row: BookSummaryRow, aggregate?: RatingAggregate):
 
     isFeatured: row.isFeatured,
     stockQuantity: row.stockQuantity,
+    availability: row.availability,
 
     ...rating(aggregate),
   };

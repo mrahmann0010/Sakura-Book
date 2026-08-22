@@ -245,13 +245,17 @@
       "editors-pick": "Editor's pick",
       "last-copy": "Last copy",
       "signed": "Signed",
-      "coming-soon": "Coming soon"
+      "coming-soon": "Coming soon",
+      "pre-order": "Pre-order"
     },
     "stock": {
       "in": "In stock, posted next working day",
       "low": "Only {{count}} left",
       "out": "Out of stock",
       "comingSoon": "Coming soon"
+    },
+    "preOrder": {
+      "shipsAround": "Pre-order now — ships around {{date}}"
     },
     "meta": {
       "pages_one": "{{count}} page",

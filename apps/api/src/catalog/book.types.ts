@@ -1,3 +1,5 @@
+import type { BookAvailability } from "@sakura/contracts";
+
 /**
  * The catalog columns that pricing and checkout are allowed to see.
  *
@@ -22,6 +24,9 @@ export type PriceableBook = {
   priceCents: number;
   stockQuantity: number;
   isActive: boolean;
+  availability: BookAvailability;
+  /** Source for `pre_order` lines' "ships around" note. */
+  publishedDate: Date | null;
 };
 
 /**
@@ -55,6 +60,7 @@ export type BookSummaryRow = {
   coverImageAlt: string | null;
   isFeatured: boolean;
   stockQuantity: number;
+  availability: BookAvailability;
   authors: { sortOrder: number; author: { name: string } }[];
 };
 

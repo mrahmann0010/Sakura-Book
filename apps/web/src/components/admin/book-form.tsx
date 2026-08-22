@@ -1,9 +1,14 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import type { AdminBookCreateRequest, AdminBookDetail, CategoryGroup } from "@sakura/contracts";
+import type {
+  AdminBookCreateRequest,
+  AdminBookDetail,
+  BookAvailability,
+  CategoryGroup,
+} from "@sakura/contracts";
 
-import { Button, Checkbox, Input, Textarea } from "@/components/ui";
+import { Button, Checkbox, Input, Select, Textarea } from "@/components/ui";
 import { FileUpload } from "@/components/admin/file-upload";
 import { AdminApiError, uploadAdminCover, uploadAdminPdf } from "@/lib/api/admin";
 import { getCategories } from "@/lib/api/catalog";
@@ -20,6 +25,7 @@ type FormState = {
   categorySlugs: string[];
   language: string;
   edition: string;
+  publishedDate: string;
   pageCount: string;
   description: string;
   priceCents: string;
@@ -27,6 +33,7 @@ type FormState = {
   sku: string;
   stockQuantity: string;
   lowStockThreshold: string;
+  availability: BookAvailability;
   weightGrams: string;
   coverImageUrl: string;
   coverImageAlt: string;
@@ -49,6 +56,7 @@ const emptyForm: FormState = {
   categorySlugs: [],
   language: "en",
   edition: "",
+  publishedDate: "",
   pageCount: "",
   description: "",
   priceCents: "",
@@ -56,6 +64,7 @@ const emptyForm: FormState = {
   sku: "",
   stockQuantity: "0",
   lowStockThreshold: "5",
+  availability: "in_stock",
   weightGrams: "",
   coverImageUrl: "",
   coverImageAlt: "",
@@ -79,6 +88,9 @@ function fromDetail(book: AdminBookDetail): FormState {
     categorySlugs: book.categorySlugs,
     language: book.language,
     edition: book.edition ?? "",
+    // `publishedDate` is a full timestamp on the wire; the date input only
+    // wants the date part.
+    publishedDate: book.publishedDate ? book.publishedDate.slice(0, 10) : "",
     pageCount: book.pageCount ? String(book.pageCount) : "",
     description: book.description,
     priceCents: String(book.priceCents),
@@ -86,6 +98,7 @@ function fromDetail(book: AdminBookDetail): FormState {
     sku: book.sku ?? "",
     stockQuantity: String(book.stockQuantity),
     lowStockThreshold: String(book.lowStockThreshold),
+    availability: book.availability,
     weightGrams: book.weightGrams ? String(book.weightGrams) : "",
     coverImageUrl: book.coverImageUrl,
     coverImageAlt: book.coverImageAlt ?? "",
@@ -119,13 +132,17 @@ function toRequest(form: FormState): BookFormValues {
     categorySlugs: form.categorySlugs,
     language: form.language.trim() || "en",
     edition: optional(form.edition),
+    publishedDate: optional(form.publishedDate),
     pageCount: form.pageCount ? Number(form.pageCount) : undefined,
     description: form.description.trim(),
     priceCents: Number(form.priceCents),
     compareAtPriceCents: form.compareAtPriceCents ? Number(form.compareAtPriceCents) : undefined,
     sku: optional(form.sku),
+    // A coming-soon book is never orderable — the API refuses (and this form
+    // never lets you type) a non-zero stock count against it, see `set()`.
     stockQuantity: Number(form.stockQuantity),
     lowStockThreshold: Number(form.lowStockThreshold),
+    availability: form.availability,
     weightGrams: form.weightGrams ? Number(form.weightGrams) : undefined,
     coverImageUrl: form.coverImageUrl.trim(),
     coverImageAlt: optional(form.coverImageAlt),
@@ -177,6 +194,20 @@ export function BookForm({
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  /**
+   * Switching to "coming soon" also zeroes the stock field — the API rejects
+   * a coming-soon book with stock (see `comingSoonHasNoStock` in
+   * `@sakura/contracts`), and doing it here means the form never sends a
+   * request the server would bounce.
+   */
+  function setAvailability(value: BookAvailability) {
+    setForm((current) => ({
+      ...current,
+      availability: value,
+      stockQuantity: value === "coming_soon" ? "0" : current.stockQuantity,
+    }));
   }
 
   function toggleCategory(slug: string) {
@@ -249,6 +280,17 @@ export function BookForm({
           onChange={(event) => set("language", event.target.value)}
         />
         <Input
+          label="Published date"
+          type="date"
+          hint={
+            form.availability === "pre_order"
+              ? "Doubles as the pre-order's expected ship date."
+              : undefined
+          }
+          value={form.publishedDate}
+          onChange={(event) => set("publishedDate", event.target.value)}
+        />
+        <Input
           label="Page count"
           type="number"
           min={1}
@@ -316,11 +358,34 @@ export function BookForm({
           onChange={(event) => set("compareAtPriceCents", event.target.value)}
         />
         <Input label="SKU" value={form.sku} onChange={(event) => set("sku", event.target.value)} />
+        <Select
+          label="Availability"
+          hint={
+            form.availability === "coming_soon"
+              ? "Never orderable — stock is forced to 0."
+              : form.availability === "pre_order"
+                ? "Buyable now through the normal cart/checkout, ships later."
+                : "A normal, in-stock book."
+          }
+          value={form.availability}
+          onChange={(event) => setAvailability(event.target.value as BookAvailability)}
+          options={[
+            { value: "in_stock", label: "In stock" },
+            { value: "pre_order", label: "Pre-order (ships later)" },
+            { value: "coming_soon", label: "Coming soon (not orderable)" },
+          ]}
+        />
         <Input
           label="Stock quantity"
           type="number"
           required
           min={0}
+          disabled={form.availability === "coming_soon"}
+          hint={
+            form.availability === "pre_order"
+              ? "The print run — checkout blocks once this hits 0."
+              : undefined
+          }
           value={form.stockQuantity}
           onChange={(event) => set("stockQuantity", event.target.value)}
         />
@@ -333,6 +398,13 @@ export function BookForm({
           onChange={(event) => set("lowStockThreshold", event.target.value)}
         />
       </section>
+
+      {form.availability === "pre_order" ? (
+        <p className="text-13.5 text-secondary -mt-4">
+          Published date above doubles as the &ldquo;ships around&rdquo; date shown to customers on
+          the book page, cart line, and checkout.
+        </p>
+      ) : null}
 
       <section className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <div className="flex flex-col gap-3">

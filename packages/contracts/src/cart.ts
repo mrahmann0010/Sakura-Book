@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { bookAvailabilityValues } from "./catalog";
+
 /* --------------------------------------------------------------------------
    Cart pricing. POST /cart/quote — the server-side priceCart().
 
@@ -44,6 +46,9 @@ export const cartQuoteLineSchema = z.object({
   lineTotalCents: z.number().int().nonnegative(),
   /** So the cart can clamp the stepper and flag a line that has run short. */
   stockQuantity: z.number().int().nonnegative(),
+  availability: z.enum(bookAvailabilityValues),
+  /** ISO date, present on `pre_order` lines — cart/checkout's "ships around" note. */
+  expectedShipDate: z.string().nullable(),
 });
 
 /**

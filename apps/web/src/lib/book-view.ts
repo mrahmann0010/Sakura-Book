@@ -35,9 +35,17 @@ const LAST_COPY_AT = 1;
  * A featured book down to its last copy is both, and "Last copy" is the one
  * that changes what the reader does next — the pick is an opinion, the stock
  * is a deadline.
+ *
+ * `availability` decides "coming soon" vs. "pre-order" now, not a bare zero
+ * stock count: a `coming_soon` row is never orderable (and always carries
+ * zero stock, enforced server-side), while a `pre_order` row is a normal
+ * buyable book that happens to ship later — it can run its own stock to zero
+ * exactly like an `in_stock` title, which is the ordinary "sold out" case,
+ * not "coming soon".
  */
 function flagFor(book: ApiBook): BookFlag | undefined {
-  if (book.stockQuantity === 0) return "coming-soon";
+  if (book.availability === "coming_soon") return "coming-soon";
+  if (book.availability === "pre_order") return "pre-order";
   if (book.stockQuantity <= LAST_COPY_AT) return "last-copy";
   if (book.isFeatured) return "editors-pick";
   return undefined;
@@ -61,7 +69,17 @@ function credit(authors: string[]): string {
  * links to an unprefixed path costs a full reload through the locale-detection
  * redirect in proxy.ts — the exact reason routes.ts exists.
  */
-export function toBookSummary(book: ApiBook, locale: string): BookSummary {
+/**
+ * `publishedDate` is optional here because this function also renders the
+ * detail page's buy card — `BookDetail` extends `BookSummary` with it, and
+ * it is the source for a `pre_order` book's "ships around" note. A plain
+ * catalog card has no use for it, so `flag` alone (not `expectedShipDate`)
+ * is what every card actually renders off.
+ */
+export function toBookSummary(
+  book: ApiBook & { publishedDate?: string | null },
+  locale: string,
+): BookSummary {
   return {
     /* The API's UUID, not the slug. The cart persists whatever id it is given
        and checkout resolves ids against the books table, so the card has to
@@ -80,6 +98,8 @@ export function toBookSummary(book: ApiBook, locale: string): BookSummary {
     soldOut: book.stockQuantity === 0,
     rating: book.rating ?? undefined,
     ratingCount: book.ratingCount ?? undefined,
+    expectedShipDate:
+      book.availability === "pre_order" ? (book.publishedDate ?? undefined) : undefined,
   };
 }
 

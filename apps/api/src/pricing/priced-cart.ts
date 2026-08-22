@@ -1,4 +1,5 @@
 import type { CartQuote, CartQuoteRejection } from "@sakura/contracts";
+import type { PriceableBook } from "../catalog";
 
 /**
  * What pricing actually computes — a superset of what crosses the wire.
@@ -25,6 +26,9 @@ export type PricedLine = {
   unitPriceCents: number;
   lineTotalCents: number;
   stockQuantity: number;
+  availability: PriceableBook["availability"];
+  /** ISO date, present on `pre_order` lines. */
+  expectedShipDate: string | null;
 };
 
 export type PricedCoupon = {

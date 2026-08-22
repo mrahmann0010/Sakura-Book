@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 /** The metadata flags the references draw. At most one shows on a card. */
-export type BookFlag = "editors-pick" | "last-copy" | "signed" | "new" | "coming-soon";
+export type BookFlag = "editors-pick" | "last-copy" | "signed" | "new" | "coming-soon" | "pre-order";
 
 export const flagLabels: Record<BookFlag, string> = {
   "editors-pick": "Editor's pick",
@@ -9,6 +9,7 @@ export const flagLabels: Record<BookFlag, string> = {
   signed: "Signed",
   new: "New",
   "coming-soon": "Coming soon",
+  "pre-order": "Pre-order",
 };
 
 /**
@@ -44,4 +45,6 @@ export type BookSummary = {
   ratingCount?: number;
   /** "Paperback", "Hardback" — shown on cart lines beside the author. */
   format?: ReactNode;
+  /** ISO date, present when `flag` is "pre-order" — the "ships around" note. */
+  expectedShipDate?: string;
 };

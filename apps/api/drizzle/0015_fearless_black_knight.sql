@@ -1,0 +1,2 @@
+CREATE TYPE "public"."book_availability" AS ENUM('in_stock', 'coming_soon', 'pre_order');--> statement-breakpoint
+ALTER TABLE "books" ADD COLUMN "availability" "book_availability" DEFAULT 'in_stock' NOT NULL;

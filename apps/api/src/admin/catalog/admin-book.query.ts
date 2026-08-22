@@ -23,6 +23,9 @@ export function adminBookFilters(query: AdminBookQuery): SQL | undefined {
   if (query.q) conditions.push(textMatch(query.q));
   if (query.isActive !== undefined) conditions.push(eq(books.isActive, query.isActive));
   if (query.isFeatured !== undefined) conditions.push(eq(books.isFeatured, query.isFeatured));
+  if (query.availability !== undefined) {
+    conditions.push(eq(books.availability, query.availability));
+  }
 
   return conditions.length ? and(...conditions) : undefined;
 }
