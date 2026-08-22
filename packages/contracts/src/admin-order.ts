@@ -2,6 +2,7 @@ import { z } from "zod";
 import { paymentMethods } from "./checkout";
 import { orderSchema, orderStatuses } from "./order";
 import { paginated, pageQuerySchema } from "./pagination";
+import { paymentVerificationRecordSchema } from "./payment-verification";
 
 /* --------------------------------------------------------------------------
    Order operations, as staff see them.
@@ -235,3 +236,23 @@ export const adminInternalNoteRequestSchema = z.object({
 });
 
 export type AdminInternalNoteRequest = z.infer<typeof adminInternalNoteRequestSchema>;
+
+/**
+ * The result of cross-checking a manual-transfer order's transaction ID
+ * against the SMS-gateway record.
+ *
+ * `NO_RECEIPT` is a fifth outcome layered on top of `paymentVerificationRecordSchema`'s
+ * four (see payment-verification.ts) — distinct from `NOT_FOUND`, because there
+ * is nothing to look up: a cash-on-delivery order, or a manual-transfer order
+ * placed before the transaction-id field existed, was never going to match
+ * anything and saying so would misreport an absent receipt as an unmatched one.
+ *
+ * Informational only — this never changes `orders.status` on its own. Acceptance
+ * stays the admin's explicit `transition`/`confirmPayment` call.
+ */
+export const adminOrderVerifyPaymentResultSchema = z.object({
+  record: z.union([paymentVerificationRecordSchema, z.object({ outcome: z.literal("NO_RECEIPT") })]),
+  summary: z.string(),
+});
+
+export type AdminOrderVerifyPaymentResult = z.infer<typeof adminOrderVerifyPaymentResultSchema>;

@@ -16,8 +16,8 @@ import { cn } from "@/lib/utils";
  * The band supports either two or three supporting points (three or four
  * cells total, metric included) because locales carry different copy —
  * three cells lays out as a stacked list on mobile and a 3-up row on
- * desktop; four cells lays out as a 2x2 grid on mobile and a 4-up row on
- * desktop. Anything other than two or three points has no defined layout.
+ * desktop; four cells lays out as a 2x2 grid at every width. Anything other
+ * than two or three points has no defined layout.
  */
 export function ProofPoints({
   eyebrow,
@@ -59,7 +59,7 @@ export function ProofPoints({
         <dl
           className={cn(
             "mt-10 grid gap-x-8 gap-y-0 lg:mt-12 lg:gap-0",
-            total === 4 ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-1 lg:grid-cols-3",
+            total === 4 ? "grid-cols-2" : "grid-cols-1 lg:grid-cols-3",
           )}
         >
           <div className={cell(0, total)}>
@@ -94,10 +94,8 @@ export type ProofPoint = { title: string; body: string };
  * first cell has neither, and pays no left padding — its metric aligns with
  * the eyebrow and with the catalogue grid above.
  *
- * Four cells: a 2x2 grid on mobile — a top rule between the two rows, a left
- * rule between the two columns, crossing in the middle — that resolves into
- * one 4-up row on desktop, where only the left rule survives, now separating
- * every cell from the one before it.
+ * Four cells: a 2x2 grid at every width — a top rule between the two rows, a
+ * left rule between the two columns, crossing in the middle.
  */
 function cell(index: number, total: number) {
   if (total === 4) {
@@ -107,8 +105,6 @@ function cell(index: number, total: number) {
     return cn(
       isSecondRow && "hairline mt-9 pt-9",
       isRightColumn ? "border-rule border-l pl-6" : "pr-6",
-      "lg:mt-0 lg:border-t-0 lg:pt-0",
-      index === 0 ? "lg:pr-12" : "lg:border-l lg:border-rule lg:px-12",
     );
   }
 

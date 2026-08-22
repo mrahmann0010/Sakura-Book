@@ -13,7 +13,6 @@ import { HealthModule } from "./health/health.module";
 import { InventoryModule } from "./inventory";
 import { OrdersModule } from "./orders";
 import { PaymentsModule } from "./payments";
-import { PreOrdersModule } from "./pre-orders";
 import { PricingModule } from "./pricing";
 import { ShippingModule } from "./shipping";
 
@@ -40,7 +39,6 @@ import { ShippingModule } from "./shipping";
     PricingModule,
     OrdersModule,
     PaymentsModule,
-    PreOrdersModule,
 
     /**
      * Last of the bounded contexts, because admin reads and writes all of

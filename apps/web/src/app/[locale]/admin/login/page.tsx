@@ -7,10 +7,8 @@ import { adminLogin, AdminApiError } from "@/lib/api/admin";
 import { ADMIN_AUTHED_KEY } from "@/lib/admin-auth";
 
 /**
- * Minimal admin sign-in. Functional, not polished — the first pass this
- * feature's admin surface gets (see AGENTS instructions for the pre-order
- * feature). Plain HTML form, no design-system chrome: this route is reached
- * by bookmark, not by browsing.
+ * Minimal admin sign-in. Functional, not polished. Plain HTML form, no
+ * design-system chrome: this route is reached by bookmark, not by browsing.
  */
 export default function AdminLoginPage() {
   const router = useRouter();

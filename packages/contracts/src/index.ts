@@ -30,7 +30,3 @@ export * from "./admin-settings";
 export * from "./admin-dashboard";
 export * from "./admin-book";
 export * from "./payment-verification";
-export * from "./pre-order-book";
-export * from "./pre-order";
-export * from "./admin-pre-order-book";
-export * from "./admin-pre-order";

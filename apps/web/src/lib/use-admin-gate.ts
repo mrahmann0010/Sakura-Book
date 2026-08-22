@@ -18,7 +18,7 @@ import { ADMIN_AUTHED_KEY } from "@/lib/admin-auth";
  *
  * Returns `checking`, which every caller renders a placeholder for: without
  * it the page renders its empty state for one frame before the redirect, and
- * that frame reads as "there are no pre-orders" rather than "signing in".
+ * that frame reads as "there is nothing here" rather than "signing in".
  */
 export function useAdminGate(): { checking: boolean } {
   const router = useRouter();
