@@ -233,7 +233,8 @@
       "unverified": {
         "title": "We couldn't verify it yet",
         "description": "Your order is placed. Our team will check the payment by hand and confirm it shortly — no action is needed from you."
-      }
+      },
+      "seeOrder": "See order info"
     },
     "empty": {
       "eyebrow": "Checkout",

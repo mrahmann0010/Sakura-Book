@@ -37,15 +37,6 @@ import {
 } from "./payment-verification-modal";
 import { ShippingFields } from "./shipping-fields";
 
-/** How long the "verified" / "unverified" result stays on screen before the
-    confirmation page takes over — long enough to read, short enough that it
-    never feels like an extra step the shopper has to click through. */
-const VERIFICATION_RESULT_DISPLAY_MS = 1500;
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /* --------------------------------------------------------------------------
    The checkout page's one job: say where the books go and how they are paid
    for.
@@ -64,6 +55,11 @@ export function CheckoutView({ locale }: { locale: Locale }) {
   const [placedOrder, setPlacedOrder] = useState<{ id: string; email: string } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [verification, setVerification] = useState<PaymentVerificationStatus | null>(null);
+  /* Holds the just-placed order between the modal resolving and the shopper
+     clicking "See order info" — the modal's result is the only thing on
+     screen until then, so the confirmation page and the cart clear wait for
+     that click rather than firing themselves. */
+  const [pendingOrder, setPendingOrder] = useState<{ id: string; email: string } | null>(null);
 
   const [step, setStep] = useState<"delivery" | "payment">("delivery");
 
@@ -112,18 +108,22 @@ export function CheckoutView({ locale }: { locale: Locale }) {
          request — a manual-transfer order comes back PAYMENT_CONFIRMED when
          the transaction was matched against the gateway, PENDING otherwise.
          This is just reading that result, not triggering a second check. */
+      setPendingOrder({ id: order.orderNumber, email: values.email });
       setVerification(order.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");
-      await wait(VERIFICATION_RESULT_DISPLAY_MS);
-
-      setVerification(null);
-      setPlacedOrder({ id: order.orderNumber, email: values.email });
-      cart.clear();
     } catch (err) {
       setVerification(null);
       setSubmitError(
         err instanceof ApiError ? err.message : t("checkout.submitError"),
       );
     }
+  }
+
+  function seeOrder() {
+    if (!pendingOrder) return;
+    setVerification(null);
+    setPlacedOrder(pendingOrder);
+    setPendingOrder(null);
+    cart.clear();
   }
 
   if (!cart.hydrated || cart.quoting) return <CheckoutSkeleton />;
@@ -336,7 +336,7 @@ export function CheckoutView({ locale }: { locale: Locale }) {
 
       <StickyBar label={t("cart.summary.total")} value={total} action={primaryAction} />
 
-      <PaymentVerificationModal status={verification} />
+      <PaymentVerificationModal status={verification} onSeeOrder={seeOrder} />
     </>
   );
 }
