@@ -27,6 +27,7 @@ import { selectQuantityOf } from "@/store/slices/cart-slice";
 export function BuyNowButton({
   bookId,
   title,
+  priceCents,
   soldOut = false,
   comingSoon = false,
   size = "sm",
@@ -36,6 +37,12 @@ export function BuyNowButton({
   bookId: string;
   /** Spoken but not shown — see `AddToCartButton`'s `title` for why. */
   title?: string;
+  /**
+   * Minor units, for the GA4 `add_to_cart` event only — nothing on screen is
+   * priced from it. Optional because the event is still worth sending without
+   * a price; see trackAddToCart.
+   */
+  priceCents?: number;
   soldOut?: boolean;
   comingSoon?: boolean;
   size?: "sm" | "md";
@@ -81,7 +88,10 @@ export function BuyNowButton({
       size={size}
       block={block}
       onClick={() => {
-        if (!inCart) add(bookId);
+        /* Already in the cart means no add, and so no `add_to_cart` — the
+           book was counted when it went in, and counting it again on every
+           press of Buy Now would make the funnel wider than the shelf. */
+        if (!inCart) add(bookId, 1, { title, priceCents });
         router.push(routes(locale ?? "en").checkout);
       }}
     >

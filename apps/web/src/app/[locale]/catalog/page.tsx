@@ -160,6 +160,7 @@ async function CatalogResults({
               <BuyNowButton
                 bookId={book.id}
                 title={book.title}
+                priceCents={book.priceCents}
                 soldOut={book.soldOut}
                 comingSoon={book.flag === "coming-soon"}
                 block

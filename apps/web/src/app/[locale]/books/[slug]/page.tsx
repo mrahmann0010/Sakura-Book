@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { ViewItemTracker } from "@/components/analytics";
 // import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { BuyNowButton } from "@/components/cart/buy-now-button";
 import { BookCover, BookMeta, BookPreview } from "@/components/domain";
@@ -139,6 +140,9 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
                 : t("book.stock.in")}
       </p>
 
+      {/* Reports the GA4 `view_item` event; renders nothing. */}
+      <ViewItemTracker id={book.id} title={book.title} priceCents={book.priceCents} />
+
       <div className="mt-5">
         {/* Add to cart is commented out, not deleted — the audience doesn't
             shop from a cart, so Buy Now is the only purchase control now. */}
@@ -151,6 +155,8 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
         /> */}
         <BuyNowButton
           bookId={book.id}
+          title={book.title}
+          priceCents={book.priceCents}
           soldOut={view.soldOut}
           comingSoon={view.flag === "coming-soon"}
           size="md"

@@ -8,6 +8,7 @@ import { CartItem, CartItemList, EmptyState, SummaryCard, SummaryRow } from "@/c
 import { PageHeader, Shell, RailLayout, StickyBar } from "@/components/layout";
 import { LinkButton, Notice, Skeleton, SkeletonText } from "@/components/ui";
 import { useCart } from "@/hooks/use-cart";
+import { useCartStepEvent } from "@/hooks/use-cart-step-event";
 import type { Locale } from "@/i18n/settings";
 import { titlesInStock } from "@/lib/books";
 import { FREE_DELIVERY_THRESHOLD, priceCart, summaryLines } from "@/lib/cart";
@@ -33,6 +34,8 @@ export function CartView({ locale }: { locale: Locale }) {
   const { t } = useTranslation();
   const path = routes(locale);
   const cart = useCart();
+
+  useCartStepEvent("view_cart", cart);
 
   /* A removal is staged, not immediate: the row sinks to the bottom of the
      list, dims, and offers an Add back button, only leaving the cart for good

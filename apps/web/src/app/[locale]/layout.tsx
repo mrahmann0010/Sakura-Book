@@ -7,6 +7,7 @@ import { locales, type Locale } from "@/i18n/settings";
 import { QueryProvider } from "@/lib/api/query-provider";
 import { localeAlternates, siteUrl } from "@/lib/site";
 import { StoreProvider } from "@/store/provider";
+import { GoogleAnalytics } from "@/components/analytics";
 import { ScrollToTop } from "@/components/layout/scroll-to-top";
 
 export function generateStaticParams() {
@@ -99,6 +100,7 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[lo
     >
       <body className="flex min-h-full flex-col">
         <script dangerouslySetInnerHTML={{ __html: NO_FLASH_SCRIPT }} />
+        <GoogleAnalytics />
         <StoreProvider>
           <QueryProvider>
             <I18nProvider locale={locale}>

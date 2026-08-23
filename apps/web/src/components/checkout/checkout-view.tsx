@@ -25,7 +25,9 @@ import {
   Toast,
 } from "@/components/ui";
 import { useCart } from "@/hooks/use-cart";
+import { useCartStepEvent } from "@/hooks/use-cart-step-event";
 import type { Locale } from "@/i18n/settings";
+import { trackPurchase } from "@/lib/analytics";
 import { ApiError } from "@/lib/api/client";
 import { placeOrder as placeOrderRequest } from "@/lib/api/orders";
 import { titlesInStock } from "@/lib/books";
@@ -174,6 +176,8 @@ export function CheckoutView({ locale }: { locale: Locale }) {
   const [divisionChosen, setDivisionChosen] = useState(false);
   const cart = useCart(divisionChosen ? region || undefined : undefined);
 
+  useCartStepEvent("begin_checkout", cart);
+
   async function placeOrder(values: CheckoutValues) {
     setSubmitError(null);
     setReusedForOrder(null);
@@ -191,6 +195,16 @@ export function CheckoutView({ locale }: { locale: Locale }) {
          This is just reading that result, not triggering a second check. */
       setPendingOrder({ id: order.orderNumber, email: values.email });
       setVerification(order.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");
+
+      /* Revenue is reported here, from the order the API returned, and not
+         from `cart` — the server re-prices every order regardless of what the
+         browser sent, so its totals are the money and the cart's are a guess.
+         Sent on the order existing rather than on the shopper clicking through
+         to the confirmation page below: the sale is made either way, and
+         anyone who closes the tab on the modal would otherwise never be
+         counted. `trackPurchase` is idempotent per order number, so a retry or
+         a re-render cannot sell the same order twice. */
+      trackPurchase(order);
     } catch (err) {
       setVerification(null);
 

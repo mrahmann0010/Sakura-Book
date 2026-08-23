@@ -309,6 +309,7 @@ async function RecentGrid({ locale, t }: { locale: Locale; t: T }) {
                 <BuyNowButton
                   bookId={book.id}
                   title={book.title}
+                  priceCents={book.priceCents}
                   soldOut={book.soldOut}
                   comingSoon={book.flag === "coming-soon"}
                   variant={index === leadIndex ? "primary" : "secondary"}

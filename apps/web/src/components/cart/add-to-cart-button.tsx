@@ -23,6 +23,7 @@ import { selectQuantityOf } from "@/store/slices/cart-slice";
 export function AddToCartButton({
   bookId,
   title,
+  priceCents,
   soldOut = false,
   comingSoon = false,
   size = "sm",
@@ -36,6 +37,8 @@ export function AddToCartButton({
    * words a dozen times with nothing to tell the buttons apart.
    */
   title?: string;
+  /** Minor units, for the GA4 `add_to_cart` event only — see `BuyNowButton`. */
+  priceCents?: number;
   soldOut?: boolean;
   /** Not yet released — same disabled shape as `soldOut`, different words. */
   comingSoon?: boolean;
@@ -96,7 +99,7 @@ export function AddToCartButton({
       variant={variant ?? "primary"}
       size={size}
       block={block}
-      onClick={() => add(bookId)}
+      onClick={() => add(bookId, 1, { title, priceCents })}
     >
       {t("actions.addToCart")}
       {title ? <span className="sr-only">{`, ${title}`}</span> : null}
