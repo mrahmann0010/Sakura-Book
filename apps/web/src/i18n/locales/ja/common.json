@@ -8,6 +8,7 @@
   "actions": {
     "shopAll": "すべての本を見る",
     "addToCart": "カートに入れる",
+    "buyNow": "今すぐ購入",
     "inCart": "カート内 · {{count}}",
     "removeFromCart": "カートから削除",
     "goToCart": "カートへ進む",

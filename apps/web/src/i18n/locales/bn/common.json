@@ -8,6 +8,7 @@
   "actions": {
     "shopAll": "সব বই দেখুন",
     "addToCart": "কার্টে দিন",
+    "buyNow": "এখনই কিনুন",
     "inCart": "কার্টে · {{count}}",
     "removeFromCart": "কার্ট থেকে সরান",
     "goToCart": "কার্টে যান",

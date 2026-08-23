@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { AddToCartButton } from "@/components/cart/add-to-cart-button";
+import { BuyNowButton } from "@/components/cart/buy-now-button";
 import { BookCover, BookMeta } from "@/components/domain";
 import {
   AppNav,
@@ -138,8 +139,15 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
                 : t("book.stock.in")}
       </p>
 
-      <div className="mt-5">
+      <div className="mt-5 flex flex-col gap-2.5">
         <AddToCartButton
+          bookId={book.id}
+          soldOut={view.soldOut}
+          comingSoon={view.flag === "coming-soon"}
+          size="md"
+          block
+        />
+        <BuyNowButton
           bookId={book.id}
           soldOut={view.soldOut}
           comingSoon={view.flag === "coming-soon"}

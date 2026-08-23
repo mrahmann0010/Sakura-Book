@@ -8,6 +8,7 @@
   "actions": {
     "shopAll": "Shop all books",
     "addToCart": "Add to cart",
+    "buyNow": "Buy now",
     "inCart": "In cart · {{count}}",
     "removeFromCart": "Remove from cart",
     "goToCart": "Go to cart",
