@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { AddToCartButton } from "@/components/cart/add-to-cart-button";
+// import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { BuyNowButton } from "@/components/cart/buy-now-button";
 import { BookCover, BookMeta } from "@/components/domain";
 import {
@@ -139,14 +139,16 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
                 : t("book.stock.in")}
       </p>
 
-      <div className="mt-5 flex flex-col gap-2.5">
-        <AddToCartButton
+      <div className="mt-5">
+        {/* Add to cart is commented out, not deleted — the audience doesn't
+            shop from a cart, so Buy Now is the only purchase control now. */}
+        {/* <AddToCartButton
           bookId={book.id}
           soldOut={view.soldOut}
           comingSoon={view.flag === "coming-soon"}
           size="md"
           block
-        />
+        /> */}
         <BuyNowButton
           bookId={book.id}
           soldOut={view.soldOut}

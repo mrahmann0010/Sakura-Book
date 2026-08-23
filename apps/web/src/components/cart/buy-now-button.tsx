@@ -11,15 +11,18 @@ import { useAppSelector } from "@/store/hooks";
 import { selectQuantityOf } from "@/store/slices/cart-slice";
 
 /**
- * Adds the book to the cart, same as `AddToCartButton`, then goes straight to
- * checkout instead of leaving the shopper on the page. It shares the cart
- * rather than a separate order path — whatever else is already in there
- * checks out alongside this book, and "bypassing the cart" only means
+ * The one purchase control the app shows now — `AddToCartButton` is commented
+ * out at every call site (§ below) because a cart the shopper has to visit
+ * and review before paying was one step too many for this audience. This
+ * button adds the book to the cart, same as that one did, then goes straight
+ * to checkout instead of leaving the shopper on the page. It still shares the
+ * cart rather than a separate order path — whatever else is already in there
+ * checks out alongside this book — so "bypassing the cart" only means
  * skipping the `/cart` page, not the state itself.
  *
- * Hidden rather than disabled once the book is unavailable or already in the
- * cart — `AddToCartButton` beside it already carries that message, so a
- * second control saying the same thing would only add noise.
+ * If the book is already in the cart this skips `add` and just navigates, so
+ * a shopper who somehow has cart state (an old session, another tab) is never
+ * stranded without a working button.
  */
 export function BuyNowButton({
   bookId,
@@ -45,7 +48,23 @@ export function BuyNowButton({
   const quantity = useAppSelector(selectQuantityOf(bookId));
   const inCart = mounted && quantity > 0;
 
-  if (soldOut || comingSoon || inCart) return null;
+  if (comingSoon) {
+    return (
+      <Button variant="secondary" size={size} block={block} disabled>
+        {t("actions.comingSoon")}
+        {title ? <span className="sr-only">{`, ${title}`}</span> : null}
+      </Button>
+    );
+  }
+
+  if (soldOut) {
+    return (
+      <Button variant="secondary" size={size} block={block} disabled>
+        {t("actions.soldOut")}
+        {title ? <span className="sr-only">{`, ${title}`}</span> : null}
+      </Button>
+    );
+  }
 
   return (
     <Button
@@ -53,7 +72,7 @@ export function BuyNowButton({
       size={size}
       block={block}
       onClick={() => {
-        add(bookId);
+        if (!inCart) add(bookId);
         router.push(routes(locale ?? "en").checkout);
       }}
     >

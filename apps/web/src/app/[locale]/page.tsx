@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Fragment, Suspense } from "react";
 
-import { AddToCartButton } from "@/components/cart/add-to-cart-button";
+// import { AddToCartButton } from "@/components/cart/add-to-cart-button";
+import { BuyNowButton } from "@/components/cart/buy-now-button";
 import { BookCard, BookGrid, BookGridSkeleton, HowItWorks, ProofPoints } from "@/components/domain";
 import type { BookSummary } from "@/components/domain";
 import { AppNav, PageShell, Shell, SiteFooter } from "@/components/layout";
@@ -276,12 +277,19 @@ async function RecentGrid({ locale, t }: { locale: Locale; t: T }) {
               locale={locale}
               mobileRow
               footerAction={
-                <AddToCartButton
+                /* <AddToCartButton
                   bookId={book.id}
                   title={book.title}
                   soldOut={book.soldOut}
                   comingSoon={book.flag === "coming-soon"}
                   variant="secondary"
+                  block
+                /> */
+                <BuyNowButton
+                  bookId={book.id}
+                  title={book.title}
+                  soldOut={book.soldOut}
+                  comingSoon={book.flag === "coming-soon"}
                   block
                 />
               }
