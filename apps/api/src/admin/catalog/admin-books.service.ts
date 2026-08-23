@@ -7,7 +7,11 @@ import type {
   AdminBookUpdateRequest,
 } from "@sakura/contracts";
 import { eq, sql } from "drizzle-orm";
-import { ResourceConflictError, ResourceNotFoundError } from "../../common/errors";
+import {
+  InvalidInputError,
+  ResourceConflictError,
+  ResourceNotFoundError,
+} from "../../common/errors";
 import { slugify } from "../../common/slugify";
 import { AuditService } from "../../audit";
 import { DbService } from "../../db/db.service";
@@ -21,6 +25,7 @@ import {
   orderItems,
   publishers,
 } from "../../db/schema";
+import { categorySelectionProblem } from "./admin-book.categories";
 import { adminBookFilters, adminBookOrder } from "./admin-book.query";
 import { toAdminBookDetail, toAdminBookSummary } from "./admin-book.mapper";
 
@@ -205,7 +210,9 @@ export class AdminBooksService {
         .values({ ...createColumns(request), slug, publisherId })
         .returning({ id: books.id });
 
-      await this.replaceRelations(tx, inserted.id, request.authorNames, request.categorySlugs);
+      await this.replaceRelations(tx, inserted.id, request.authorNames, request.categorySlugs, {
+        requireCoverage: true,
+      });
 
       await this.auditService.record(
         {
@@ -253,6 +260,14 @@ export class AdminBooksService {
           id,
           request.authorNames ?? existing.authors.map((link) => link.author.name),
           request.categorySlugs ?? existing.categories.map((link) => link.category.slug),
+          /* Only what this request actually chose is held to the skill/level
+             rule. A book saved before the rule existed can be short of one —
+             the reference title carrying no `level` is a real row — and making
+             every PATCH re-assert the categories would leave that book
+             uneditable: renaming it would fail on a field the request never
+             mentioned. Send `categorySlugs` and it is checked; omit it and the
+             existing links are carried over untouched. */
+          { requireCoverage: request.categorySlugs !== undefined },
         );
       }
 
@@ -332,7 +347,10 @@ export class AdminBooksService {
     bookId: string,
     authorNames: string[],
     categorySlugs: string[],
+    { requireCoverage }: { requireCoverage: boolean },
   ): Promise<void> {
+    const categoryIds = await this.resolveCategories(tx, categorySlugs, requireCoverage);
+
     await tx.delete(bookAuthors).where(eq(bookAuthors.bookId, bookId));
     await tx.delete(bookCategories).where(eq(bookCategories.bookId, bookId));
 
@@ -341,15 +359,39 @@ export class AdminBooksService {
       await tx.insert(bookAuthors).values({ bookId, authorId, sortOrder: index });
     }
 
-    if (categorySlugs.length > 0) {
-      const rows = await tx.query.categories.findMany({
-        where: (category, { inArray }) => inArray(category.slug, categorySlugs),
-        columns: { id: true },
-      });
-      if (rows.length > 0) {
-        await tx.insert(bookCategories).values(rows.map((row) => ({ bookId, categoryId: row.id })));
-      }
+    if (categoryIds.length > 0) {
+      await tx.insert(bookCategories).values(categoryIds.map((id) => ({ bookId, categoryId: id })));
     }
+  }
+
+  /**
+   * Slugs to category ids, refusing a set that does not describe a book this
+   * shop can sell. The rule itself is `categorySelectionProblem` — this is the
+   * database half: fetch the rows, then turn a problem into the error the API
+   * reports.
+   */
+  private async resolveCategories(
+    tx: Transaction,
+    slugs: string[],
+    requireCoverage: boolean,
+  ): Promise<string[]> {
+    /* De-duplicated first: `book_categories` has a composite primary key, so
+       the same slug twice in one request would fail the insert on a conflict
+       rather than being the no-op the operator meant. */
+    const wanted = [...new Set(slugs)];
+
+    const rows =
+      wanted.length > 0
+        ? await tx.query.categories.findMany({
+            where: (category, { inArray }) => inArray(category.slug, wanted),
+            columns: { id: true, slug: true, group: true },
+          })
+        : [];
+
+    const problem = categorySelectionProblem(wanted, rows, requireCoverage);
+    if (problem) throw new InvalidInputError(problem.message, problem.details);
+
+    return rows.map((row) => row.id);
   }
 
   /**

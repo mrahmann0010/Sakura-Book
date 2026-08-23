@@ -101,7 +101,13 @@ const adminBookFieldsSchema = z.object({
   subtitle: z.string().trim().optional(),
   isbn10: z.string().trim().optional(),
   isbn13: z.string().trim().optional(),
-  publisherName: z.string().trim().optional(),
+  /**
+   * Required, unlike the nullable `books.publisher_id` it resolves to. The
+   * column stays nullable because rows written before this rule existed have
+   * no publisher and must stay editable; requiring it on the way *in* is what
+   * stops the gap growing.
+   */
+  publisherName: z.string().trim().min(1, "Publisher is required."),
   publishedDate: z.string().date().optional(),
   edition: z.string().trim().optional(),
   language: z.string().trim().min(1).optional(),
@@ -139,7 +145,16 @@ const adminBookFieldsSchema = z.object({
   metaDescription: z.string().trim().optional(),
 
   authorNames: z.array(z.string().trim().min(1)).min(1, "Add at least one author."),
-  categorySlugs: z.array(z.string()).optional(),
+
+  /**
+   * Required, and required to cover two specific groups: at least one `skill`
+   * and at least one `level`. Only the non-empty half of that is expressible
+   * here — which group a slug belongs to is a row in `categories`, not a fact
+   * this package can see — so the coverage rule is enforced in
+   * `admin-books.service.ts`, where the taxonomy is in reach. See
+   * `assertCategoryCoverage` there.
+   */
+  categorySlugs: z.array(z.string()).min(1, "Pick a skill and a JLPT level."),
 
   /** Auto-generated from the title when omitted — see admin-books.service.ts. */
   slug: z
@@ -197,10 +212,22 @@ export const adminBookCreateRequestSchema = adminBookFieldsSchema
     isActive: value.isActive ?? true,
     isFeatured: value.isFeatured ?? false,
     availability: value.availability ?? "in_stock",
-    categorySlugs: value.categorySlugs ?? [],
   }));
 
 export type AdminBookCreateRequest = z.infer<typeof adminBookCreateRequestSchema>;
+
+/**
+ * What a caller *sends*, as opposed to what the schema hands back.
+ *
+ * `adminBookCreateRequestSchema` ends in a `.transform()` that fills in
+ * `language`, `stockQuantity`, `lowStockThreshold`, `availability`,
+ * `galleryImageUrls`, `isActive` and `isFeatured`, so `AdminBookCreateRequest`
+ * — the output — has all seven as required. A form building the payload has
+ * not been through the transform yet and must be allowed to omit them; typing
+ * it against the output makes every optional field look mandatory and forces
+ * the form to invent the very defaults the schema exists to apply.
+ */
+export type AdminBookCreateInput = z.input<typeof adminBookCreateRequestSchema>;
 
 /**
  * Everything except `slug`, which cannot move once a book exists — the same
@@ -221,6 +248,9 @@ export const adminBookUpdateRequestSchema = adminBookFieldsSchema
   });
 
 export type AdminBookUpdateRequest = z.infer<typeof adminBookUpdateRequestSchema>;
+
+/** The pre-parse shape, for the same reason as `AdminBookCreateInput`. */
+export type AdminBookUpdateInput = z.input<typeof adminBookUpdateRequestSchema>;
 
 /* --------------------------------------------------------------------------
    Uploads

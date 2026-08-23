@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import type {
-  AdminBookCreateRequest,
+  AdminBookCreateInput,
   AdminBookDetail,
   BookAvailability,
   CategoryGroup,
@@ -13,7 +13,12 @@ import { FileUpload } from "@/components/admin/file-upload";
 import { AdminApiError, uploadAdminCover, uploadAdminPdf } from "@/lib/api/admin";
 import { getCategories } from "@/lib/api/catalog";
 
-export type BookFormValues = Omit<AdminBookCreateRequest, "slug">;
+/**
+ * The payload this form produces — the schema's *input*, not its output, so
+ * the fields the create schema defaults (stock, threshold, language, the
+ * flags) may be left out and filled in server-side. See `AdminBookCreateInput`.
+ */
+export type BookFormValues = Omit<AdminBookCreateInput, "slug">;
 
 type FormState = {
   title: string;
@@ -112,10 +117,37 @@ function fromDetail(book: AdminBookDetail): FormState {
   };
 }
 
+/**
+ * The category groups a book cannot be saved without — the client half of
+ * `REQUIRED_CATEGORY_GROUPS` in `admin-books.service.ts`. Checked here so the
+ * operator is told which box to tick before a round trip, and there so it
+ * holds for any caller; neither is redundant.
+ */
+const REQUIRED_CATEGORY_GROUPS: { group: string; label: string }[] = [
+  { group: "skill", label: "skill" },
+  { group: "level", label: "JLPT level" },
+];
+
 /** Empty optional string → `undefined`, so a cleared field is omitted rather than sent as `""`. */
 function optional(value: string): string | undefined {
   const trimmed = value.trim();
   return trimmed === "" ? undefined : trimmed;
+}
+
+/**
+ * Same, for the number inputs whose fields are optional.
+ *
+ * `Number("")` is 0, not NaN, so a cleared stock field would silently post a
+ * real zero and take the book out of stock. Anything non-numeric *is* NaN, and
+ * `JSON.stringify(NaN)` is `null`, which the schema rejects with "expected
+ * number, received null" — true but unhelpful in front of an empty box. Both
+ * become `undefined`, and the server applies its own default.
+ */
+function optionalNumber(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (trimmed === "") return undefined;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function toRequest(form: FormState): BookFormValues {
@@ -124,7 +156,7 @@ function toRequest(form: FormState): BookFormValues {
     subtitle: optional(form.subtitle),
     isbn10: optional(form.isbn10),
     isbn13: optional(form.isbn13),
-    publisherName: optional(form.publisherName),
+    publisherName: form.publisherName.trim(),
     authorNames: form.authorNames
       .split(",")
       .map((name) => name.trim())
@@ -133,17 +165,18 @@ function toRequest(form: FormState): BookFormValues {
     language: form.language.trim() || "en",
     edition: optional(form.edition),
     publishedDate: optional(form.publishedDate),
-    pageCount: form.pageCount ? Number(form.pageCount) : undefined,
+    pageCount: optionalNumber(form.pageCount),
     description: form.description.trim(),
     priceCents: Number(form.priceCents),
-    compareAtPriceCents: form.compareAtPriceCents ? Number(form.compareAtPriceCents) : undefined,
+    compareAtPriceCents: optionalNumber(form.compareAtPriceCents),
     sku: optional(form.sku),
     // A coming-soon book is never orderable — the API refuses (and this form
     // never lets you type) a non-zero stock count against it, see `set()`.
-    stockQuantity: Number(form.stockQuantity),
-    lowStockThreshold: Number(form.lowStockThreshold),
+    // Both are optional: left blank, the server applies 0 and 5.
+    stockQuantity: optionalNumber(form.stockQuantity),
+    lowStockThreshold: optionalNumber(form.lowStockThreshold),
     availability: form.availability,
-    weightGrams: form.weightGrams ? Number(form.weightGrams) : undefined,
+    weightGrams: optionalNumber(form.weightGrams),
     coverImageUrl: form.coverImageUrl.trim(),
     coverImageAlt: optional(form.coverImageAlt),
     galleryImageUrls: form.galleryImageUrls,
@@ -219,8 +252,29 @@ export function BookForm({
     }));
   }
 
+  /**
+   * Which required groups have nothing ticked.
+   *
+   * Derived from the fetched taxonomy rather than a hardcoded slug list, so
+   * adding a sixth skill to the `categories` table needs no change here. If
+   * the fetch failed, `categoryGroups` is empty and this reports nothing
+   * missing — the form must not become unsubmittable because a taxonomy
+   * request did not come back; the server still enforces the rule.
+   */
+  const missingGroups = REQUIRED_CATEGORY_GROUPS.filter(({ group }) => {
+    const known = categoryGroups.find((candidate) => candidate.group === group);
+    if (!known) return false;
+    return !known.categories.some((category) => form.categorySlugs.includes(category.slug));
+  });
+
   async function submit(event: FormEvent) {
     event.preventDefault();
+
+    if (missingGroups.length > 0) {
+      setError(`Pick at least one ${missingGroups.map((entry) => entry.label).join(" and one ")}.`);
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -255,7 +309,8 @@ export function BookForm({
         />
         <Input
           label="Publisher"
-          hint="Leave blank if unknown. New names are added automatically."
+          required
+          hint="New names are added automatically."
           value={form.publisherName}
           onChange={(event) => set("publisherName", event.target.value)}
         />
@@ -318,24 +373,46 @@ export function BookForm({
         <div>
           <p className="text-caption tracking-eyebrow text-muted mb-2 uppercase">Categories</p>
           <div className="flex flex-col gap-4">
-            {categoryGroups.map((group) => (
-              <div key={group.group ?? "ungrouped"}>
-                {group.group ? (
-                  <p className="text-13.5 text-secondary mb-1 capitalize">{group.group}</p>
-                ) : null}
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
-                  {group.categories.map((category) => (
-                    <Checkbox
-                      key={category.slug}
-                      checked={form.categorySlugs.includes(category.slug)}
-                      onChange={() => toggleCategory(category.slug)}
-                    >
-                      {category.name}
-                    </Checkbox>
-                  ))}
+            {categoryGroups.map((group) => {
+              /* Skill and level are the two the book cannot be saved without,
+                 so they are labelled as required and flagged when empty. Every
+                 other group — `genre`, the vocabulary the catalog stopped
+                 filtering on — is left as a plain optional row. */
+              const required = REQUIRED_CATEGORY_GROUPS.find(
+                (entry) => entry.group === group.group,
+              );
+              const unmet = required
+                ? missingGroups.some((entry) => entry.group === group.group)
+                : false;
+
+              return (
+                <div key={group.group ?? "ungrouped"}>
+                  {group.group ? (
+                    <p className="text-13.5 mb-1 capitalize">
+                      <span className={unmet ? "text-clay-deep" : "text-secondary"}>
+                        {required ? required.label : group.group}
+                      </span>
+                      {required ? (
+                        <span className="text-clay" aria-hidden>
+                          {" *"}
+                        </span>
+                      ) : null}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {group.categories.map((category) => (
+                      <Checkbox
+                        key={category.slug}
+                        checked={form.categorySlugs.includes(category.slug)}
+                        onChange={() => toggleCategory(category.slug)}
+                      >
+                        {category.name}
+                      </Checkbox>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : null}
@@ -378,7 +455,6 @@ export function BookForm({
         <Input
           label="Stock quantity"
           type="number"
-          required
           min={0}
           disabled={form.availability === "coming_soon"}
           hint={
@@ -392,8 +468,8 @@ export function BookForm({
         <Input
           label="Low stock threshold"
           type="number"
-          required
           min={0}
+          hint="Blank defaults to 5."
           value={form.lowStockThreshold}
           onChange={(event) => set("lowStockThreshold", event.target.value)}
         />

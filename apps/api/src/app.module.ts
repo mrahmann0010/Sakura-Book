@@ -12,6 +12,11 @@ import { PaymentVerificationModule } from "./payment-verification";
 import { HealthModule } from "./health/health.module";
 import { InventoryModule } from "./inventory";
 import { OrdersModule } from "./orders";
+/* eslint-disable-next-line no-restricted-imports -- the one import the barrel
+   rule cannot cover: orders/index.ts deliberately does not re-export
+   OrdersHttpModule (it imports PaymentsModule, which imports that same barrel
+   for OrdersModule, so re-exporting would make the cycle a file-level one) and
+   says to import it directly. See the comment beside the omission there. */
 import { OrdersHttpModule } from "./orders/orders-http.module";
 import { PaymentNumbersModule, PaymentsModule } from "./payments";
 import { PricingModule } from "./pricing";

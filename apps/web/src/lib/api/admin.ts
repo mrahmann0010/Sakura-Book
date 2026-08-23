@@ -16,11 +16,11 @@ import {
   adminUploadResultSchema,
   dashboardSchema,
   monthlyReportSchema,
-  type AdminBookCreateRequest,
+  type AdminBookCreateInput,
   type AdminBookDetail,
   type AdminBookList,
   type AdminBookQuery,
-  type AdminBookUpdateRequest,
+  type AdminBookUpdateInput,
   type AdminConfirmPaymentRequest,
   type AdminInternalNoteRequest,
   type AdminLoginRequest,
@@ -282,14 +282,14 @@ export function getAdminBook(id: string): Promise<AdminBookDetail> {
   return adminFetch(`/admin/books/${encodeURIComponent(id)}`, adminBookDetailSchema);
 }
 
-export function createAdminBook(request: AdminBookCreateRequest): Promise<AdminBookDetail> {
+export function createAdminBook(request: AdminBookCreateInput): Promise<AdminBookDetail> {
   const validated = adminBookCreateRequestSchema.parse(request);
   return adminFetch("/admin/books", adminBookDetailSchema, { method: "POST", body: validated });
 }
 
 export function updateAdminBook(
   id: string,
-  request: AdminBookUpdateRequest,
+  request: AdminBookUpdateInput,
 ): Promise<AdminBookDetail> {
   const validated = adminBookUpdateRequestSchema.parse(request);
   return adminFetch(`/admin/books/${encodeURIComponent(id)}`, adminBookDetailSchema, {
