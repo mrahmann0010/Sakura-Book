@@ -138,7 +138,7 @@ export function BookCardSkeleton({
       {/* `sm:contents` returns these to the plain stacked flow at tablet up,
           so the one skeleton serves both layouts. */}
       <div className={mobileRow ? "min-w-0 flex-1 sm:contents" : "contents"}>
-        <Skeleton index={index} className="mt-4.5 h-3.5 max-sm:mt-0" />
+        <Skeleton index={index} className={cn("mt-4.5 h-3.5", mobileRow && "max-sm:mt-0")} />
         <Skeleton index={index} className="mt-2 h-3.5 w-4/5" />
         <Skeleton index={index} className="mt-2.5 h-2.5 w-3/5" />
         <Skeleton index={index} className="mt-2.5 h-2.5 w-2/5" />

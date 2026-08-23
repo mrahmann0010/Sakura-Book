@@ -281,7 +281,12 @@ export function BookCard({
           `sm` the wrapper is the column, beside the cover. */}
       <div className={mobileRow ? "flex min-w-0 flex-1 flex-col sm:contents" : "contents"}>
         {flag ? (
-          <p className="mt-4 max-sm:mt-0">
+          /* `max-sm:mt-0` is `mobileRow` only: there the badge leads the text
+             column beside the cover, so its top margin would be a gap against
+             nothing. In the ordinary stack the badge sits under the cover and
+             needs the full 16px — ungated, this silently closed that gap on
+             every bare card on mobile, the catalog's included. */
+          <p className={cn("mt-4", mobileRow && "max-sm:mt-0")}>
             <Badge
               tone={
                 flag === "editors-pick" ? "accent" : flag === "pre-order" ? "outline" : "neutral"
