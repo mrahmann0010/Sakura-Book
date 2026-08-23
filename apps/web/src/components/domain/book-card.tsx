@@ -94,6 +94,20 @@ export type BookCardProps = Omit<Variants<VariantProps<typeof cardTitle>>, "clam
    * per §10.4.
    */
   variant?: "bare" | "panel";
+  /**
+   * Turn the `bare` card sideways below `sm` — cover on the left at a fixed
+   * 118px, everything else stacked beside it — and back to the ordinary
+   * portrait stack from tablet up.
+   *
+   * For the landing shelf's one-book-per-row mobile grid (`grid-books-1`).
+   * A full-width 2:3 cover on a 390px phone is ~560px tall before the title
+   * is reached, so three of them is three screens of scrolling for three
+   * books; sideways, each card is ~180px and the whole shelf is one screen.
+   *
+   * `bare` only — `panel` seats its cover in an inset block that has no
+   * sideways reading, and `row` is already the compact horizontal list.
+   */
+  mobileRow?: boolean;
   className?: string;
 };
 
@@ -108,14 +122,16 @@ export function BookCard({
   action,
   footerAction,
   variant = "bare",
+  mobileRow = false,
   className,
 }: BookCardProps) {
   const flag = showFlag ? book.flag : undefined;
-  const priceLine = book.flag === "coming-soon"
-    ? "Coming soon"
-    : book.soldOut
-      ? "Out of stock"
-      : formatMoney(book.priceCents, intlLocale(locale));
+  const priceLine =
+    book.flag === "coming-soon"
+      ? "Coming soon"
+      : book.soldOut
+        ? "Out of stock"
+        : formatMoney(book.priceCents, intlLocale(locale));
 
   /* "Ships around <Month year>" — the same fact the detail page's buy card
      states in full sentence form (`book.preOrder.shipsAround`), shortened to
@@ -236,7 +252,11 @@ export function BookCard({
   return (
     <article
       className={cn(
-        "group relative flex flex-col",
+        "group relative flex",
+        /* Sideways below `sm`, then the ordinary portrait stack from tablet
+           up — see `mobileRow`. The `sm:` half restates the default column so
+           the two states are readable side by side. */
+        mobileRow ? "gap-5 sm:flex-col sm:gap-0" : "flex-col",
         "outline-1 outline-offset-6 outline-transparent transition-[outline-color] duration-150",
         "hover:outline-ink has-[a:focus-visible]:outline-ink",
         book.soldOut && "opacity-55",
@@ -245,31 +265,48 @@ export function BookCard({
     >
       {action ? <div className="relative z-10 mb-3 flex justify-end">{action}</div> : null}
 
-      <BookCover
-        src={book.coverUrl}
-        title={book.title}
-        author={book.author}
-        fallback={book.coverUrl ? "hatch" : "wordmark"}
-      />
+      <div className={mobileRow ? "w-[118px] shrink-0 sm:w-auto" : undefined}>
+        <BookCover
+          src={book.coverUrl}
+          title={book.title}
+          author={book.author}
+          fallback={book.coverUrl ? "hatch" : "wordmark"}
+        />
+      </div>
 
-      {flag ? (
-        <p className="mt-4">
-          <Badge
-          tone={flag === "editors-pick" ? "accent" : flag === "pre-order" ? "outline" : "neutral"}
+      {/* `sm:contents` dissolves this wrapper at tablet up, handing its
+          children straight back to the article's own column — which is what
+          keeps `mt-auto` on the footer working there, seating the button
+          against the cell floor when a neighbouring card runs taller. Below
+          `sm` the wrapper is the column, beside the cover. */}
+      <div className={mobileRow ? "flex min-w-0 flex-1 flex-col sm:contents" : "contents"}>
+        {flag ? (
+          <p className="mt-4 max-sm:mt-0">
+            <Badge
+              tone={
+                flag === "editors-pick" ? "accent" : flag === "pre-order" ? "outline" : "neutral"
+              }
+            >
+              {flagLabels[flag]}
+            </Badge>
+          </p>
+        ) : null}
+
+        <h3
+          className={cn(
+            cardTitle({ size, clamp: true }),
+            flag ? "mt-3" : "mt-4.5",
+            mobileRow && !flag && "max-sm:mt-0",
+          )}
         >
-          {flagLabels[flag]}
-        </Badge>
-        </p>
-      ) : null}
+          {title}
+        </h3>
+        {meta}
 
-      <h3 className={cn(cardTitle({ size, clamp: true }), flag ? "mt-3" : "mt-4.5")}>{title}</h3>
-      {meta}
-
-      {/* Read last, after the price has made its case, and flush with the
-          cover's edges so a row of cards keeps one straight bottom line.
-          `mt-auto` seats it against the cell floor when a neighbouring card
-          runs taller. */}
-      {footerAction ? <div className="relative z-10 mt-auto pt-4">{footerAction}</div> : null}
+        {/* Read last, after the price has made its case, and flush with the
+            cover's edges so a row of cards keeps one straight bottom line. */}
+        {footerAction ? <div className="relative z-10 mt-auto pt-4">{footerAction}</div> : null}
+      </div>
     </article>
   );
 }

@@ -162,6 +162,28 @@
   }
 }
 
+@utility grid-books-1 {
+  /* The landing shelf: one book per row on mobile, then the catalog's own
+     3-up tablet / 4-up desktop. The single mobile column is why `BookCard`
+     grows a `mobileRow` layout — a full-width 2:3 cover on a phone is ~560px
+     tall before the title is even reached, so the card turns horizontal at
+     this width and back to the stack at `sm`.
+
+     The mobile gap is 24px rather than the 40px gutter: horizontal cards are
+     short, and the shelf reads as a list rather than three floating cells. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+
+  @media (width >= 40rem) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--spacing-gutter);
+  }
+  @media (width >= 64rem) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 @utility grid-books-3 {
   /* The landing shelf: 1 up mobile, 2 up tablet, 3 up desktop at the shelf's
      tighter 28px gutter. Panel cards are wider than a bare cover, so the

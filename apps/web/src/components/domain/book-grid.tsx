@@ -12,6 +12,10 @@ import { cn } from "@/lib/utils";
  * landing wireframe draws for its two shelves of panel cards. Catalog and
  * search keep the 4-up default.
  *
+ * `columns={1}` is the landing shelf: one book per row on mobile, then the
+ * same 3/4 as everywhere else. Pair it with `mobileRow` on the cards — a
+ * full-width portrait cover on a phone is taller than the viewport.
+ *
  * `columns={6}` is the landing shelf's best-sellers rail: 2 up through tablet,
  * jumping straight to 6 up at desktop — the caller hides everything past the
  * second card below that breakpoint, so the intermediate step is unused.
@@ -25,11 +29,17 @@ export function BookGrid({
   className,
 }: {
   children: ReactNode;
-  columns?: 3 | 4 | 6;
+  columns?: 1 | 3 | 4 | 6;
   className?: string;
 }) {
   const gridClass =
-    columns === 3 ? "grid-books-3" : columns === 6 ? "grid-books-6" : "grid-books";
+    columns === 1
+      ? "grid-books-1"
+      : columns === 3
+        ? "grid-books-3"
+        : columns === 6
+          ? "grid-books-6"
+          : "grid-books";
 
   return <div className={cn(gridClass, className)}>{children}</div>;
 }
@@ -109,18 +119,31 @@ export function BookCardSkeleton({
   index = 0,
   /** Match the grid being waited on — the catalog's cells end in a button. */
   footer = false,
+  /** Mirror `BookCard`'s `mobileRow`: cover beside the text below `sm`. */
+  mobileRow = false,
 }: {
   index?: number;
   footer?: boolean;
+  mobileRow?: boolean;
 }) {
   return (
-    <div>
-      <Skeleton index={index} className="rounded-control aspect-[2/3] w-full" />
-      <Skeleton index={index} className="mt-4.5 h-3.5" />
-      <Skeleton index={index} className="mt-2 h-3.5 w-4/5" />
-      <Skeleton index={index} className="mt-2.5 h-2.5 w-3/5" />
-      <Skeleton index={index} className="mt-2.5 h-2.5 w-2/5" />
-      {footer ? <Skeleton index={index} className="rounded-control mt-4 h-11 w-full" /> : null}
+    <div className={mobileRow ? "flex gap-5 sm:block" : undefined}>
+      <Skeleton
+        index={index}
+        className={cn(
+          "rounded-control aspect-[2/3] w-full",
+          mobileRow && "w-[118px] shrink-0 sm:w-full",
+        )}
+      />
+      {/* `sm:contents` returns these to the plain stacked flow at tablet up,
+          so the one skeleton serves both layouts. */}
+      <div className={mobileRow ? "min-w-0 flex-1 sm:contents" : "contents"}>
+        <Skeleton index={index} className="mt-4.5 h-3.5 max-sm:mt-0" />
+        <Skeleton index={index} className="mt-2 h-3.5 w-4/5" />
+        <Skeleton index={index} className="mt-2.5 h-2.5 w-3/5" />
+        <Skeleton index={index} className="mt-2.5 h-2.5 w-2/5" />
+        {footer ? <Skeleton index={index} className="rounded-control mt-4 h-11 w-full" /> : null}
+      </div>
     </div>
   );
 }
@@ -130,17 +153,35 @@ export function BookGridSkeleton({
   count = 8,
   columns,
   footer = false,
+  /**
+   * How many cells survive below `sm`, matching a grid that hides its tail on
+   * mobile. Without this the fallback would stand `count` cells tall on a
+   * phone and the real shelf three — exactly the shift a skeleton exists to
+   * prevent.
+   */
+  mobileCount,
+  /** Mirror `BookCard`'s `mobileRow` on the cells that show on mobile. */
+  mobileRow = false,
   className,
 }: {
   count?: number;
-  columns?: 3 | 4 | 6;
+  columns?: 1 | 3 | 4 | 6;
   footer?: boolean;
+  mobileCount?: number;
+  mobileRow?: boolean;
   className?: string;
 }) {
   return (
     <BookGrid columns={columns} className={className}>
       {Array.from({ length: count }, (_, index) => (
-        <BookCardSkeleton key={index} index={index} footer={footer} />
+        <div
+          key={index}
+          className={
+            mobileCount !== undefined && index >= mobileCount ? "hidden sm:block" : undefined
+          }
+        >
+          <BookCardSkeleton index={index} footer={footer} mobileRow={mobileRow} />
+        </div>
       ))}
     </BookGrid>
   );

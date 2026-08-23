@@ -3,6 +3,7 @@ import { Fragment, Suspense } from "react";
 
 import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { BookCard, BookGrid, BookGridSkeleton, HowItWorks, ProofPoints } from "@/components/domain";
+import type { BookSummary } from "@/components/domain";
 import { AppNav, PageShell, Shell, SiteFooter } from "@/components/layout";
 import { LinkButton } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
@@ -100,6 +101,21 @@ type T = Awaited<ReturnType<typeof getTranslation>>["t"];
  * catalog's own skeleton count, so both pages wait at the same size.
  */
 const HOME_SHELF_COUNT = 8;
+
+/**
+ * How many of those eight survive below `sm`.
+ *
+ * The shelf runs one book per row on a phone (`grid-books-1`), so eight cards
+ * is eight screens of scrolling before the catalogue CTA, the proof band or
+ * the journey is reachable. Three is a shelf you can take in at once and still
+ * leaves the rest of the page within reach.
+ *
+ * The tail is hidden rather than not fetched: the count is one number for the
+ * whole render, and a server component cannot know the viewport. The five
+ * extra cards cost DOM, not bandwidth — `BookCover` lazy-loads, and nothing
+ * below the fold of a `display: none` cell is ever requested.
+ */
+const MOBILE_SHELF_COUNT = 3;
 
 /* Word-by-word stagger for the hero headline. Base is the beat before the
    first word — long enough to read as a deliberate entrance, short enough that
@@ -203,6 +219,32 @@ function Hero({ tagline, subhead }: { tagline: string; subhead: string }) {
 }
 
 /**
+ * Lead the shelf with a pre-order, if one came back.
+ *
+ * The API will not do this: `orderableBucket()` in book.query.ts ranks
+ * `in_stock` (0) above `pre_order` (1) as a primary sort key under *every*
+ * sort, and `/books` has no availability filter to ask the other way round. So
+ * a pre-order title is structurally last on a shelf of eight, and the landing
+ * page wants it first — it is the one thing on the page with a deadline.
+ *
+ * Reordering on the client is safe *here* specifically. The warning attached
+ * to that sort key is about offset pagination: a client that moves a row
+ * duplicates or drops books across pages. This shelf is page 1 of 1 and has no
+ * next page, so there is nothing for a move to fall out of. Do not copy this
+ * into /catalog.
+ *
+ * If none of the eight is a pre-order the shelf is returned untouched — the
+ * alternative is a second round trip for a book that may not exist.
+ */
+function preOrderFirst(books: BookSummary[]): BookSummary[] {
+  const index = books.findIndex((book) => book.flag === "pre-order");
+  if (index <= 0) return books;
+
+  const lead = books[index];
+  return [lead, ...books.slice(0, index), ...books.slice(index + 1)];
+}
+
+/**
  * The landing shelf — the catalog's grid, card for card.
  *
  * Everything the card renders is the catalog's: the `bare` reference variant
@@ -215,28 +257,36 @@ async function RecentGrid({ locale, t }: { locale: Locale; t: T }) {
     { q: "", genres: [], sort: "recent", page: 1 },
     { pageSize: HOME_SHELF_COUNT },
   );
-  const bestSellers = toBookSummaries(recent.items, locale);
+  const bestSellers = preOrderFirst(toBookSummaries(recent.items, locale));
 
   return (
     <>
       <h2 className="sr-only">{t("home.recent.title")}</h2>
-      <BookGrid>
-        {bestSellers.map((book) => (
-          <BookCard
+      <BookGrid columns={1}>
+        {bestSellers.map((book, index) => (
+          /* The wrapper carries the mobile cut only. `sm:contents` dissolves
+             it at tablet up so the card itself is the grid item again and the
+             row's cards keep one shared bottom edge. */
+          <div
             key={book.id}
-            book={book}
-            locale={locale}
-            footerAction={
-              <AddToCartButton
-                bookId={book.id}
-                title={book.title}
-                soldOut={book.soldOut}
-                comingSoon={book.flag === "coming-soon"}
-                variant="secondary"
-                block
-              />
-            }
-          />
+            className={index >= MOBILE_SHELF_COUNT ? "hidden sm:contents" : "contents"}
+          >
+            <BookCard
+              book={book}
+              locale={locale}
+              mobileRow
+              footerAction={
+                <AddToCartButton
+                  bookId={book.id}
+                  title={book.title}
+                  soldOut={book.soldOut}
+                  comingSoon={book.flag === "coming-soon"}
+                  variant="secondary"
+                  block
+                />
+              }
+            />
+          </div>
         ))}
       </BookGrid>
 
@@ -268,10 +318,21 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
       <Hero tagline={t("home.hero.tagline")} subhead={t("home.hero.subhead")} />
 
       {/* Best-selling, buyable-now books — the catalog's grid at the catalog's
-          card, 2 up on mobile, 3 on tablet, 4 on desktop, then the way through
-          to the rest of the catalogue. */}
+          card, one per row on mobile (three of them, led by a pre-order), 3 on
+          tablet, 4 on desktop, then the way through to the rest of the
+          catalogue. */}
       <Shell>
-        <Suspense fallback={<BookGridSkeleton count={HOME_SHELF_COUNT} footer />}>
+        <Suspense
+          fallback={
+            <BookGridSkeleton
+              count={HOME_SHELF_COUNT}
+              mobileCount={MOBILE_SHELF_COUNT}
+              columns={1}
+              mobileRow
+              footer
+            />
+          }
+        >
           <RecentGrid locale={locale} t={t} />
         </Suspense>
       </Shell>
