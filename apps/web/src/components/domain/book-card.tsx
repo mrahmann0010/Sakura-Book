@@ -126,9 +126,24 @@ export function BookCard({
   className,
 }: BookCardProps) {
   const flag = showFlag ? book.flag : undefined;
+  /**
+   * The price, or the word that stands in for it — `undefined` when the badge
+   * is already carrying that word.
+   *
+   * A coming-soon card otherwise says "Coming soon" three times: the badge,
+   * this line, and the disabled footer button, inside a cell about 200px tall
+   * on a phone. The badge is what a reader scans and the button is what they
+   * reach for; this line is the one of the three with no job of its own.
+   *
+   * Keyed off `flag` rather than `book.flag`, so a rail that suppresses the
+   * badge with `showFlag={false}` gets the word back here. Principle 03 asks
+   * that the state be stated, not that it be stated three times.
+   */
   const priceLine =
     book.flag === "coming-soon"
-      ? "Coming soon"
+      ? flag === "coming-soon"
+        ? undefined
+        : "Coming soon"
       : book.soldOut
         ? "Out of stock"
         : formatMoney(book.priceCents, intlLocale(locale));
@@ -161,13 +176,13 @@ export function BookCard({
   const meta = inlineMeta ? (
     <p className="text-13 text-secondary mt-1.5">
       {book.author}
-      {showPrice ? ` · ${priceLine}` : null}
+      {showPrice && priceLine ? ` · ${priceLine}` : null}
       {shipDateLine ? ` · ${shipDateLine}` : null}
     </p>
   ) : (
     <>
       <p className="text-caption text-secondary mt-1.5">{book.author}</p>
-      {showPrice ? (
+      {showPrice && priceLine ? (
         <p className={cn("text-caption mt-1.5", book.soldOut ? "text-secondary" : "text-body")}>
           {priceLine}
         </p>
@@ -193,7 +208,7 @@ export function BookCard({
           <h3 className={cardTitle({ size: "sm" })}>{title}</h3>
           <p className="text-12 text-secondary mt-1">{book.author}</p>
         </div>
-        {showPrice ? <p className="text-caption text-body">{priceLine}</p> : null}
+        {showPrice && priceLine ? <p className="text-caption text-body">{priceLine}</p> : null}
       </article>
     );
   }
