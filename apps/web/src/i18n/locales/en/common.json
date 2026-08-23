@@ -221,6 +221,7 @@
     "back": "Back to delivery details",
     "place": "Place order",
     "placing": "Placing order",
+    "missing": "Please fill in {{fields}}.",
     "errorSummary": "Check the fields marked below, then place the order again.",
     "submitError": "Something went wrong placing your order. Please try again.",
     "verify": {

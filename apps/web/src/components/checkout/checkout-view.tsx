@@ -2,8 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useEffect, useState } from "react";
+import { useForm, useWatch, type FieldErrors } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -14,7 +14,16 @@ import {
   type RecapLine,
 } from "@/components/domain";
 import { CheckoutProgress, PageHeader, RailLayout, Shell, StickyBar } from "@/components/layout";
-import { Button, Card, CopyButton, LinkButton, Notice, OrderId, Skeleton } from "@/components/ui";
+import {
+  Button,
+  Card,
+  CopyButton,
+  LinkButton,
+  Notice,
+  OrderId,
+  Skeleton,
+  Toast,
+} from "@/components/ui";
 import { useCart } from "@/hooks/use-cart";
 import type { Locale } from "@/i18n/settings";
 import { ApiError } from "@/lib/api/client";
@@ -63,6 +72,19 @@ export function CheckoutView({ locale }: { locale: Locale }) {
 
   const [step, setStep] = useState<"delivery" | "payment">("delivery");
 
+  /* A missed field is currently silent where it matters most: "Next" simply
+     does not advance, and the error it set may be off-screen on a phone. The
+     toast names what is missing so the shopper is not left tapping a button
+     that appears dead. Local to this page rather than an app-wide host —
+     Toast is presentational by design, and checkout is the only caller. */
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
   const {
     control,
     register,
@@ -81,8 +103,57 @@ export function CheckoutView({ locale }: { locale: Locale }) {
      but never blocks Next on its own before a division is chosen. */
   const deliveryFields = ["fullName", "email", "phone", "address", "city", "region"] as const;
 
+  /* Which form field each name points at on screen. `city` and `region` are
+     never typed — the district and division pickers write them — so the toast
+     names the control the shopper has to touch, not the schema field behind
+     it, which they would look for and never find. */
+  const fieldLabels: Partial<Record<keyof CheckoutValues, string>> = {
+    fullName: t("checkout.shipping.fullName"),
+    email: t("checkout.shipping.email"),
+    phone: t("checkout.shipping.phone"),
+    address: t("checkout.shipping.address"),
+    city: t("checkout.shipping.district"),
+    region: t("checkout.shipping.division"),
+    provider: t("checkout.payment.mobileMoneyLegend"),
+    senderNumber: t("checkout.payment.senderNumber"),
+    transactionId: t("checkout.payment.transactionId"),
+  };
+
+  function missingToast(names: readonly (keyof CheckoutValues)[]) {
+    const labels = names.map((name) => fieldLabels[name] ?? name);
+    if (labels.length === 0) return;
+    /* Intl rather than join(", ") — the separator and the final conjunction
+       differ per locale, and this string is read in three. */
+    const list = new Intl.ListFormat(intlLocale(locale), {
+      style: "long",
+      type: "conjunction",
+    }).format(labels);
+    setToast(t("checkout.missing", { fields: list }));
+  }
+
   async function goToPayment() {
-    if (await trigger(deliveryFields)) setStep("payment");
+    /* Validated one field at a time rather than as an array: `trigger(fields)`
+       answers only whether all of them passed, and the toast has to name the
+       ones that did not. Reading `errors` straight after would race the
+       formState update this same call triggers. */
+    const results = await Promise.all(
+      deliveryFields.map(async (name) => [name, await trigger(name)] as const),
+    );
+    const missing = results.filter(([, ok]) => !ok).map(([name]) => name);
+
+    if (missing.length === 0) {
+      setToast(null);
+      setStep("payment");
+      return;
+    }
+
+    missingToast(missing);
+  }
+
+  /* The submit's failure path. react-hook-form hands the errors straight in,
+     so unlike goToPayment there is nothing to re-derive. */
+  function onInvalid(formErrors: FieldErrors<CheckoutValues>) {
+    missingToast(Object.keys(formErrors) as (keyof CheckoutValues)[]);
   }
 
   /* useWatch rather than `watch()`: watch returns a fresh function each render,
@@ -297,7 +368,7 @@ export function CheckoutView({ locale }: { locale: Locale }) {
           <form
             id="checkout"
             noValidate
-            onSubmit={handleSubmit(placeOrder)}
+            onSubmit={handleSubmit(placeOrder, onInvalid)}
             className="mt-9 flex flex-col gap-10"
           >
             <div className={step === "delivery" ? undefined : "hidden"}>
@@ -354,8 +425,13 @@ export function CheckoutView({ locale }: { locale: Locale }) {
       </Shell>
 
       <StickyBar
-        label={t("cart.summary.total")}
-        value={total}
+        /* The total only earns its line once there is one. Before a division
+           the figure is "—", so on the address step the bar was spending a
+           row, a gap and a hairline to say nothing while sitting on top of
+           the form being typed into. It collapses to just the button there,
+           and grows as the order becomes known. */
+        label={deliveryKnown ? t("cart.summary.total") : undefined}
+        value={deliveryKnown ? total : undefined}
         /* The same rows the desktop rail draws, from the same derivation — but
            only on the payment step. On a phone the docked bar sits on top of
            whatever is being typed, and three extra rows plus a hairline left
@@ -373,6 +449,17 @@ export function CheckoutView({ locale }: { locale: Locale }) {
         }
         action={primaryAction}
       />
+
+      {/* Above the docked bar rather than under it: the bar is the thing the
+          shopper just tapped, and a message hidden behind it would be the
+          same silence this replaces. */}
+      {toast ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 pb-40 lg:pb-8">
+          <div className="shell flex justify-center">
+            <Toast className="max-w-measure pointer-events-auto shadow-lg">{toast}</Toast>
+          </div>
+        </div>
+      ) : null}
 
       <PaymentVerificationModal status={verification} onSeeOrder={seeOrder} />
     </>
