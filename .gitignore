@@ -35,3 +35,8 @@ coverage/
 
 # Agent critique notes — generated commentary about the code, not the code.
 .impeccable/
+
+# pdf.js runtime assets (worker, cmaps, standard fonts), copied out of the
+# installed pdfjs-dist by apps/web/scripts/copy-pdfjs-assets.mjs on predev and
+# prebuild. Generated, and must match the installed version — never committed.
+/apps/web/public/pdfjs/

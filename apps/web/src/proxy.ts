@@ -16,12 +16,36 @@ export const LOCALE_HEADER = "x-locale";
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|icon.svg|robots.txt|sitemap.xml).*)",
+    "/((?!api|_next/static|_next/image|pdfjs|favicon.ico|icon.svg|robots.txt|sitemap.xml).*)",
   ],
 };
 
+/**
+ * Static assets under public/ that must never be given a locale prefix.
+ *
+ * `pdfjs/` is the pdf.js worker, the CJK character maps and the standard font
+ * metrics (see scripts/copy-pdfjs-assets.mjs), fetched by absolute path from
+ * inside the browser by the sample reader. Prefixed, they become `/bn/pdfjs/…`
+ * and resolve to nothing — and the failure is quiet in exactly the wrong way:
+ * the worker 404s, pdf.js gives up or falls back onto the main thread, and the
+ * sample either never appears or freezes the tab, with nothing in the console
+ * pointing back at this file.
+ *
+ * Checked here rather than left to the `matcher` above, which also names it.
+ * On Next 16.3 the matcher's exclusions are not applied to public/ files at
+ * runtime — `/file.svg` is redirected today despite the same list — so the
+ * config alone does not hold. Both are kept: the matcher is the declaration of
+ * intent and saves the invocation wherever it is honoured, and this is the
+ * check that actually runs.
+ */
+const UNPREFIXED_PATHS = ["/pdfjs/"];
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (UNPREFIXED_PATHS.some((prefix) => pathname.startsWith(prefix))) {
+    return NextResponse.next();
+  }
 
   const matched = locales.find(
     (locale) => pathname === `/${locale}` || pathname.startsWith(`/${locale}/`),

@@ -1,10 +1,26 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { Button } from "@/components/ui";
+import { Button, Spinner } from "@/components/ui";
 import { cn } from "@/lib/utils";
+
+/* pdf.js is around half a megabyte and belongs to nobody who does not open a
+   sample, so the reader is a separate chunk fetched on the click. `ssr: false`
+   because it rasterises to a <canvas> and there is nothing for the server to
+   render — and the dialog it lives in does not exist until a browser event
+   anyway. The placeholder holds the panel's shape so the frame does not appear
+   empty and then jump. */
+const PdfReader = dynamic(() => import("./pdf-reader").then((m) => m.PdfReader), {
+  ssr: false,
+  loading: () => (
+    <div className="bg-tint flex h-full items-center justify-center">
+      <Spinner />
+    </div>
+  ),
+});
 
 /* --------------------------------------------------------------------------
    "Read a sample" — the button on the book page, and the reader it opens.
@@ -128,22 +144,17 @@ export function BookPreview({
               </Button>
             </div>
 
-            {/* `min-h-0` so the iframe is bounded by the panel and scrolls
+            {/* `min-h-0` so the reader is bounded by the panel and scrolls
                 inside itself — without it a flex child sized by its content
                 pushes the header off the top of a short viewport. */}
-            <div className="relative min-h-0 flex-1">
-              {/* An <iframe> rather than <embed>/<object>: it is the one of the
-                  three that reliably falls back to *nothing* rather than to a
-                  broken plugin box, which is what makes the message underneath
-                  worth printing. iOS Safari renders only the first page of a
-                  PDF in a frame and will not scroll it — hence the
-                  open-in-a-new-tab link below, which is the whole sample on
-                  every browser and is not a consolation prize. */}
-              <iframe
-                src={pdfUrl}
-                title={`${t("book.preview.title")} — ${bookTitle}`}
-                className="absolute inset-0 h-full w-full"
-              />
+            <div className="min-h-0 flex-1">
+              {/* Was an <iframe src={pdfUrl}>, which asks the browser to supply
+                  a PDF viewer. Desktop browsers ship one and phones do not:
+                  Android Chrome left the frame blank and iOS Safari showed page
+                  one and refused to scroll, so the sample was legible on the
+                  devices least likely to be buying from it. PdfReader draws the
+                  pages itself, which is the same picture everywhere. */}
+              <PdfReader url={pdfUrl} className="h-full w-full" />
             </div>
 
             <div className="border-rule flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3.5">
