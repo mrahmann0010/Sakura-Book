@@ -224,6 +224,9 @@
     "missing": "Please fill in {{fields}}.",
     "errorSummary": "Check the fields marked below, then place the order again.",
     "submitError": "Something went wrong placing your order. Please try again.",
+    "transactionIdReusedLead": "This payment is already on an order.",
+    "transactionIdReused": "Transaction ID already used for order {{orderNumber}}. If that order is yours, there is nothing more to pay — otherwise send a new payment and enter the transaction ID from it.",
+    "transactionIdReusedTrack": "Track that order",
     "verify": {
       "verifying": {
         "title": "Verifying your payment",
@@ -430,9 +433,7 @@
       },
       "refunds": {
         "title": "4. Cancellations & Refunds",
-        "body": [
-          "Cancellations, returns, and refunds are handled under our Refund Policy."
-        ]
+        "body": ["Cancellations, returns, and refunds are handled under our Refund Policy."]
       },
       "conduct": {
         "title": "5. Fair Use",
