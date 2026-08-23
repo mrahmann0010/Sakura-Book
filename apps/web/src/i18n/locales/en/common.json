@@ -390,7 +390,9 @@
       "cookies": {
         "title": "6. Cookies & Tracking",
         "body": [
-          "We currently do not use advertising pixels or analytics tools to track users. Essential cookies may be used for the basic operation and security of the website."
+          "Essential cookies are used for the basic operation and security of the website.",
+          "We also use Google Analytics to understand how visitors find and move through the shop — which pages are opened, which books are looked at, and roughly which country a visit came from. Google sets cookies on your device for this and processes the data on our behalf.",
+          "We do not use advertising pixels, and we never send Google your name, email address, phone number, delivery address or order details. You can opt out using Google's browser add-on or by blocking cookies in your browser; the shop works normally either way."
         ]
       },
       "security": {

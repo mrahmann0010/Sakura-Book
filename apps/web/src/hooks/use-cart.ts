@@ -4,6 +4,7 @@ import type { CartItem, CartQuoteRejection } from "@sakura/contracts";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
+import { trackAddToCart, trackRemoveFromCart } from "@/lib/analytics";
 import { quoteCart } from "@/lib/api/cart";
 import { cartFromQuote, emptyCart, type Cart } from "@/lib/cart";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -46,7 +47,13 @@ export type UseCart = Cart & {
   quoting: boolean;
   /** Entries the server could not price — delisted, unavailable, out of stock. */
   rejected: CartQuoteRejection[];
-  add: (bookId: string, quantity?: number) => void;
+  /**
+   * `item` is for analytics only and never reaches Redux, which owns ids and
+   * quantities and nothing else. A caller that has the book on screen passes
+   * its title and price so the GA4 `add_to_cart` event carries them; one that
+   * does not simply omits it and the event still counts. See trackAddToCart.
+   */
+  add: (bookId: string, quantity?: number, item?: { title?: string; priceCents?: number }) => void;
   remove: (bookId: string) => void;
   setQuantity: (bookId: string, quantity: number) => void;
   clear: () => void;
@@ -92,14 +99,35 @@ export function useCart(region?: string): UseCart {
     entries: items,
     quoting: hydrated && items.length > 0 && isLoading,
     rejected: quote?.rejected ?? [],
+    /* The analytics calls live here rather than in the buttons because this is
+       the only seam every cart mutation passes through — a future control that
+       adds a book gets tracked by existing, instead of by remembering to. */
     add: useCallback(
-      (bookId: string, quantity = 1) => dispatch(addItem({ bookId, quantity })),
+      (bookId: string, quantity = 1, item?: { title?: string; priceCents?: number }) => {
+        dispatch(addItem({ bookId, quantity }));
+        trackAddToCart({ id: bookId, quantity, ...item });
+      },
       [dispatch],
     ),
-    remove: useCallback((bookId: string) => dispatch(removeItem({ bookId })), [dispatch]),
+    remove: useCallback(
+      (bookId: string) => {
+        /* Read before the dispatch: afterwards the line is gone from the quote
+           and there is nothing left to describe what was removed. */
+        const line = cart.lines.find((candidate) => candidate.book.id === bookId);
+        dispatch(removeItem({ bookId }));
+        if (line) trackRemoveFromCart(line);
+      },
+      [cart.lines, dispatch],
+    ),
     setQuantity: useCallback(
-      (bookId: string, quantity: number) => dispatch(setQuantity({ bookId, quantity })),
-      [dispatch],
+      (bookId: string, quantity: number) => {
+        /* The stepper's floor is 1, but a quantity of 0 removes — and a removal
+           is a removal however it was spelled, so it reports as one. */
+        const line = cart.lines.find((candidate) => candidate.book.id === bookId);
+        dispatch(setQuantity({ bookId, quantity }));
+        if (quantity < 1 && line) trackRemoveFromCart(line);
+      },
+      [cart.lines, dispatch],
     ),
     clear: useCallback(() => dispatch(clearCart()), [dispatch]),
   };

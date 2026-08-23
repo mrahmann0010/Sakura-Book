@@ -49,6 +49,11 @@ COPY apps/web apps/web
 # origin baked in as undefined.
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+# G_ANALYTICS is deliberately NOT a build arg. It is served at request time by
+# app/api/analytics-config/route.ts, so setting it on the running container is
+# enough and a rebuild is not — which is the point: the ID can be added, changed
+# or removed from a hosting panel by someone who cannot run a docker build.
 RUN npm run build --workspace @sakura/web
 
 # ---------- runner ----------
