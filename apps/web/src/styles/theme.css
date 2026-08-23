@@ -241,6 +241,10 @@
   /* Base unit is 8px. Tailwind's 0.25rem step means the 8px scale is
      `2 4 6 8 10 14 22 28`; these aliases name them by role. */
   --spacing-gutter: 2.5rem; /* 40 — grid gutter */
+  /* The book grid's gutter at desktop only, where the shelf runs 5 across and
+     40px between cards would spend a third of the row on air. Mobile and
+     tablet keep the 40px above — a 2-up phone row needs the separation. */
+  --spacing-gutter-tight: 1.25rem; /* 20 */
   /* CAUTION: Tailwind builds an `inline-size` utility off this scale, so this
      key makes `inline-block` mean two things at once — `display:inline-block`
      AND `inline-size:3.5rem`. Both compile, the width wins, and any element

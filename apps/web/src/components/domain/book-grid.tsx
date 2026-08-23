@@ -131,7 +131,11 @@ export function BookCardSkeleton({
       <Skeleton
         index={index}
         className={cn(
-          "rounded-control aspect-[2/3] w-full",
+          /* Tracks BookCard's crop at both breakpoints. A skeleton that stays
+             2:3 where the card goes 3:4 hands back a third of the cover's
+             height the moment the real covers land — the shift a placeholder
+             exists to prevent (§9). */
+          "rounded-control aspect-[2/3] w-full lg:aspect-[3/4]",
           mobileRow && "w-[118px] shrink-0 sm:w-full",
         )}
       />

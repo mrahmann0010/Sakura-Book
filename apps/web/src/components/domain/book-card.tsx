@@ -286,6 +286,14 @@ export function BookCard({
           title={book.title}
           author={book.author}
           fallback={book.coverUrl ? "hatch" : "wordmark"}
+          /* 2:3 up to the desktop floor, 3:4 above it. At 5 across, a 2:3 crop
+             makes the card taller than the screenful it sits in and the shelf
+             reads as a column of covers rather than a row. The `cover` utility
+             still owns the crop everywhere else — the cart row, the admin
+             preview, the mobileRow thumbnail — so this is the one context that
+             differs, and it says so at the call site rather than in the
+             utility. */
+          className="lg:aspect-[3/4]"
         />
       </div>
 
