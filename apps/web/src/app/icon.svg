@@ -1,0 +1,18 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="14" fill="#c96442"/>
+  <g fill="none" stroke="#faf9f5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 16c-4-2.5-9-3-14-1.5v24c5-1.5 10-1 14 1.5" />
+    <path d="M32 16c4-2.5 9-3 14-1.5v24c-5-1.5-10-1-14 1.5" />
+    <path d="M32 16v24" />
+  </g>
+  <text
+    x="32"
+    y="56"
+    text-anchor="middle"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="13"
+    font-weight="700"
+    letter-spacing="1"
+    fill="#faf9f5"
+  >NB</text>
+</svg>

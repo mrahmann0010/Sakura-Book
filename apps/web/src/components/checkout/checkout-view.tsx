@@ -356,14 +356,21 @@ export function CheckoutView({ locale }: { locale: Locale }) {
       <StickyBar
         label={t("cart.summary.total")}
         value={total}
-        /* The same rows the desktop rail draws, from the same derivation — so
-           the delivery line the shopper reads at the bottom of a phone is the
-           one the rail would have shown them, pending label and all, and the
-           total above the button is only a figure once there is a division to
-           price it against. */
-        breakdown={rows.map((row) => (
-          <SummaryRow key={row.key} label={row.label} value={row.value} tone={row.tone} />
-        ))}
+        /* The same rows the desktop rail draws, from the same derivation — but
+           only on the payment step. On a phone the docked bar sits on top of
+           whatever is being typed, and three extra rows plus a hairline left
+           the address form almost no room to work in. There is also nothing
+           to read yet: delivery has no figure until a division is chosen, so
+           on the delivery step the breakdown costs a third of the screen to
+           say "not known". By the payment step it is priced, and it is the
+           figure being typed into a banking app. */
+        breakdown={
+          step === "payment"
+            ? rows.map((row) => (
+                <SummaryRow key={row.key} label={row.label} value={row.value} tone={row.tone} />
+              ))
+            : undefined
+        }
         action={primaryAction}
       />
 

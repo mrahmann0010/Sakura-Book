@@ -12,7 +12,9 @@ import {
   adminOrderVerifyPaymentResultSchema,
   adminPaymentNumbersSchema,
   adminRecordRefundRequestSchema,
+  adminRegionSchema,
   adminSessionSchema,
+  adminShippingTermsSchema,
   adminUploadResultSchema,
   dashboardSchema,
   monthlyReportSchema,
@@ -31,11 +33,16 @@ import {
   type AdminOrderVerifyPaymentResult,
   type AdminPaymentNumbers,
   type AdminRecordRefundRequest,
+  type AdminRegion,
+  type AdminRegionCreate,
+  type AdminRegionUpdate,
   type AdminSession,
+  type AdminShippingTerms,
   type AdminUploadResult,
   type Dashboard,
   type MonthlyReport,
   type PaymentNumbersUpdate,
+  type ShippingTermsUpdate,
 } from "@sakura/contracts";
 import { z } from "zod";
 
@@ -344,6 +351,49 @@ export function updateAdminPaymentNumbers(
   return adminFetch("/admin/settings/payments", adminPaymentNumbersSchema, {
     method: "PATCH",
     body: changes,
+  });
+}
+
+/* --------------------------------------------------------------------------
+   Shipping settings — the flat rate, the free-delivery threshold, the
+   division the shop currently ships from, and the per-region rate overrides
+   that price relative to it (see originDivision on ShippingTerms).
+   -------------------------------------------------------------------------- */
+
+export function getAdminShippingTerms(): Promise<AdminShippingTerms> {
+  return adminFetch("/admin/settings/shipping", adminShippingTermsSchema);
+}
+
+export function updateAdminShippingTerms(
+  changes: ShippingTermsUpdate,
+): Promise<AdminShippingTerms> {
+  return adminFetch("/admin/settings/shipping", adminShippingTermsSchema, {
+    method: "PATCH",
+    body: changes,
+  });
+}
+
+export function listAdminRegions(): Promise<AdminRegion[]> {
+  return adminFetch("/admin/settings/regions", z.array(adminRegionSchema));
+}
+
+export function createAdminRegion(input: AdminRegionCreate): Promise<AdminRegion> {
+  return adminFetch("/admin/settings/regions", adminRegionSchema, { method: "POST", body: input });
+}
+
+export function updateAdminRegion(
+  slug: string,
+  changes: AdminRegionUpdate,
+): Promise<AdminRegion> {
+  return adminFetch(`/admin/settings/regions/${encodeURIComponent(slug)}`, adminRegionSchema, {
+    method: "PATCH",
+    body: changes,
+  });
+}
+
+export function deactivateAdminRegion(slug: string): Promise<AdminRegion> {
+  return adminFetch(`/admin/settings/regions/${encodeURIComponent(slug)}`, adminRegionSchema, {
+    method: "DELETE",
   });
 }
 
