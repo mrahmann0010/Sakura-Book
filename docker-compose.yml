@@ -49,11 +49,25 @@ services:
       API_INTERNAL_URL: http://api:4000
     volumes:
       - ./apps/web:/app/apps/web
-      # Mounted so edits to the shared contracts land in the container; turbo's
-      # dev task rebuilds its dist before Next starts.
+      # Mounted so edits to the shared contracts land in the container; the dev
+      # command rebuilds its dist before Next starts.
       - ./packages/contracts:/app/packages/contracts
-      - /app/node_modules
-      - /app/apps/web/.next
+      # Named, not anonymous. An anonymous volume is created from the image on
+      # first run and then carried forward by Compose across every `up` and
+      # every rebuild — so a dependency added later never appears, and the
+      # container crash-loops on a module the image demonstrably contains
+      # (this is what happened to pdfjs-dist). Named volumes fail the same way,
+      # but they are visible in `docker volume ls` and `down -v` clears them by
+      # name, which turns a mystery into a one-line fix. After changing any
+      # dependency: `docker compose down -v && docker compose up --build`.
+      - web_root_modules:/app/node_modules
+      # The two bind mounts above shadow the container's per-workspace
+      # node_modules. npm does not hoist everything — @hookform/resolvers lands
+      # in apps/web/node_modules — so without these the mount hides packages the
+      # install put there and Next fails to resolve them.
+      - web_app_modules:/app/apps/web/node_modules
+      - web_contracts_modules:/app/packages/contracts/node_modules
+      - web_next_cache:/app/apps/web/.next
     # Optional: only enforced when the api service is actually running, i.e.
     # under --profile backend. Plain `docker compose up` still starts web alone.
     depends_on:
@@ -78,8 +92,10 @@ services:
     volumes:
       - ./apps/api:/app/apps/api
       - ./packages/contracts:/app/packages/contracts
-      - /app/node_modules
-      - /app/apps/api/node_modules
+      # Named for the same reason as the web service's — see the note there.
+      - api_root_modules:/app/node_modules
+      - api_app_modules:/app/apps/api/node_modules
+      - api_contracts_modules:/app/packages/contracts/node_modules
     healthcheck:
       # Liveness, not readiness — a Postgres blip must not mark the API
       # unhealthy. See apps/api/src/health/health.controller.ts.
@@ -90,3 +106,19 @@ services:
       start_period: 40s
       retries: 3
 
+# Declared rather than left anonymous so `docker volume ls` shows what is
+# holding a stale dependency tree and `docker compose down -v` can clear it.
+#
+# web and api keep separate module volumes on purpose. Each dev image now
+# installs only its own workspace (see the --workspace flags in the two
+# Dockerfile.dev files), so the two /app/node_modules trees are genuinely
+# different — sharing one would give whichever service started second the
+# other's dependencies.
+volumes:
+  web_root_modules:
+  web_app_modules:
+  web_contracts_modules:
+  web_next_cache:
+  api_root_modules:
+  api_app_modules:
+  api_contracts_modules:
