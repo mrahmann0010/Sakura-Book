@@ -63,6 +63,12 @@ export function CheckoutView({ locale }: { locale: Locale }) {
 
   const [placedOrder, setPlacedOrder] = useState<{ id: string; email: string } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  /* Held apart from `submitError` because this one refusal has somewhere to
+     send the shopper. The order number is the whole point: the usual cause of
+     a reused transaction ID is not fraud but someone who believes their first
+     order failed, and the useful answer is a link to it rather than a
+     sentence saying no. */
+  const [reusedForOrder, setReusedForOrder] = useState<string | null>(null);
   const [verification, setVerification] = useState<PaymentVerificationStatus | null>(null);
   /* Holds the just-placed order between the modal resolving and the shopper
      clicking "See order info" — the modal's result is the only thing on
@@ -170,6 +176,7 @@ export function CheckoutView({ locale }: { locale: Locale }) {
 
   async function placeOrder(values: CheckoutValues) {
     setSubmitError(null);
+    setReusedForOrder(null);
     setVerification("verifying");
 
     try {
@@ -186,7 +193,17 @@ export function CheckoutView({ locale }: { locale: Locale }) {
       setVerification(order.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");
     } catch (err) {
       setVerification(null);
-      setSubmitError(err instanceof ApiError ? err.message : t("checkout.submitError"));
+
+      /* The one API refusal with its own copy. Everything else falls through
+         to the server's message, which is staff-facing English — acceptable
+         for the rare failures, wrong for the one a shopper hits by honest
+         mistake and reads in Bengali. */
+      const claimedBy = reusedOrderNumberOf(err);
+
+      setReusedForOrder(claimedBy);
+      setSubmitError(
+        claimedBy ? null : err instanceof ApiError ? err.message : t("checkout.submitError"),
+      );
     }
   }
 
@@ -414,6 +431,21 @@ export function CheckoutView({ locale }: { locale: Locale }) {
 
             {submitError ? <Notice tone="error">{submitError}</Notice> : null}
 
+            {/* The lead carries the state, the body says what it means, and
+                the link is the way out — this refusal is the one where the
+                shopper most likely already has what they came for. */}
+            {reusedForOrder ? (
+              <Notice tone="error" lead={t("checkout.transactionIdReusedLead")}>
+                {t("checkout.transactionIdReused", { orderNumber: reusedForOrder })}{" "}
+                <Link
+                  href={path.order(reusedForOrder)}
+                  className="text-clay hover:text-clay-deep font-semibold"
+                >
+                  {t("checkout.transactionIdReusedTrack")}
+                </Link>
+              </Notice>
+            ) : null}
+
             <div className="hidden lg:block">
               {primaryAction}
               {step === "payment" ? (
@@ -464,6 +496,24 @@ export function CheckoutView({ locale }: { locale: Locale }) {
       <PaymentVerificationModal status={verification} onSeeOrder={seeOrder} />
     </>
   );
+}
+
+/**
+ * The order number holding this transaction ID, if that is why the checkout
+ * was refused. Null for every other failure.
+ *
+ * Both halves are checked — the code *and* a usable order number in details —
+ * because the copy this drives is built around linking to that order. A
+ * TRANSACTION_ID_ALREADY_USED that somehow arrived without one would render a
+ * sentence with a hole in it and a link to nowhere; falling back to the
+ * server's own message is worse English but honest.
+ */
+function reusedOrderNumberOf(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.code !== "TRANSACTION_ID_ALREADY_USED") return null;
+
+  const claimedBy = error.body?.details?.claimedBy;
+
+  return typeof claimedBy === "string" && claimedBy ? claimedBy : null;
 }
 
 function CheckoutSkeleton() {
