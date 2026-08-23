@@ -54,6 +54,13 @@ export const shopSettings = pgTable(
      */
     originDivision: text("origin_division"),
 
+    /** Receiving number shown at checkout. Null → BKASH_NUMBER from the environment. */
+    bkashNumber: text("bkash_number"),
+    /** Receiving number shown at checkout. Null → ROCKET_NUMBER from the environment. */
+    rocketNumber: text("rocket_number"),
+    /** Receiving number shown at checkout. Null → NAGAD_NUMBER from the environment. */
+    nagadNumber: text("nagad_number"),
+
     /**
      * Who last saved, and when.
      *

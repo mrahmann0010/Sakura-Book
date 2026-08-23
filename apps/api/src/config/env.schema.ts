@@ -124,6 +124,17 @@ export const envSchema = z.object({
   WAREHOUSE_DIVISION: z.string().trim().min(1).default("dhaka"),
 
   /**
+   * Fallbacks for `shop_settings.{bkash,rocket,nagad}_number` — the numbers
+   * shown at checkout for manual mobile-money transfers, until staff save an
+   * override from Payment Settings. Server-side only (not `NEXT_PUBLIC_*`):
+   * the frontend now reads these from the API, not the browser bundle, which
+   * is what makes them admin-editable without a redeploy.
+   */
+  BKASH_NUMBER: z.string().trim().min(1).default("01700000000"),
+  ROCKET_NUMBER: z.string().trim().min(1).default("01700000000"),
+  NAGAD_NUMBER: z.string().trim().min(1).default("01700000000"),
+
+  /**
    * Connection string for the Redis that docker compose already provisions.
    *
    * Optional, and the throttler falls back to per-instance in-memory counters

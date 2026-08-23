@@ -10,6 +10,7 @@ import {
   adminOrderListSchema,
   adminOrderTransitionRequestSchema,
   adminOrderVerifyPaymentResultSchema,
+  adminPaymentNumbersSchema,
   adminRecordRefundRequestSchema,
   adminSessionSchema,
   adminUploadResultSchema,
@@ -28,11 +29,13 @@ import {
   type AdminOrderQuery,
   type AdminOrderTransitionRequest,
   type AdminOrderVerifyPaymentResult,
+  type AdminPaymentNumbers,
   type AdminRecordRefundRequest,
   type AdminSession,
   type AdminUploadResult,
   type Dashboard,
   type MonthlyReport,
+  type PaymentNumbersUpdate,
 } from "@sakura/contracts";
 import { z } from "zod";
 
@@ -240,6 +243,23 @@ export function getAdminMonthlyReport(month: string): Promise<MonthlyReport> {
     `/admin/dashboard/report?month=${encodeURIComponent(month)}`,
     monthlyReportSchema,
   );
+}
+
+/* --------------------------------------------------------------------------
+   Payment settings.
+   -------------------------------------------------------------------------- */
+
+export function getAdminPaymentNumbers(): Promise<AdminPaymentNumbers> {
+  return adminFetch("/admin/settings/payments", adminPaymentNumbersSchema);
+}
+
+export function updateAdminPaymentNumbers(
+  changes: PaymentNumbersUpdate,
+): Promise<AdminPaymentNumbers> {
+  return adminFetch("/admin/settings/payments", adminPaymentNumbersSchema, {
+    method: "PATCH",
+    body: changes,
+  });
 }
 
 /* --------------------------------------------------------------------------

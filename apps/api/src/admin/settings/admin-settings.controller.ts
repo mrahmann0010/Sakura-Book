@@ -3,7 +3,9 @@ import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   adminRegionCreateSchema,
   adminRegionUpdateSchema,
+  paymentNumbersUpdateSchema,
   shippingTermsUpdateSchema,
+  type AdminPaymentNumbers,
   type AdminRegion,
   type AdminShippingTerms,
   type UnitsSoldReport,
@@ -18,6 +20,7 @@ import { AdminSettingsService } from "./admin-settings.service";
 class ShippingTermsUpdateDto extends createZodDto(shippingTermsUpdateSchema) {}
 class AdminRegionCreateDto extends createZodDto(adminRegionCreateSchema) {}
 class AdminRegionUpdateDto extends createZodDto(adminRegionUpdateSchema) {}
+class PaymentNumbersUpdateDto extends createZodDto(paymentNumbersUpdateSchema) {}
 
 /**
  * Shop policy and maintenance.
@@ -59,6 +62,29 @@ export class AdminSettingsController {
     @Req() request: Request,
   ): Promise<AdminShippingTerms> {
     return this.settingsService.updateShippingTerms(body, contextOf(admin, request));
+  }
+
+  @Get("payments")
+  @ApiOperation({ summary: "bKash/Rocket/Nagad numbers, and whether they come from the DB or the environment." })
+  async paymentNumbers(): Promise<AdminPaymentNumbers> {
+    return this.settingsService.paymentNumbers();
+  }
+
+  /**
+   * Change the mobile-money receiving numbers. PATCH with partial semantics,
+   * same reasoning as updateShippingTerms: saving one wallet's number must not
+   * silently promote whichever value the form happened to have loaded for the
+   * other two.
+   */
+  @Patch("payments")
+  @Roles("ADMIN")
+  @ApiOperation({ summary: "Change the bKash/Rocket/Nagad numbers shown at checkout." })
+  async updatePaymentNumbers(
+    @Body() body: PaymentNumbersUpdateDto,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminPaymentNumbers> {
+    return this.settingsService.updatePaymentNumbers(body, contextOf(admin, request));
   }
 
   @Get("regions")

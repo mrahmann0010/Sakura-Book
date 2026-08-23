@@ -33,7 +33,7 @@ export type { EmptyStateProps } from "./empty-state";
 export { HowItWorks } from "./how-it-works";
 export type { HowItWorksProps, HowItWorksStage } from "./how-it-works";
 
-export { MobileMoneyPayment, mobileMoneyProviders } from "./mobile-money-payment";
+export { MobileMoneyPayment } from "./mobile-money-payment";
 export type { MobileMoneyProviderId } from "./mobile-money-payment";
 
 export { ProofPoints } from "./proof-points";

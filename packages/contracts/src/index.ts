@@ -30,3 +30,4 @@ export * from "./admin-settings";
 export * from "./admin-dashboard";
 export * from "./admin-book";
 export * from "./payment-verification";
+export * from "./payment-numbers";

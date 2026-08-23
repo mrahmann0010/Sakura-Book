@@ -127,6 +127,13 @@
       "when": 1787429261693,
       "tag": "0017_add_order_payment_provider",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787468962261,
+      "tag": "0018_rich_sunset_bain",
+      "breakpoints": true
     }
   ]
 }

@@ -1,14 +1,17 @@
 import { Injectable } from "@nestjs/common";
 import type {
+  AdminPaymentNumbers,
   AdminRegion,
   AdminRegionCreate,
   AdminRegionUpdate,
   AdminShippingTerms,
+  PaymentNumbersUpdate,
   ShippingTermsUpdate,
   UnitsSoldReport,
 } from "@sakura/contracts";
 import { DbService } from "../../db/db.service";
 import { UnitsSoldReconciler } from "../../inventory";
+import { PaymentNumbersService } from "../../payments";
 import { RegionsService, ShippingTermsService } from "../../shipping";
 import { AuditService } from "../../audit";
 import type { AdminContext } from "../orders";
@@ -34,12 +37,57 @@ export class AdminSettingsService {
     private readonly dbService: DbService,
     private readonly shippingTermsService: ShippingTermsService,
     private readonly regionsService: RegionsService,
+    private readonly paymentNumbersService: PaymentNumbersService,
     private readonly reconciler: UnitsSoldReconciler,
     private readonly auditService: AuditService,
   ) {}
 
   async shippingTerms(): Promise<AdminShippingTerms> {
     return this.shippingTermsService.describe();
+  }
+
+  async paymentNumbers(): Promise<AdminPaymentNumbers> {
+    return this.paymentNumbersService.describe();
+  }
+
+  /**
+   * Change the mobile-money receiving numbers. Same shape as
+   * updateShippingTerms: `before` is the effective numbers, not the stored
+   * row, so the first edit's audit entry records what checkout actually
+   * showed customers rather than a set of nulls.
+   */
+  async updatePaymentNumbers(
+    changes: PaymentNumbersUpdate,
+    context: AdminContext,
+  ): Promise<AdminPaymentNumbers> {
+    const before = await this.paymentNumbersService.describe();
+
+    await this.dbService.db.transaction(async (tx) => {
+      await this.paymentNumbersService.update(
+        changes,
+        { id: context.actor.sub, email: context.actor.email },
+        tx,
+      );
+
+      await this.auditService.record(
+        {
+          ...auditActor(context),
+          action: "UPDATE",
+          entityType: "shop_settings",
+          entityId: "payment_numbers",
+          before: {
+            bkashNumber: before.bkashNumber,
+            rocketNumber: before.rocketNumber,
+            nagadNumber: before.nagadNumber,
+            source: before.source,
+          },
+          after: { ...changes },
+        },
+        tx,
+      );
+    });
+
+    return this.paymentNumbersService.describe();
   }
 
   /**

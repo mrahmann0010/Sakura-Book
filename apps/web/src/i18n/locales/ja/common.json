@@ -193,8 +193,6 @@
       "mobileMoneyMeta": "手動振込",
       "sendTo": "この{{provider}}番号へ合計額を送金してください",
       "sendToHint": "{{provider}}アプリを開いて送金し、完了したらこちらに戻ってください。",
-      "editNumber": "番号を編集",
-      "save": "保存",
       "completeTransaction": "送金完了",
       "verifyHint": "送金内容の詳細をご入力ください。",
       "reference": "参照番号（任意）",

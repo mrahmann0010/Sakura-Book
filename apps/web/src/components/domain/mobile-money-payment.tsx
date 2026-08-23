@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import type { FieldErrors, UseFormRegister, UseFormSetValue } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
-import type { PaymentProvider } from "@sakura/contracts";
+import type { PaymentNumbers, PaymentProvider } from "@sakura/contracts";
 import { PaymentOption, PaymentOptionList } from "@/components/domain";
 import { Button, CopyButton, Input } from "@/components/ui";
+import { getPaymentNumbers } from "@/lib/api/payments";
 import type { CheckoutValues } from "@/lib/checkout";
-import { input, paymentOption } from "@/lib/variants";
+import { paymentOption } from "@/lib/variants";
 import { cn } from "@/lib/utils";
 
 /* --------------------------------------------------------------------------
@@ -19,8 +21,9 @@ import { cn } from "@/lib/utils";
    out of band in their own banking app, so the control's job is to walk
    them through that hand-off in order —
      1. pick a provider,
-     2. get the number to send to (with one-tap copy — editable, since there
-        is no admin panel yet for these numbers),
+     2. get the number to send to (one-tap copy; read-only — this is the
+        number verification runs against, so it must not be editable in the
+        browser),
      3. say "I've sent it" to reveal the fields that prove it, and
      4. submit.
    Each provider gets its own local `phase`, keyed off which one is selected,
@@ -41,19 +44,34 @@ import { cn } from "@/lib/utils";
    -------------------------------------------------------------------------- */
 
 /**
- * Placeholders until real numbers land in env — always non-empty, so the
- * copy/edit affordances always have something to work with.
- *
+ * Placeholders shown for the instant before `getPaymentNumbers` resolves —
+ * always non-empty, so the copy affordance always has something to work
+ * with. Never what a customer actually sends money to: `useQuery` below
+ * replaces these with the numbers Payment Settings has saved (or the
+ * environment's, if nobody has) before the "complete transaction" button is
+ * reachable.
+ */
+const placeholderNumbers: PaymentNumbers = {
+  bkashNumber: "01712-345678",
+  rocketNumber: "01812-345678",
+  nagadNumber: "01912-345678",
+};
+
+/**
  * `id` is `PaymentProvider` from @sakura/contracts, not a locally invented
  * union: it is the same value that travels to the API as `customer.provider`
  * and lands in `orders.provider`, and the SMS gateway files receipts under
  * exactly these three collection names.
  */
-export const mobileMoneyProviders: readonly { id: PaymentProvider; number: string }[] = [
-  { id: "bkash", number: process.env.NEXT_PUBLIC_BKASH_NUMBER || "01712-345678" },
-  { id: "rocket", number: process.env.NEXT_PUBLIC_ROCKET_NUMBER || "01812-345678" },
-  { id: "nagad", number: process.env.NEXT_PUBLIC_NAGAD_NUMBER || "01912-345678" },
-];
+function providersFrom(
+  numbers: PaymentNumbers,
+): readonly { id: PaymentProvider; number: string }[] {
+  return [
+    { id: "bkash", number: numbers.bkashNumber },
+    { id: "rocket", number: numbers.rocketNumber },
+    { id: "nagad", number: numbers.nagadNumber },
+  ];
+}
 
 export type MobileMoneyProviderId = PaymentProvider;
 
@@ -80,6 +98,13 @@ export function MobileMoneyPayment({
 }) {
   const { t } = useTranslation();
   const [phase, setPhase] = useState<Phase>("pay");
+
+  const { data: numbers } = useQuery({
+    queryKey: ["payment-numbers"],
+    queryFn: getPaymentNumbers,
+    staleTime: 5 * 60 * 1000,
+  });
+  const mobileMoneyProviders = providersFrom(numbers ?? placeholderNumbers);
 
   function selectProvider(id: MobileMoneyProviderId) {
     if (id !== provider) setPhase("pay");
@@ -128,11 +153,6 @@ export function MobileMoneyPayment({
   );
 }
 
-/**
- * One provider's card. Its own component (rather than inline in the `.map`
- * above) because it owns a hook — `useStoredNumber` — and hooks can't live
- * inside a loop body, only at a component's top level.
- */
 function ProviderOption({
   entry,
   checked,
@@ -143,7 +163,7 @@ function ProviderOption({
   register,
   errors,
 }: {
-  entry: (typeof mobileMoneyProviders)[number];
+  entry: { id: PaymentProvider; number: string };
   checked: boolean;
   phase: Phase;
   onSelect: () => void;
@@ -153,7 +173,6 @@ function ProviderOption({
   errors: FieldErrors<CheckoutValues>;
 }) {
   const { t } = useTranslation();
-  const [number, setNumber] = useStoredNumber(entry.id, entry.number);
   const label = t(`checkout.payment.${entry.id}`);
 
   return (
@@ -167,12 +186,7 @@ function ProviderOption({
       fields={
         checked ? (
           phase === "pay" ? (
-            <SendMoneyStep
-              number={number}
-              onNumberChange={setNumber}
-              providerLabel={label}
-              onSent={onSent}
-            />
+            <SendMoneyStep number={entry.number} providerLabel={label} onSent={onSent} />
           ) : (
             <VerifyStep register={register} errors={errors} onBack={onBack} />
           )
@@ -182,66 +196,16 @@ function ProviderOption({
   );
 }
 
-/**
- * Persists an editable override for a provider's receiving number in
- * localStorage, keyed by provider id. A stopgap for not having an admin
- * panel yet: whoever runs the shop can correct a wrong number from the
- * checkout page itself, and it sticks in that browser from then on.
- *
- * `useSyncExternalStore` rather than state-plus-effect: localStorage is an
- * external store, and reading it is exactly what the hook exists for — the
- * server snapshot (`fallback`) and the client snapshot (`fallback`, then the
- * stored override once mounted) never disagree at hydration time, since the
- * client snapshot function only touches `window` after mount.
- */
-const storedNumberListeners = new Set<() => void>();
-
-function subscribeToStoredNumbers(callback: () => void) {
-  storedNumberListeners.add(callback);
-  return () => storedNumberListeners.delete(callback);
-}
-
-function useStoredNumber(id: string, fallback: string) {
-  const key = `sakura:payment-number:${id}`;
-  const value = useSyncExternalStore(
-    subscribeToStoredNumbers,
-    () => window.localStorage.getItem(key) ?? fallback,
-    () => fallback,
-  );
-
-  function update(next: string) {
-    window.localStorage.setItem(key, next);
-    storedNumberListeners.forEach((notify) => notify());
-  }
-
-  return [value, update] as const;
-}
-
 function SendMoneyStep({
   number,
-  onNumberChange,
   providerLabel,
   onSent,
 }: {
   number: string;
-  onNumberChange: (next: string) => void;
   providerLabel: string;
   onSent: () => void;
 }) {
   const { t } = useTranslation();
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(number);
-
-  function startEditing() {
-    setDraft(number);
-    setEditing(true);
-  }
-
-  function save() {
-    const trimmed = draft.trim();
-    if (trimmed) onNumberChange(trimmed);
-    setEditing(false);
-  }
 
   return (
     <div className={cn(paymentOption({ selected: false }), "bg-tint border-none px-4 py-3.5")}>
@@ -250,50 +214,10 @@ function SendMoneyStep({
       </p>
 
       <div className="mt-2 flex items-center justify-between gap-3">
-        {editing ? (
-          <input
-            autoFocus
-            inputMode="tel"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                save();
-              }
-              if (event.key === "Escape") setEditing(false);
-            }}
-            className={cn(input({ state: "filled" }), "font-mono text-13.5")}
-          />
-        ) : (
-          <span className="text-body text-ink font-mono font-semibold tracking-wide">
-            {number}
-          </span>
-        )}
+        <span className="text-body text-ink font-mono font-semibold tracking-wide">{number}</span>
 
         <div className="flex shrink-0 items-center gap-3">
-          {editing ? (
-            <button
-              type="button"
-              onClick={save}
-              className="text-caption text-clay hover:text-clay-deep font-semibold"
-            >
-              {t("checkout.payment.save")}
-            </button>
-          ) : (
-            <>
-              <CopyButton value={number} />
-              <button
-                type="button"
-                onClick={startEditing}
-                aria-label={t("checkout.payment.editNumber")}
-                title={t("checkout.payment.editNumber")}
-                className="text-secondary hover:text-ink inline-flex"
-              >
-                <PencilIcon />
-              </button>
-            </>
-          )}
+          <CopyButton value={number} />
         </div>
       </div>
 
@@ -354,19 +278,5 @@ function VerifyStep({
         </button>
       </div>
     </div>
-  );
-}
-
-function PencilIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path
-        d="M13.5 3.5l3 3L6 17H3v-3L13.5 3.5z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }

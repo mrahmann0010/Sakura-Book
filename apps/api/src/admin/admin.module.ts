@@ -6,7 +6,7 @@ import { randomBytes } from "node:crypto";
 import type { Env } from "../config/env.schema";
 import { InventoryModule } from "../inventory";
 import { OrdersModule } from "../orders";
-import { PaymentsModule } from "../payments";
+import { PaymentNumbersModule, PaymentsModule } from "../payments";
 import { ShippingModule } from "../shipping";
 import { StorageModule } from "../storage";
 import { AdminAuthController } from "./auth/admin-auth.controller";
@@ -50,6 +50,7 @@ import { AdminSettingsController, AdminSettingsService } from "./settings";
      */
     OrdersModule,
     PaymentsModule,
+    PaymentNumbersModule,
     ShippingModule,
     InventoryModule,
     StorageModule,
