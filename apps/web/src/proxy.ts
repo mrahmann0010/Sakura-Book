@@ -15,7 +15,9 @@ import { defaultLocale, locales } from "@/i18n/settings";
 export const LOCALE_HEADER = "x-locale";
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|icon.svg|robots.txt|sitemap.xml).*)",
+  ],
 };
 
 export function proxy(request: NextRequest) {
