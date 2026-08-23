@@ -129,10 +129,10 @@
     "rejectedNotice_other": "আপনার কার্টের {{count}}টি বই আর পাওয়া যাচ্ছে না, তাই বাদ দেওয়া হয়েছে।",
     "summary": {
       "title": "সারসংক্ষেপ",
-      "subtotal_one": "উপমোট · {{count}}টি বই",
-      "subtotal_other": "উপমোট · {{count}}টি বই",
+      "subtotal_one": "{{count}}টি বইয়ের মূল্য",
+      "subtotal_other": "{{count}}টি বইয়ের মূল্য",
       "delivery": "ডেলিভারি",
-      "deliveryPending": "বিভাগ বাছুন",
+      "deliveryPending": "বিভাগ নির্বাচনের পর",
       "deliveryFree": "{{threshold}}-এর বেশি হলে ফ্রি",
       "total": "মোট",
       "totalPending": "—",
