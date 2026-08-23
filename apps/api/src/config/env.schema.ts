@@ -305,6 +305,27 @@ export const envSchema = z.object({
 
   /** Bucket the uploads above are written to. Must be public — see StorageService. */
   SUPABASE_STORAGE_BUCKET: z.string().min(1).default("book-assets"),
+
+  /**
+   * Brevo (formerly Sendinblue) transactional API key.
+   *
+   * Optional, and its absence is a closed door rather than an open one, same
+   * shape as PAYMENTS_WEBHOOK_SECRET: with no key configured, EmailService logs
+   * and skips instead of sending. An order confirming is never allowed to fail
+   * because a marketing tool is unreachable, so this must never be "silently
+   * pretend it sent".
+   */
+  EMAIL_SERVICE: z.string().min(1).optional(),
+
+  /**
+   * The address transactional email is sent from. Must be a sender Brevo has
+   * verified for this account — an unverified `from` is rejected by their API,
+   * not silently delivered. Only meaningful alongside EMAIL_SERVICE.
+   */
+  EMAIL_FROM_ADDRESS: z.string().email().optional(),
+
+  /** Display name on the `from` header. */
+  EMAIL_FROM_NAME: z.string().trim().min(1).default("Nihonova Books"),
 });
 
 /**

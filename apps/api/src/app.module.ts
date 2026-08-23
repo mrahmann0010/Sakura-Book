@@ -8,6 +8,7 @@ import { CatalogModule } from "./catalog";
 import { CouponsModule } from "./coupons";
 import { AuditModule } from "./audit";
 import { DbModule } from "./db/db.module";
+import { EmailModule } from "./email";
 import { PaymentVerificationModule } from "./payment-verification";
 import { HealthModule } from "./health/health.module";
 import { InventoryModule } from "./inventory";
@@ -37,6 +38,7 @@ import { ShippingModule } from "./shipping";
     DbModule,
     AuditModule,
     PaymentVerificationModule,
+    EmailModule,
 
     CatalogModule,
     CouponsModule,
