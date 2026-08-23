@@ -1,13 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import type { FieldErrors, UseFormRegister, UseFormSetValue } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
 import type { PaymentNumbers, PaymentProvider } from "@sakura/contracts";
 import { PaymentOption, PaymentOptionList } from "@/components/domain";
-import { Button, CopyButton, Input } from "@/components/ui";
+import { CopyButton, Input } from "@/components/ui";
 import { getPaymentNumbers } from "@/lib/api/payments";
 import type { CheckoutValues } from "@/lib/checkout";
 import { paymentOption } from "@/lib/variants";
@@ -19,16 +18,17 @@ import { cn } from "@/lib/utils";
 
    There is no gateway behind any of these three: the customer sends money
    out of band in their own banking app, so the control's job is to walk
-   them through that hand-off in order —
+   them through that hand-off —
      1. pick a provider,
      2. get the number to send to (one-tap copy; read-only — this is the
         number verification runs against, so it must not be editable in the
-        browser),
-     3. say "I've sent it" to reveal the fields that prove it, and
-     4. submit.
-   Each provider gets its own local `phase`, keyed off which one is selected,
-   so switching providers mid-flow always restarts at step 2 rather than
-   showing stale verification fields for a different number.
+        browser), and
+     3. fill in the fields that prove the transfer happened.
+   The number and the proof-of-transfer fields show together as soon as a
+   provider is picked — this control has no submit button of its own. It is
+   one step inside the checkout page's payment step, which ends in the page's
+   single "Place order" submit, so a second submit here would just be a
+   second button doing the same job.
 
    Once a provider is picked the other two unmount: past step 1 they are only
    noise, and a stray click on one would throw away whatever has been typed
@@ -48,8 +48,7 @@ import { cn } from "@/lib/utils";
  * always non-empty, so the copy affordance always has something to work
  * with. Never what a customer actually sends money to: `useQuery` below
  * replaces these with the numbers Payment Settings has saved (or the
- * environment's, if nobody has) before the "complete transaction" button is
- * reachable.
+ * environment's, if nobody has) before a provider can be picked.
  */
 const placeholderNumbers: PaymentNumbers = {
   bkashNumber: "01712-345678",
@@ -75,8 +74,6 @@ function providersFrom(
 
 export type MobileMoneyProviderId = PaymentProvider;
 
-type Phase = "pay" | "verify";
-
 export function MobileMoneyPayment({
   register,
   setValue,
@@ -97,7 +94,6 @@ export function MobileMoneyPayment({
   className?: string;
 }) {
   const { t } = useTranslation();
-  const [phase, setPhase] = useState<Phase>("pay");
 
   const { data: numbers } = useQuery({
     queryKey: ["payment-numbers"],
@@ -107,13 +103,11 @@ export function MobileMoneyPayment({
   const mobileMoneyProviders = providersFrom(numbers ?? placeholderNumbers);
 
   function selectProvider(id: MobileMoneyProviderId) {
-    if (id !== provider) setPhase("pay");
     setValue("provider", id, { shouldValidate: true, shouldDirty: true });
     onProviderChange(id);
   }
 
   function clearProvider() {
-    setPhase("pay");
     setValue("provider", undefined, { shouldValidate: true, shouldDirty: true });
     onProviderChange(null);
   }
@@ -130,10 +124,7 @@ export function MobileMoneyPayment({
             key={entry.id}
             entry={entry}
             checked={provider === entry.id}
-            phase={phase}
             onSelect={() => selectProvider(entry.id)}
-            onSent={() => setPhase("verify")}
-            onBack={() => setPhase("pay")}
             register={register}
             errors={errors}
           />
@@ -156,19 +147,13 @@ export function MobileMoneyPayment({
 function ProviderOption({
   entry,
   checked,
-  phase,
   onSelect,
-  onSent,
-  onBack,
   register,
   errors,
 }: {
   entry: { id: PaymentProvider; number: string };
   checked: boolean;
-  phase: Phase;
   onSelect: () => void;
-  onSent: () => void;
-  onBack: () => void;
   register: UseFormRegister<CheckoutValues>;
   errors: FieldErrors<CheckoutValues>;
 }) {
@@ -185,25 +170,28 @@ function ProviderOption({
       meta={t("checkout.payment.mobileMoneyMeta")}
       fields={
         checked ? (
-          phase === "pay" ? (
-            <SendMoneyStep number={entry.number} providerLabel={label} onSent={onSent} />
-          ) : (
-            <VerifyStep register={register} errors={errors} onBack={onBack} />
-          )
+          <TransferDetails
+            number={entry.number}
+            providerLabel={label}
+            register={register}
+            errors={errors}
+          />
         ) : undefined
       }
     />
   );
 }
 
-function SendMoneyStep({
+function TransferDetails({
   number,
   providerLabel,
-  onSent,
+  register,
+  errors,
 }: {
   number: string;
   providerLabel: string;
-  onSent: () => void;
+  register: UseFormRegister<CheckoutValues>;
+  errors: FieldErrors<CheckoutValues>;
 }) {
   const { t } = useTranslation();
 
@@ -225,29 +213,9 @@ function SendMoneyStep({
         {t("checkout.payment.sendToHint", { provider: providerLabel })}
       </p>
 
-      <Button type="button" size="sm" className="mt-3.5" onClick={onSent}>
-        {t("checkout.payment.completeTransaction")}
-      </Button>
-    </div>
-  );
-}
+      <p className="text-caption text-secondary mt-3.5">{t("checkout.payment.verifyHint")}</p>
 
-function VerifyStep({
-  register,
-  errors,
-  onBack,
-}: {
-  register: UseFormRegister<CheckoutValues>;
-  errors: FieldErrors<CheckoutValues>;
-  onBack: () => void;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <div className="flex flex-col gap-3.5">
-      <p className="text-caption text-secondary">{t("checkout.payment.verifyHint")}</p>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Input
           label={t("checkout.payment.senderNumber")}
           inputMode="tel"
@@ -262,23 +230,11 @@ function VerifyStep({
       </div>
 
       <Input
+        className="mt-3"
         label={t("checkout.payment.reference")}
         error={errors.notes?.message}
         {...register("notes")}
       />
-
-      <div className="flex items-center gap-3">
-        <Button type="submit" size="sm">
-          {t("checkout.payment.completeOrder")}
-        </Button>
-        <button
-          type="button"
-          onClick={onBack}
-          className="text-caption text-secondary hover:text-ink underline underline-offset-2"
-        >
-          {t("checkout.payment.back")}
-        </button>
-      </div>
     </div>
   );
 }

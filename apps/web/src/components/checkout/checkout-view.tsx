@@ -65,17 +65,29 @@ export function CheckoutView({ locale }: { locale: Locale }) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [verification, setVerification] = useState<PaymentVerificationStatus | null>(null);
 
+  const [step, setStep] = useState<"delivery" | "payment">("delivery");
+
   const {
     control,
     register,
     handleSubmit,
     setValue,
+    trigger,
     formState: { errors, isSubmitting, isSubmitted, isValid },
   } = useForm<CheckoutValues>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: checkoutDefaults,
     mode: "onBlur",
   });
+
+  /* Only the delivery fields — `region` is derived from the address picker
+     rather than typed, so it validates along with the rest of the address
+     but never blocks Next on its own before a division is chosen. */
+  const deliveryFields = ["fullName", "email", "phone", "address", "city", "region"] as const;
+
+  async function goToPayment() {
+    if (await trigger(deliveryFields)) setStep("payment");
+  }
 
   /* useWatch rather than `watch()`: watch returns a fresh function each render,
      which opts the whole component out of the React Compiler's memoisation. */
@@ -196,20 +208,27 @@ export function CheckoutView({ locale }: { locale: Locale }) {
     </Link>
   );
 
-  /* One submit button node, placed in the form on desktop and in the docked bar
-     on mobile. `form="checkout"` lets the mobile copy live outside the <form>
-     and still submit it. */
-  const submitAction = (
-    <Button
-      type="submit"
-      form="checkout"
-      block
-      loading={isSubmitting}
-      loadingLabel={t("checkout.placing")}
-    >
-      {t("checkout.place")}
-    </Button>
-  );
+  /* One primary action node, placed in the form on desktop and in the docked
+     bar on mobile. `form="checkout"` lets the mobile copy live outside the
+     <form> and still submit it. On the delivery step this is "Next" (advances
+     local step state, no submit); on the payment step it becomes the one real
+     submit button for the whole order. */
+  const primaryAction =
+    step === "delivery" ? (
+      <Button type="button" block onClick={goToPayment}>
+        {t("checkout.next")}
+      </Button>
+    ) : (
+      <Button
+        type="submit"
+        form="checkout"
+        block
+        loading={isSubmitting}
+        loadingLabel={t("checkout.placing")}
+      >
+        {t("checkout.place")}
+      </Button>
+    );
 
   return (
     <>
@@ -271,17 +290,31 @@ export function CheckoutView({ locale }: { locale: Locale }) {
             onSubmit={handleSubmit(placeOrder)}
             className="mt-9 flex flex-col gap-10"
           >
-            <ShippingFields register={register} errors={errors} setValue={setValue} />
+            <div className={step === "delivery" ? undefined : "hidden"}>
+              <ShippingFields register={register} errors={errors} setValue={setValue} />
+            </div>
 
-            <PaymentSection
-              register={register}
-              setValue={setValue}
-              errors={errors}
-              method={method}
-              onMethodChange={(next) =>
-                setValue("method", next, { shouldValidate: true, shouldDirty: true })
-              }
-            />
+            {step === "payment" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setStep("delivery")}
+                  className="text-caption text-secondary hover:text-ink -mt-6 underline underline-offset-2"
+                >
+                  {t("checkout.back")}
+                </button>
+
+                <PaymentSection
+                  register={register}
+                  setValue={setValue}
+                  errors={errors}
+                  method={method}
+                  onMethodChange={(next) =>
+                    setValue("method", next, { shouldValidate: true, shouldDirty: true })
+                  }
+                />
+              </>
+            ) : null}
 
             {/* Errors are already stated under each field; this only points at
                 them, and only once a submit has actually failed. */}
@@ -292,14 +325,16 @@ export function CheckoutView({ locale }: { locale: Locale }) {
             {submitError ? <Notice tone="error">{submitError}</Notice> : null}
 
             <div className="hidden lg:block">
-              {submitAction}
-              <p className="text-caption text-secondary mt-2.5">{t("checkout.reassurance")}</p>
+              {primaryAction}
+              {step === "payment" ? (
+                <p className="text-caption text-secondary mt-2.5">{t("checkout.reassurance")}</p>
+              ) : null}
             </div>
           </form>
         </RailLayout>
       </Shell>
 
-      <StickyBar label={t("cart.summary.total")} value={total} action={submitAction} />
+      <StickyBar label={t("cart.summary.total")} value={total} action={primaryAction} />
 
       <PaymentVerificationModal status={verification} />
     </>
