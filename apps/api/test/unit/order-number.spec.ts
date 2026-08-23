@@ -5,7 +5,7 @@ import { ORDER_NUMBER_PREFIX, generateOrderNumber } from "../../src/orders/order
  * The customer-facing order id.
  *
  * The format is a promise made in the confirmation copy — "eight characters,
- * like MG-40718" — and in the design system's `OrderId` component, so it is
+ * like NB-40718" — and in the design system's `OrderId` component, so it is
  * pinned here rather than left to be discovered when a nine-character number
  * overflows a printed layout.
  */
@@ -20,7 +20,7 @@ describe("generateOrderNumber", () => {
   });
 
   it("never emits a leading-zero number that would read as shorter", () => {
-    // The lower bound is 10000, not 0: `MG-04718` is eight characters but
+    // The lower bound is 10000, not 0: `NB-04718` is eight characters but
     // reads as a typo over the phone, and a customer dropping the zero would
     // look up a different, real order.
     for (let index = 0; index < 200; index += 1) {

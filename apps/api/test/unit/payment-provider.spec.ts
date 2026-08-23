@@ -17,13 +17,13 @@ function sign(body: string, secret = SECRET): string {
   return createHmac("sha256", secret).update(Buffer.from(body, "utf8")).digest("hex");
 }
 
-const context = { orderNumber: "MG-40718", totalCents: 145000, currency: "BDT" };
+const context = { orderNumber: "NB-40718", totalCents: 145000, currency: "BDT" };
 
 describe("CashOnDeliveryProvider", () => {
   const provider = new CashOnDeliveryProvider();
 
   it("needs nothing from the customer at checkout", () => {
-    expect(provider.initiate(context)).toEqual({ referenceId: "MG-40718", action: "none" });
+    expect(provider.initiate(context)).toEqual({ referenceId: "NB-40718", action: "none" });
   });
 
   it("refuses webhooks outright", () => {
@@ -35,13 +35,13 @@ describe("CashOnDeliveryProvider", () => {
 
 describe("ManualTransferProvider.verifyWebhook", () => {
   const provider = new ManualTransferProvider(configWith(SECRET));
-  const body = JSON.stringify({ reference: "MG-40718", status: "SUCCEEDED", amountCents: 145000 });
+  const body = JSON.stringify({ reference: "NB-40718", status: "SUCCEEDED", amountCents: 145000 });
 
   it("accepts a correctly signed payload", () => {
     const event = provider.verifyWebhook(Buffer.from(body), { "x-signature": sign(body) });
 
     expect(event).toMatchObject({
-      referenceId: "MG-40718",
+      referenceId: "NB-40718",
       status: "SUCCEEDED",
       amountCents: 145000,
     });
@@ -49,7 +49,7 @@ describe("ManualTransferProvider.verifyWebhook", () => {
 
   it("rejects a tampered payload under a valid-looking signature", () => {
     const tampered = JSON.stringify({
-      reference: "MG-40718",
+      reference: "NB-40718",
       status: "SUCCEEDED",
       amountCents: 1,
     });
@@ -82,7 +82,7 @@ describe("ManualTransferProvider.verifyWebhook", () => {
   });
 
   it("treats anything that is not an explicit success as a failure", () => {
-    const odd = JSON.stringify({ reference: "MG-40718", status: "succeeded", amountCents: 145000 });
+    const odd = JSON.stringify({ reference: "NB-40718", status: "succeeded", amountCents: 145000 });
 
     expect(provider.verifyWebhook(Buffer.from(odd), { "x-signature": sign(odd) }).status).toBe(
       "FAILED",

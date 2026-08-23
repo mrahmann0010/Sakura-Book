@@ -127,12 +127,12 @@ export default function Playground() {
 
         <Row label="Input · Select">
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            <Input label="Default" placeholder="Order ID, e.g. MG-40718" />
-            <Input label="Filled" state="filled" defaultValue="MG-40718" />
+            <Input label="Default" placeholder="Order ID, e.g. NB-40718" />
+            <Input label="Filled" state="filled" defaultValue="NB-40718" />
             <Input
               label="Error"
-              defaultValue="MG-407"
-              error="Order IDs are eight characters, like MG-40718."
+              defaultValue="NB-407"
+              error="Order IDs are eight characters, like NB-40718."
             />
             <Input label="Disabled" disabled defaultValue="Locked after payment" />
             <Select
@@ -228,7 +228,7 @@ export default function Playground() {
           <div className="grid gap-10 lg:grid-cols-3">
             <div className="flex flex-col gap-5">
               <Card>
-                <CardTitle>Order MG-40718</CardTitle>
+                <CardTitle>Order NB-40718</CardTitle>
                 <p className="text-13 text-secondary mt-2.5">Placed 3 August 2026</p>
                 <CardDivider />
                 <div className="text-13.5 flex justify-between">
@@ -284,7 +284,7 @@ export default function Playground() {
                 Check the card number and try again.
               </Notice>
               <div className="flex items-center gap-4">
-                <OrderId>MG-40718</OrderId>
+                <OrderId>NB-40718</OrderId>
                 <Wordmark />
               </div>
             </div>

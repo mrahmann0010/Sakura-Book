@@ -86,7 +86,7 @@ export function TrackOrderView() {
       <form onSubmit={(event) => void handleSubmit(event)} className="mt-8 flex flex-col gap-5">
         <Input
           label="Order ID"
-          placeholder="e.g. MG-40718"
+          placeholder="e.g. NB-40718"
           value={orderId}
           onChange={(event) => setOrderId(event.target.value)}
         />

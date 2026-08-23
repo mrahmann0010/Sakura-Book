@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 
 /**
- * The customer-facing order id: `MG-40718`. Eight characters, as the
+ * The customer-facing order id: `NB-40718`. Eight characters, as the
  * confirmation copy promises and `draftOrderId()` in the web app mocks.
  *
  * Random, not sequential, and that is a security property rather than a
@@ -16,7 +16,7 @@ import { randomInt } from "node:crypto";
  * `randomInt` from node:crypto rather than Math.random: the whole point is
  * unpredictability, and Math.random's output is a documented non-guarantee.
  */
-export const ORDER_NUMBER_PREFIX = "MG";
+export const ORDER_NUMBER_PREFIX = "NB";
 
 export function generateOrderNumber(): string {
   return `${ORDER_NUMBER_PREFIX}-${randomInt(10000, 100000)}`;

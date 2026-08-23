@@ -69,7 +69,7 @@ describe("adminOrderFilters", () => {
 
   it("builds a constraint once any filter is present", () => {
     expect(adminOrderFilters(query({ status: "PENDING" }))).toBeDefined();
-    expect(adminOrderFilters(query({ q: "MG-40718" }))).toBeDefined();
+    expect(adminOrderFilters(query({ q: "NB-40718" }))).toBeDefined();
     expect(adminOrderFilters(query({ paymentMethod: "cash-on-delivery" }))).toBeDefined();
   });
 
@@ -82,7 +82,7 @@ describe("adminOrderFilters", () => {
   it("escapes an underscore, which would otherwise match any character", () => {
     // Anchored to the start for the order number, since it is typed in whole
     // off a printed confirmation — and carrying the escape either way.
-    expect(render(adminOrderFilters(query({ q: "MG_40718" }))).params).toContain("MG\\_40718%");
+    expect(render(adminOrderFilters(query({ q: "NB_40718" }))).params).toContain("NB\\_40718%");
   });
 
   it("includes the whole of the last day in a date range", () => {

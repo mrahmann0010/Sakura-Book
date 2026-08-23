@@ -15,7 +15,7 @@ import {
  * an error anyone notices.
  */
 function event(from: OrderStatus, to: OrderStatus) {
-  return { orderId: "o", orderNumber: "MG-40718", from, to };
+  return { orderId: "o", orderNumber: "NB-40718", from, to };
 }
 
 describe("directionFor", () => {

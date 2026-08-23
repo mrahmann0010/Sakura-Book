@@ -19,7 +19,7 @@ import type { OrderStatusChangedEvent } from "../../src/orders/order.events";
  * These tests are the thing standing between that and a code review.
  */
 const event = (from: string, to: string): OrderStatusChangedEvent =>
-  ({ orderId: "o", orderNumber: "MG-1", from, to }) as OrderStatusChangedEvent;
+  ({ orderId: "o", orderNumber: "NB-1", from, to }) as OrderStatusChangedEvent;
 
 describe("units_sold counted statuses", () => {
   it("names only statuses the lifecycle actually has", () => {

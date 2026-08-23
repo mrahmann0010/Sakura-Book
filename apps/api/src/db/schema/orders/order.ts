@@ -35,7 +35,7 @@ export const orders = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
 
     /**
-     * The human-quotable id: eight characters, "MG-40718", exactly as the
+     * The human-quotable id: eight characters, "NB-40718", exactly as the
      * confirmation copy promises and the design system's `OrderId` renders.
      *
      * A separate column rather than a formatted view of `id`, because it has to
