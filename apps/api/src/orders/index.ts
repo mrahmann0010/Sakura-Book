@@ -6,6 +6,10 @@
  * end up being written.
  */
 export { OrdersModule } from "./orders.module";
+// OrdersHttpModule is deliberately not re-exported here: it imports
+// PaymentsModule, and PaymentsModule imports this barrel for OrdersModule.
+// Re-exporting it too would turn that into a circular import at the file
+// level. Import it directly from "./orders/orders-http.module" instead.
 export { CheckoutService } from "./checkout.service";
 export { OrdersService } from "./orders.service";
 export { toOrderResponse, type OrderRow } from "./order.mapper";

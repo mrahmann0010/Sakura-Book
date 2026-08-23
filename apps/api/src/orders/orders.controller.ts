@@ -6,6 +6,7 @@ import { createZodDto } from "nestjs-zod";
 import { StrictThrottle } from "../common/throttling/strict-throttle.decorator";
 import { z } from "zod";
 import { CheckoutService } from "./checkout.service";
+import { OrderAutoVerifyService } from "./order-auto-verify.service";
 
 class PlaceOrderDto extends createZodDto(placeOrderRequestSchema) {}
 
@@ -27,7 +28,10 @@ const idempotencyKeySchema = z
 @ApiTags("orders")
 @Controller("orders")
 export class OrdersController {
-  constructor(private readonly checkoutService: CheckoutService) {}
+  constructor(
+    private readonly checkoutService: CheckoutService,
+    private readonly autoVerifyService: OrderAutoVerifyService,
+  ) {}
 
   /**
    * Place an order.
@@ -59,11 +63,16 @@ export class OrdersController {
     const key = idempotencyKeySchema.parse(idempotencyKey);
     const { order, created } = await this.checkoutService.placeOrder(body, key);
 
+    // Only for the request that actually created the order — a replay's
+    // order already settled at whatever status its original request left it
+    // at, and re-checking on every retry buys nothing but Mongo load.
+    const settled = created ? await this.autoVerifyService.tryAutoConfirm(order) : order;
+
     // `passthrough` so Nest still serialises the return value; only the status
     // is taken over. Setting it here rather than with @HttpCode because the
     // code is a fact about what happened, not about the route.
     response.status(created ? 201 : 200);
 
-    return order;
+    return settled;
   }
 }

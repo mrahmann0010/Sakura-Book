@@ -5,7 +5,6 @@ import { PricingModule } from "../pricing";
 import { ShippingModule } from "../shipping";
 import { CheckoutService } from "./checkout.service";
 import { GuestOrdersController } from "./guest-orders.controller";
-import { OrdersController } from "./orders.controller";
 import { OrdersService } from "./orders.service";
 
 /**
@@ -18,7 +17,7 @@ import { OrdersService } from "./orders.service";
  */
 @Module({
   imports: [PricingModule, InventoryModule, CouponsModule, ShippingModule],
-  controllers: [OrdersController, GuestOrdersController],
+  controllers: [GuestOrdersController],
   providers: [CheckoutService, OrdersService],
   exports: [CheckoutService, OrdersService],
 })

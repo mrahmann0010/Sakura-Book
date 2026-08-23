@@ -222,6 +222,21 @@
     "placing": "Placing order",
     "errorSummary": "Check the fields marked below, then place the order again.",
     "submitError": "Something went wrong placing your order. Please try again.",
+    "verify": {
+      "verifying": {
+        "title": "Verifying your payment",
+        "description": "We're checking your transaction ID against the payment we received.",
+        "hint": "This takes a few seconds…"
+      },
+      "verified": {
+        "title": "Payment verified",
+        "description": "Your transaction was matched. Your order is confirmed."
+      },
+      "unverified": {
+        "title": "We couldn't verify it yet",
+        "description": "Your order is placed. Our team will check the payment by hand and confirm it shortly — no action is needed from you."
+      }
+    },
     "empty": {
       "eyebrow": "Checkout",
       "title": "There is nothing to check out",

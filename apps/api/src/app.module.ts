@@ -12,6 +12,7 @@ import { PaymentVerificationModule } from "./payment-verification";
 import { HealthModule } from "./health/health.module";
 import { InventoryModule } from "./inventory";
 import { OrdersModule } from "./orders";
+import { OrdersHttpModule } from "./orders/orders-http.module";
 import { PaymentsModule } from "./payments";
 import { PricingModule } from "./pricing";
 import { ShippingModule } from "./shipping";
@@ -39,6 +40,10 @@ import { ShippingModule } from "./shipping";
     PricingModule,
     OrdersModule,
     PaymentsModule,
+    // Above both: the checkout route needs order placement and payment
+    // confirmation together, and neither of those modules is allowed to
+    // depend on the other. See OrdersHttpModule's own comment.
+    OrdersHttpModule,
 
     /**
      * Last of the bounded contexts, because admin reads and writes all of

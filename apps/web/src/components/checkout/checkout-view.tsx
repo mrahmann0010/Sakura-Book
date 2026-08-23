@@ -31,7 +31,20 @@ import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 
 import { PaymentSection } from "./payment-section";
+import {
+  PaymentVerificationModal,
+  type PaymentVerificationStatus,
+} from "./payment-verification-modal";
 import { ShippingFields } from "./shipping-fields";
+
+/** How long the "verified" / "unverified" result stays on screen before the
+    confirmation page takes over — long enough to read, short enough that it
+    never feels like an extra step the shopper has to click through. */
+const VERIFICATION_RESULT_DISPLAY_MS = 1500;
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /* --------------------------------------------------------------------------
    The checkout page's one job: say where the books go and how they are paid
@@ -50,6 +63,7 @@ export function CheckoutView({ locale }: { locale: Locale }) {
 
   const [placedOrder, setPlacedOrder] = useState<{ id: string; email: string } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [verification, setVerification] = useState<PaymentVerificationStatus | null>(null);
 
   const {
     control,
@@ -74,15 +88,26 @@ export function CheckoutView({ locale }: { locale: Locale }) {
 
   async function placeOrder(values: CheckoutValues) {
     setSubmitError(null);
+    setVerification("verifying");
 
     try {
       const order = await placeOrderRequest(
         { items: cart.entries, customer: values },
         crypto.randomUUID(),
       );
+
+      /* The auto-verify check already ran server-side, inside the same
+         request — a manual-transfer order comes back PAYMENT_CONFIRMED when
+         the transaction was matched against the gateway, PENDING otherwise.
+         This is just reading that result, not triggering a second check. */
+      setVerification(order.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");
+      await wait(VERIFICATION_RESULT_DISPLAY_MS);
+
+      setVerification(null);
       setPlacedOrder({ id: order.orderNumber, email: values.email });
       cart.clear();
     } catch (err) {
+      setVerification(null);
       setSubmitError(
         err instanceof ApiError ? err.message : t("checkout.submitError"),
       );
@@ -275,6 +300,8 @@ export function CheckoutView({ locale }: { locale: Locale }) {
       </Shell>
 
       <StickyBar label={t("cart.summary.total")} value={total} action={submitAction} />
+
+      <PaymentVerificationModal status={verification} />
     </>
   );
 }
