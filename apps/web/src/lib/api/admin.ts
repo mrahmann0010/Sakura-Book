@@ -141,16 +141,31 @@ async function adminFetch<T extends z.ZodTypeAny>(
   schema: T,
   init: { method?: string; body?: unknown } = {},
 ): Promise<z.infer<T>> {
-  const response = await fetch(`${apiOrigin()}${API_PREFIX}${path}`, {
-    method: init.method ?? "GET",
-    credentials: "include",
-    headers: {
-      accept: "application/json",
-      ...(init.body === undefined ? {} : { "content-type": "application/json" }),
-    },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiOrigin()}${API_PREFIX}${path}`, {
+      method: init.method ?? "GET",
+      credentials: "include",
+      headers: {
+        accept: "application/json",
+        ...(init.body === undefined ? {} : { "content-type": "application/json" }),
+      },
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      cache: "no-store",
+    });
+  } catch {
+    /* `fetch` rejects rather than resolving when the request never completes —
+       API down, wrong NEXT_PUBLIC_API_URL, DNS, a dropped connection. That was
+       a bare TypeError escaping to every caller, which is not an AdminApiError,
+       so every one of them showed its own "something went wrong" fallback for
+       the one failure with a completely specific cause. */
+    throw new AdminApiError(
+      0,
+      "Could not reach the API. Check that it is running, then try again.",
+      [],
+      "NETWORK_ERROR",
+    );
+  }
 
   if (!response.ok) {
     let message = `Request failed with ${response.status}`;
@@ -171,8 +186,39 @@ async function adminFetch<T extends z.ZodTypeAny>(
 
   if (response.status === 204) return schema.parse(undefined);
 
-  const payload: unknown = await response.json();
-  return schema.parse(payload);
+  /**
+   * A 2xx whose body does not match the schema is its own failure, and a
+   * dangerous one to report as "it did not work".
+   *
+   * The write succeeded — the book exists — and only reading the reply back
+   * failed. Throwing the raw ZodError sent the caller down its unknown-error
+   * path, which says the save failed, so the operator fills the form in again
+   * and creates a second copy. The code lets the caller say what is actually
+   * true: it probably saved, go and look.
+   */
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new AdminApiError(
+      response.status,
+      "The API answered with something that is not JSON.",
+      [],
+      "RESPONSE_INVALID",
+    );
+  }
+
+  const parsed = schema.safeParse(payload);
+  if (!parsed.success) {
+    throw new AdminApiError(
+      response.status,
+      "The request went through, but the reply was not in the shape this app expects.",
+      [],
+      "RESPONSE_INVALID",
+    );
+  }
+
+  return parsed.data;
 }
 
 /**

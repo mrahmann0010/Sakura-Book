@@ -16,15 +16,22 @@ import { AdminApiError } from "@/lib/api/admin";
 export function FileUpload({
   label,
   accept,
+  /** What the API will take — formats and the size ceiling it enforces. */
+  hint,
   uploadFn,
   onUploaded,
 }: {
   label: string;
   accept: string;
+  hint?: string;
   uploadFn: (file: File) => Promise<{ url: string; fileName?: string }>;
   onUploaded: (result: { url: string; fileName?: string }) => void;
 }) {
   const id = useId();
+  /* One id for whichever message is showing, wired onto the input the way
+     FieldFrame does it for every other field on this form — a hint nobody
+     using a screen reader hears is only half a hint. */
+  const messageId = `${id}-message`;
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Uploading cannot work at all here, as opposed to this file having failed. */
@@ -64,12 +71,29 @@ export function FileUpload({
         id={id}
         type="file"
         accept={accept}
+        aria-describedby={error || hint || uploading ? messageId : undefined}
+        aria-invalid={error ? true : undefined}
         disabled={uploading}
         onChange={(event) => void handleChange(event)}
         className="text-13.5 text-secondary file:rounded-control file:border-rule file:bg-tint file:text-13.5 file:text-ink block w-full file:mr-3 file:border file:px-3 file:py-1.5"
       />
-      {uploading ? <p className="text-13.5 text-muted mt-1">Uploading…</p> : null}
-      {error ? <p className="text-13.5 text-clay-deep mt-1">{error}</p> : null}
+      {/* The hint stands down while there is something more urgent to say, the
+          same way FieldFrame lets an error supersede a hint. */}
+      {hint && !uploading && !error ? (
+        <p id={messageId} className="text-13.5 text-muted mt-1">
+          {hint}
+        </p>
+      ) : null}
+      {uploading ? (
+        <p id={messageId} className="text-13.5 text-muted mt-1">
+          Uploading…
+        </p>
+      ) : null}
+      {error ? (
+        <p id={messageId} className="text-13.5 text-clay-deep mt-1">
+          {error}
+        </p>
+      ) : null}
       {blocked ? (
         <p className="text-13.5 text-secondary mt-1">
           Paste a link into the URL field below instead — the book saves either way.

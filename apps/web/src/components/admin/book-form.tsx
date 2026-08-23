@@ -33,8 +33,9 @@ type FormState = {
   publishedDate: string;
   pageCount: string;
   description: string;
-  priceCents: string;
-  compareAtPriceCents: string;
+  /** Taka as typed — "399", "399.50". Converted to cents on submit. */
+  priceTaka: string;
+  compareAtPriceTaka: string;
   sku: string;
   stockQuantity: string;
   lowStockThreshold: string;
@@ -64,8 +65,8 @@ const emptyForm: FormState = {
   publishedDate: "",
   pageCount: "",
   description: "",
-  priceCents: "",
-  compareAtPriceCents: "",
+  priceTaka: "",
+  compareAtPriceTaka: "",
   sku: "",
   stockQuantity: "0",
   lowStockThreshold: "5",
@@ -98,8 +99,9 @@ function fromDetail(book: AdminBookDetail): FormState {
     publishedDate: book.publishedDate ? book.publishedDate.slice(0, 10) : "",
     pageCount: book.pageCount ? String(book.pageCount) : "",
     description: book.description,
-    priceCents: String(book.priceCents),
-    compareAtPriceCents: book.compareAtPriceCents ? String(book.compareAtPriceCents) : "",
+    priceTaka: takaFromCents(book.priceCents),
+    compareAtPriceTaka:
+      book.compareAtPriceCents === null ? "" : takaFromCents(book.compareAtPriceCents),
     sku: book.sku ?? "",
     stockQuantity: String(book.stockQuantity),
     lowStockThreshold: String(book.lowStockThreshold),
@@ -139,8 +141,8 @@ const FIELD_LABELS: Record<string, string> = {
   publishedDate: "Published date",
   pageCount: "Page count",
   description: "Description",
-  priceCents: "Price (cents)",
-  compareAtPriceCents: "Compare-at price (cents)",
+  priceCents: "Price",
+  compareAtPriceCents: "Compare-at price",
   sku: "SKU",
   stockQuantity: "Stock quantity",
   lowStockThreshold: "Low stock threshold",
@@ -166,6 +168,39 @@ const REQUIRED_CATEGORY_GROUPS: { group: string; label: string }[] = [
   { group: "skill", label: "skill" },
   { group: "level", label: "JLPT level" },
 ];
+
+/* --------------------------------------------------------------------------
+   Money
+
+   The form takes taka; the API, the database and every price on the storefront
+   are minor units. The fields used to be labelled "(cents)" and to pass the
+   number through untouched, which meant typing 399 for a ৳399 book priced it
+   at ৳3.99 — and typing a price and a "was" price in the obvious order made
+   compare-at lower than price, which the schema refuses. Both were the same
+   mistake: asking an operator to do the ×100 in their head.
+
+   The conversion lives here and only here. `priceCents` remains the name on
+   the wire, so nothing downstream changes.
+   -------------------------------------------------------------------------- */
+
+/** "399.5" → 39950. Rounded, because 39950.000000001 is a float artefact. */
+function centsFromTaka(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (trimmed === "") return undefined;
+  const taka = Number(trimmed);
+  return Number.isFinite(taka) ? Math.round(taka * 100) : undefined;
+}
+
+/**
+ * 39950 → "399.5", and 39900 → "399".
+ *
+ * Trailing zeros are dropped so a whole-taka price comes back into the form as
+ * the operator typed it rather than as "399.00", which reads as a value
+ * someone else set.
+ */
+function takaFromCents(cents: number): string {
+  return String(cents / 100);
+}
 
 /** Empty optional string → `undefined`, so a cleared field is omitted rather than sent as `""`. */
 function optional(value: string): string | undefined {
@@ -218,8 +253,8 @@ function humanise(path: string, code: string, message: string): string {
  * "expected int" and cannot say which of the form's boxes that was.
  */
 const INTEGER_FIELDS = new Set([
-  "priceCents",
-  "compareAtPriceCents",
+  /* Not the money fields: those are typed in taka and converted, so a decimal
+     there is expected and `centsFromTaka` makes the result whole. */
   "pageCount",
   "stockQuantity",
   "lowStockThreshold",
@@ -268,8 +303,8 @@ function toRequest(form: FormState): BookFormValues {
     publishedDate: optional(form.publishedDate),
     pageCount: optionalNumber(form.pageCount),
     description: form.description.trim(),
-    priceCents: Number(form.priceCents),
-    compareAtPriceCents: optionalNumber(form.compareAtPriceCents),
+    priceCents: centsFromTaka(form.priceTaka) ?? Number.NaN,
+    compareAtPriceCents: centsFromTaka(form.compareAtPriceTaka),
     sku: optional(form.sku),
     // A coming-soon book is never orderable — the API refuses (and this form
     // never lets you type) a non-zero stock count against it, see `set()`.
@@ -433,27 +468,54 @@ export function BookForm({
       /* Both the local pre-flight parse and the API raise AdminApiError with
          `fields`, so there is one branch here rather than one per source. See
          `validate` in lib/api/admin.ts. */
-      if (err instanceof AdminApiError && err.fields.length > 0) {
+      if (err instanceof AdminApiError && err.code === "RESPONSE_INVALID") {
+        /* The write landed and only the reply was unreadable, so the one thing
+           not to say is "it failed" — that sends the operator back to Save and
+           creates a second copy of the book. */
+        setFieldErrors({});
+        setError(
+          "This may have saved — the API accepted it but replied in an unexpected shape. " +
+            "Check the books list before trying again.",
+        );
+      } else if (err instanceof AdminApiError && err.fields.length > 0) {
         const byPath: Record<string, string> = {};
+        /* Issues with no path are about the request as a whole — a refine
+           across two fields that names neither. They have no input to sit
+           under, so they go to the banner; keying them by "" would render a
+           field error under an empty label. */
+        const general: string[] = [];
+
         for (const field of err.fields) {
           /* First issue per field wins: Zod can report several on one value
              ("expected int" and "too small"), and the first is the one that
              names the immediate problem. `path` is dotted for nested values —
              `galleryImageUrls.0` — so the head is what identifies the input. */
-          const head = field.path.split(".")[0] || field.path;
+          const head = field.path.split(".")[0];
+          if (!head) {
+            general.push(field.message);
+            continue;
+          }
           byPath[head] ??= humanise(head, field.code, field.message);
         }
+
         setFieldErrors(byPath);
-        setError(null);
+        /* Only when nothing could be pinned to a field does the banner carry
+           the general text; otherwise `banner` derives from the field errors
+           and naming them is more useful. */
+        setError(Object.keys(byPath).length === 0 ? general.join(" ") : null);
       } else if (err instanceof AdminApiError) {
-        /* No field detail — a conflict on the slug, an expired session, an
+        /* No field detail — a slug conflict, an expired session, an
            unreachable API. The server's own sentence is the best thing to
            show, and there is nothing to mark up. */
         setFieldErrors({});
         setError(err.message);
       } else {
+        /* Genuinely unexpected now that transport and response failures both
+           arrive as AdminApiError. Logged, because a message this vague is not
+           something anyone can act on without the console. */
+        console.error("Unexpected failure saving a book", err);
         setFieldErrors({});
-        setError("Could not save this book.");
+        setError("Could not save this book — see the browser console for details.");
       }
     } finally {
       setSaving(false);
@@ -465,6 +527,7 @@ export function BookForm({
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Input
           label="Title"
+          hint="Text · required. The URL slug is built from this."
           error={fieldErrors.title}
           required
           value={form.title}
@@ -472,6 +535,7 @@ export function BookForm({
         />
         <Input
           label="Subtitle"
+          hint="Text · optional."
           error={fieldErrors.subtitle}
           value={form.subtitle}
           onChange={(event) => set("subtitle", event.target.value)}
@@ -480,7 +544,7 @@ export function BookForm({
           label="Authors (comma-separated)"
           error={fieldErrors.authorNames}
           required
-          hint="New names are added to the author list automatically."
+          hint="Text, comma-separated · required. New names are added automatically."
           value={form.authorNames}
           onChange={(event) => set("authorNames", event.target.value)}
         />
@@ -488,30 +552,34 @@ export function BookForm({
           label="Publisher"
           error={fieldErrors.publisherName}
           required
-          hint="New names are added automatically."
+          hint="Text · required. New names are added automatically."
           value={form.publisherName}
           onChange={(event) => set("publisherName", event.target.value)}
         />
         <Input
           label="ISBN-10"
+          hint="10 characters · optional."
           error={fieldErrors.isbn10}
           value={form.isbn10}
           onChange={(event) => set("isbn10", event.target.value)}
         />
         <Input
           label="ISBN-13"
+          hint="13 characters · optional."
           error={fieldErrors.isbn13}
           value={form.isbn13}
           onChange={(event) => set("isbn13", event.target.value)}
         />
         <Input
           label="Edition"
+          hint="Text · optional. e.g. First edition."
           error={fieldErrors.edition}
           value={form.edition}
           onChange={(event) => set("edition", event.target.value)}
         />
         <Input
           label="Language"
+          hint="Two-letter code · optional. bn, en or ja. Blank means en."
           error={fieldErrors.language}
           value={form.language}
           onChange={(event) => set("language", event.target.value)}
@@ -522,14 +590,15 @@ export function BookForm({
           type="date"
           hint={
             form.availability === "pre_order"
-              ? "Doubles as the pre-order's expected ship date."
-              : undefined
+              ? "Date · doubles as the pre-order's expected ship date."
+              : "Date · optional."
           }
           value={form.publishedDate}
           onChange={(event) => set("publishedDate", event.target.value)}
         />
         <Input
           label="Page count"
+          hint="Whole number · optional."
           error={fieldErrors.pageCount}
           type="number"
           min={1}
@@ -538,6 +607,7 @@ export function BookForm({
         />
         <Input
           label="Weight (grams)"
+          hint="Whole number · optional. Grams, not kilograms."
           error={fieldErrors.weightGrams}
           type="number"
           min={1}
@@ -548,6 +618,7 @@ export function BookForm({
 
       <Textarea
         label="Description"
+        hint="Text · required. Shown in full on the book page."
         error={fieldErrors.description}
         required
         rows={5}
@@ -560,7 +631,11 @@ export function BookForm({
           <p className="text-caption tracking-eyebrow text-muted mb-2 uppercase">Categories</p>
           {fieldErrors.categorySlugs ? (
             <p className="text-13.5 text-clay-deep mb-2">{fieldErrors.categorySlugs}</p>
-          ) : null}
+          ) : (
+            <p className="text-13.5 text-muted mb-2">
+              Tick boxes · at least one Skill and one JLPT Level are required. Genre is optional.
+            </p>
+          )}
           <div className="flex flex-col gap-4">
             {categoryGroups.map((group) => {
               /* Skill and level are the two the book cannot be saved without,
@@ -608,32 +683,34 @@ export function BookForm({
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Input
-          label="Price (cents)"
+          label="Price (৳)"
+          /* The error is keyed by the wire field, `priceCents`, whatever the
+             label above it says. */
           error={fieldErrors.priceCents}
           type="number"
           required
           min={0}
-          /* Whole cents only. Without a step the browser accepts "12.50" in a
-             field whose label says cents, the schema rejects the fraction, and
-             the save fails on a value that looked perfectly reasonable to type.
-             `step` makes the browser refuse it at the point of entry. */
-          step={1}
-          hint="Whole cents — 1200 is ৳12.00."
-          value={form.priceCents}
-          onChange={(event) => set("priceCents", event.target.value)}
+          /* Two decimal places, because that is what taka has. The field used
+             to be cents at `step={1}`, which is what turned a perfectly
+             reasonable "399" into ৳3.99. */
+          step="0.01"
+          hint="Taka · required. What the customer pays — 399 or 399.50."
+          value={form.priceTaka}
+          onChange={(event) => set("priceTaka", event.target.value)}
         />
         <Input
-          label="Compare-at price (cents)"
+          label="Compare-at price (৳)"
           error={fieldErrors.compareAtPriceCents}
           type="number"
           min={0}
-          step={1}
-          hint="Optional — whole cents, and higher than the price."
-          value={form.compareAtPriceCents}
-          onChange={(event) => set("compareAtPriceCents", event.target.value)}
+          step="0.01"
+          hint="Taka · optional. The struck-through “was” price, so it must be higher than the price above."
+          value={form.compareAtPriceTaka}
+          onChange={(event) => set("compareAtPriceTaka", event.target.value)}
         />
         <Input
           label="SKU"
+          hint="Text · optional. Your own stock code, if you use one."
           error={fieldErrors.sku}
           value={form.sku}
           onChange={(event) => set("sku", event.target.value)}
@@ -643,10 +720,10 @@ export function BookForm({
           error={fieldErrors.availability}
           hint={
             form.availability === "coming_soon"
-              ? "Never orderable — stock is forced to 0."
+              ? "Pick one · never orderable, and stock is forced to 0."
               : form.availability === "pre_order"
-                ? "Buyable now through the normal cart/checkout, ships later."
-                : "A normal, in-stock book."
+                ? "Pick one · buyable now through the normal checkout, ships later."
+                : "Pick one · a normal, in-stock book."
           }
           value={form.availability}
           onChange={(event) => setAvailability(event.target.value as BookAvailability)}
@@ -662,10 +739,13 @@ export function BookForm({
           type="number"
           min={0}
           disabled={form.availability === "coming_soon"}
+          /* The pre-order wording replaces the generic line rather than sitting
+             beside it — one field, one hint, and on a pre-order the print run
+             is the more useful thing to say. */
           hint={
             form.availability === "pre_order"
-              ? "The print run — checkout blocks once this hits 0."
-              : undefined
+              ? "Whole number · the print run. Checkout blocks once this hits 0."
+              : "Whole number · optional. Blank means 0."
           }
           value={form.stockQuantity}
           onChange={(event) => set("stockQuantity", event.target.value)}
@@ -675,7 +755,7 @@ export function BookForm({
           error={fieldErrors.lowStockThreshold}
           type="number"
           min={0}
-          hint="Blank defaults to 5."
+          hint="Whole number · optional. Blank means 5."
           value={form.lowStockThreshold}
           onChange={(event) => set("lowStockThreshold", event.target.value)}
         />
@@ -693,6 +773,7 @@ export function BookForm({
           <FileUpload
             label="Cover image"
             accept="image/jpeg,image/png,image/webp"
+            hint="JPEG, PNG or WebP · up to 8MB. Fills the URL field below."
             uploadFn={uploadAdminCover}
             onUploaded={(result) => set("coverImageUrl", result.url)}
           />
@@ -700,12 +781,13 @@ export function BookForm({
             label="Cover image URL"
             error={fieldErrors.coverImageUrl}
             required
-            hint="Set automatically by the upload above — or paste one directly."
+            hint="URL · required. Set by the upload above, or paste a link."
             value={form.coverImageUrl}
             onChange={(event) => set("coverImageUrl", event.target.value)}
           />
           <Input
             label="Cover image alt text"
+            hint="Text · optional. Describes the cover to a screen reader."
             error={fieldErrors.coverImageAlt}
             value={form.coverImageAlt}
             onChange={(event) => set("coverImageAlt", event.target.value)}
@@ -724,6 +806,7 @@ export function BookForm({
           <FileUpload
             label="Sample PDF"
             accept="application/pdf"
+            hint="PDF · up to 40MB. A sample chapter, not the whole book."
             uploadFn={uploadAdminPdf}
             onUploaded={(result) => {
               set("pdfUrl", result.url);
@@ -733,7 +816,7 @@ export function BookForm({
           <Input
             label="PDF URL"
             error={fieldErrors.pdfUrl}
-            hint="Optional — a sample chapter, not the full book."
+            hint="URL · optional. A sample chapter, not the full book — this is what the Preview button opens."
             value={form.pdfUrl}
             onChange={(event) => set("pdfUrl", event.target.value)}
           />
@@ -757,33 +840,38 @@ export function BookForm({
         </div>
       </section>
 
-      <section className="flex flex-wrap gap-6">
-        <Checkbox
-          checked={form.isActive}
-          onChange={(event) => set("isActive", event.target.checked)}
-        >
-          Active (shown on the storefront)
-        </Checkbox>
-        <Checkbox
-          checked={form.isFeatured}
-          onChange={(event) => set("isFeatured", event.target.checked)}
-        >
-          Featured
-        </Checkbox>
+      <section className="flex flex-col gap-2">
+        <p className="text-13.5 text-muted">
+          Yes/no · Active shows the book on the storefront, Featured marks it for the landing shelf.
+        </p>
+        <div className="flex flex-wrap gap-6">
+          <Checkbox
+            checked={form.isActive}
+            onChange={(event) => set("isActive", event.target.checked)}
+          >
+            Active (shown on the storefront)
+          </Checkbox>
+          <Checkbox
+            checked={form.isFeatured}
+            onChange={(event) => set("isFeatured", event.target.checked)}
+          >
+            Featured
+          </Checkbox>
+        </div>
       </section>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Input
           label="Meta title"
           error={fieldErrors.metaTitle}
-          hint="SEO — leave blank to fall back to the title."
+          hint="Text · optional. Blank falls back to the title."
           value={form.metaTitle}
           onChange={(event) => set("metaTitle", event.target.value)}
         />
         <Input
           label="Meta description"
           error={fieldErrors.metaDescription}
-          hint="SEO — leave blank to fall back to the description."
+          hint="Text · optional. Blank falls back to the description."
           value={form.metaDescription}
           onChange={(event) => set("metaDescription", event.target.value)}
         />
