@@ -39,7 +39,7 @@ import {
 } from "@sakura/contracts";
 import { z } from "zod";
 
-import { isErrorResponse, type ErrorResponse } from "@sakura/contracts";
+import { isErrorResponse, type ErrorResponse, type FieldError } from "@sakura/contracts";
 
 /* --------------------------------------------------------------------------
    Admin API calls — separate from lib/api/client.ts's apiFetch.
@@ -63,11 +63,70 @@ function apiOrigin(): string {
 
 export class AdminApiError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+
+  /**
+   * The envelope's `error.code` — "STORAGE_NOT_CONFIGURED", "CONFLICT",
+   * "SESSION_EXPIRED". Kept so a caller can branch on *which* failure this is
+   * without matching on the prose, which is written to be read and therefore
+   * free to change. Empty string when the body was not our envelope at all (a
+   * proxy's HTML 502, say).
+   */
+  readonly code: string;
+
+  /**
+   * Which fields the server (or the local pre-flight parse) objected to.
+   *
+   * Empty for the errors that are about the request as a whole — a 401, a
+   * conflict, an unreachable API. Non-empty is what lets a form put the
+   * message under the offending input instead of showing one line that says
+   * only that something, somewhere, was wrong.
+   *
+   * The envelope has carried `fields[]` since errors.ts was written and this
+   * class used to drop it on the floor, which is why a failed save could
+   * report "Could not save this book." and nothing else.
+   */
+  readonly fields: FieldError[];
+
+  constructor(status: number, message: string, fields: FieldError[] = [], code = "") {
     super(message);
     this.name = "AdminApiError";
     this.status = status;
+    this.fields = fields;
+    this.code = code;
   }
+}
+
+/**
+ * Validate a request body before sending it, failing the way the server does.
+ *
+ * The pre-flight parse is worth keeping — it catches a bad price without a
+ * round trip — but a raw `ZodError` is not an `AdminApiError`, so every caller
+ * that checked `instanceof AdminApiError` fell through to its own generic
+ * fallback and threw away the one thing the error knew: which field. Both
+ * paths now raise the same type with the same `fields`, so a form needs one
+ * branch rather than two.
+ *
+ * 422 rather than 400: the body was well-formed JSON that failed validation,
+ * which is what the status means, and it keeps this distinguishable from a
+ * transport failure if anything ever switches on the code.
+ */
+function validate<T extends z.ZodTypeAny>(schema: T, request: unknown): z.infer<T> {
+  const result = schema.safeParse(request);
+  if (result.success) return result.data;
+
+  throw new AdminApiError(
+    422,
+    "Some details need fixing before this can be saved.",
+    result.error.issues.map((issue) => ({
+      /* Dotted and array-indexed, matching the server's own `path` format
+         (see toFieldError in global-exception.filter.ts) so a caller can key
+         off one shape whichever side rejected the request. */
+      path: issue.path.join("."),
+      code: issue.code,
+      message: issue.message,
+    })),
+    "VALIDATION_FAILED",
+  );
 }
 
 async function adminFetch<T extends z.ZodTypeAny>(
@@ -88,13 +147,19 @@ async function adminFetch<T extends z.ZodTypeAny>(
 
   if (!response.ok) {
     let message = `Request failed with ${response.status}`;
+    let fields: FieldError[] = [];
+    let code = "";
     try {
       const payload: unknown = await response.json();
-      if (isErrorResponse(payload)) message = (payload as ErrorResponse).error.message;
+      if (isErrorResponse(payload)) {
+        message = (payload as ErrorResponse).error.message;
+        fields = (payload as ErrorResponse).error.fields ?? [];
+        code = (payload as ErrorResponse).error.code;
+      }
     } catch {
       // best-effort — fall back to the generic message above
     }
-    throw new AdminApiError(response.status, message);
+    throw new AdminApiError(response.status, message, fields, code);
   }
 
   if (response.status === 204) return schema.parse(undefined);
@@ -127,20 +192,26 @@ async function adminUpload<T extends z.ZodTypeAny>(
 
   if (!response.ok) {
     let message = `Upload failed with ${response.status}`;
+    let fields: FieldError[] = [];
+    let code = "";
     try {
       const payload: unknown = await response.json();
-      if (isErrorResponse(payload)) message = (payload as ErrorResponse).error.message;
+      if (isErrorResponse(payload)) {
+        message = (payload as ErrorResponse).error.message;
+        fields = (payload as ErrorResponse).error.fields ?? [];
+        code = (payload as ErrorResponse).error.code;
+      }
     } catch {
       // best-effort — fall back to the generic message above
     }
-    throw new AdminApiError(response.status, message);
+    throw new AdminApiError(response.status, message, fields, code);
   }
 
   return schema.parse(await response.json());
 }
 
 export function adminLogin(request: AdminLoginRequest): Promise<AdminSession> {
-  const validated = adminLoginRequestSchema.parse(request);
+  const validated = validate(adminLoginRequestSchema, request);
   return adminFetch("/admin/auth/login", adminSessionSchema, { method: "POST", body: validated });
 }
 
@@ -176,7 +247,9 @@ export function getAdminOrder(orderNumber: string): Promise<AdminOrderDetail> {
   return adminFetch(`/admin/orders/${encodeURIComponent(orderNumber)}`, adminOrderDetailSchema);
 }
 
-export function verifyAdminOrderPayment(orderNumber: string): Promise<AdminOrderVerifyPaymentResult> {
+export function verifyAdminOrderPayment(
+  orderNumber: string,
+): Promise<AdminOrderVerifyPaymentResult> {
   return adminFetch(
     `/admin/orders/${encodeURIComponent(orderNumber)}/verify-payment`,
     adminOrderVerifyPaymentResultSchema,
@@ -188,18 +261,22 @@ export function transitionAdminOrder(
   orderNumber: string,
   request: AdminOrderTransitionRequest,
 ): Promise<AdminOrderDetail> {
-  const validated = adminOrderTransitionRequestSchema.parse(request);
-  return adminFetch(`/admin/orders/${encodeURIComponent(orderNumber)}/transition`, adminOrderDetailSchema, {
-    method: "POST",
-    body: validated,
-  });
+  const validated = validate(adminOrderTransitionRequestSchema, request);
+  return adminFetch(
+    `/admin/orders/${encodeURIComponent(orderNumber)}/transition`,
+    adminOrderDetailSchema,
+    {
+      method: "POST",
+      body: validated,
+    },
+  );
 }
 
 export function confirmAdminOrderPayment(
   orderNumber: string,
   request: AdminConfirmPaymentRequest,
 ): Promise<AdminOrderDetail> {
-  const validated = adminConfirmPaymentRequestSchema.parse(request);
+  const validated = validate(adminConfirmPaymentRequestSchema, request);
   return adminFetch(
     `/admin/orders/${encodeURIComponent(orderNumber)}/payments/confirm`,
     adminOrderDetailSchema,
@@ -211,22 +288,30 @@ export function recordAdminOrderRefund(
   orderNumber: string,
   request: AdminRecordRefundRequest,
 ): Promise<AdminOrderDetail> {
-  const validated = adminRecordRefundRequestSchema.parse(request);
-  return adminFetch(`/admin/orders/${encodeURIComponent(orderNumber)}/refund`, adminOrderDetailSchema, {
-    method: "POST",
-    body: validated,
-  });
+  const validated = validate(adminRecordRefundRequestSchema, request);
+  return adminFetch(
+    `/admin/orders/${encodeURIComponent(orderNumber)}/refund`,
+    adminOrderDetailSchema,
+    {
+      method: "POST",
+      body: validated,
+    },
+  );
 }
 
 export function setAdminOrderNote(
   orderNumber: string,
   request: AdminInternalNoteRequest,
 ): Promise<AdminOrderDetail> {
-  const validated = adminInternalNoteRequestSchema.parse(request);
-  return adminFetch(`/admin/orders/${encodeURIComponent(orderNumber)}/note`, adminOrderDetailSchema, {
-    method: "PATCH",
-    body: validated,
-  });
+  const validated = validate(adminInternalNoteRequestSchema, request);
+  return adminFetch(
+    `/admin/orders/${encodeURIComponent(orderNumber)}/note`,
+    adminOrderDetailSchema,
+    {
+      method: "PATCH",
+      body: validated,
+    },
+  );
 }
 
 /* --------------------------------------------------------------------------
@@ -283,7 +368,7 @@ export function getAdminBook(id: string): Promise<AdminBookDetail> {
 }
 
 export function createAdminBook(request: AdminBookCreateInput): Promise<AdminBookDetail> {
-  const validated = adminBookCreateRequestSchema.parse(request);
+  const validated = validate(adminBookCreateRequestSchema, request);
   return adminFetch("/admin/books", adminBookDetailSchema, { method: "POST", body: validated });
 }
 
@@ -291,7 +376,7 @@ export function updateAdminBook(
   id: string,
   request: AdminBookUpdateInput,
 ): Promise<AdminBookDetail> {
-  const validated = adminBookUpdateRequestSchema.parse(request);
+  const validated = validate(adminBookUpdateRequestSchema, request);
   return adminFetch(`/admin/books/${encodeURIComponent(id)}`, adminBookDetailSchema, {
     method: "PATCH",
     body: validated,

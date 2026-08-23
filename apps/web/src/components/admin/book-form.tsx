@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type {
   AdminBookCreateInput,
   AdminBookDetail,
@@ -118,6 +118,45 @@ function fromDetail(book: AdminBookDetail): FormState {
 }
 
 /**
+ * Request-field name → the label this form puts above it.
+ *
+ * A validation failure arrives keyed by the field in the *request* (`priceCents`,
+ * `authorNames`), which is not what the operator is looking at ("Price (cents)",
+ * "Authors"). Without this the summary would name fields that appear nowhere on
+ * screen. Anything missing from the map falls back to the raw path, which is
+ * still better than the generic message this replaces.
+ */
+const FIELD_LABELS: Record<string, string> = {
+  title: "Title",
+  subtitle: "Subtitle",
+  isbn10: "ISBN-10",
+  isbn13: "ISBN-13",
+  publisherName: "Publisher",
+  authorNames: "Authors",
+  categorySlugs: "Categories",
+  language: "Language",
+  edition: "Edition",
+  publishedDate: "Published date",
+  pageCount: "Page count",
+  description: "Description",
+  priceCents: "Price (cents)",
+  compareAtPriceCents: "Compare-at price (cents)",
+  sku: "SKU",
+  stockQuantity: "Stock quantity",
+  lowStockThreshold: "Low stock threshold",
+  availability: "Availability",
+  weightGrams: "Weight (grams)",
+  coverImageUrl: "Cover image URL",
+  coverImageAlt: "Cover image alt text",
+  galleryImageUrls: "Gallery images",
+  pdfUrl: "PDF URL",
+  pdfFileName: "PDF file name",
+  metaTitle: "Meta title",
+  metaDescription: "Meta description",
+  slug: "Slug",
+};
+
+/**
  * The category groups a book cannot be saved without — the client half of
  * `REQUIRED_CATEGORY_GROUPS` in `admin-books.service.ts`. Checked here so the
  * operator is told which box to tick before a round trip, and there so it
@@ -148,6 +187,68 @@ function optionalNumber(value: string): number | undefined {
   if (trimmed === "") return undefined;
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/**
+ * Turn one field error into something an operator can act on.
+ *
+ * `fieldErrorSchema` calls its `message` "developer-facing English. Clients
+ * translate from `code` + `path`." — so this is that translation. Where the
+ * schema author wrote a real message ("Publisher is required.", "Compare-at
+ * price must be higher than the price.") the code is `custom` or `too_small`
+ * with copy already aimed at a person, and it passes through untouched. What
+ * needs replacing is Zod's structural default: "Invalid input: expected int,
+ * received number" is true and useless in front of a box labelled "Price
+ * (cents)" that someone typed 12.50 into.
+ */
+function humanise(path: string, code: string, message: string): string {
+  if (code === "invalid_type") {
+    if (INTEGER_FIELDS.has(path)) return "Whole numbers only — no decimal point.";
+    return "This does not look like the right kind of value.";
+  }
+  if (code === "invalid_format" && path === "publishedDate") {
+    return "Pick a date, or leave it blank.";
+  }
+  return message;
+}
+
+/**
+ * The fields the schema types as `z.number().int()`, so a decimal reads as a
+ * type error rather than a range one. Listed here because the reply says only
+ * "expected int" and cannot say which of the form's boxes that was.
+ */
+const INTEGER_FIELDS = new Set([
+  "priceCents",
+  "compareAtPriceCents",
+  "pageCount",
+  "stockQuantity",
+  "lowStockThreshold",
+  "weightGrams",
+]);
+
+/**
+ * One line covering everything that needs attention.
+ *
+ * Derived at render time from the field errors rather than stored beside them,
+ * so it cannot say "2 fields need fixing" after one has been corrected — which
+ * it did while the two were separate pieces of state.
+ *
+ * A single problem is stated outright: with one field there is nothing to
+ * disambiguate, and "Categories needs fixing — see the message under it" is
+ * strictly worse than the message. Several become a list of names, because
+ * three full sentences run together in one banner read as a wall.
+ */
+function summarise(byPath: Record<string, string>): string {
+  const entries = Object.entries(byPath);
+  if (entries.length === 0) return "";
+
+  const label = (path: string) => FIELD_LABELS[path] ?? path;
+
+  if (entries.length === 1) {
+    const [path, message] = entries[0];
+    return `${label(path)}: ${message}`;
+  }
+  return `${entries.length} fields need fixing: ${entries.map(([path]) => label(path)).join(", ")}.`;
 }
 
 function toRequest(form: FormState): BookFormValues {
@@ -215,6 +316,9 @@ export function BookForm({
   const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Request-field path → what is wrong with it. Keyed the way the server keys it. */
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   useEffect(() => {
     getCategories()
@@ -225,8 +329,44 @@ export function BookForm({
       });
   }, []);
 
+  /**
+   * Put the cursor on the first rejected field.
+   *
+   * The form is roughly three screens tall and Save is at the bottom, so a
+   * complaint about the Title is out of sight at the moment it appears. The
+   * banner names the field; this goes there. Reads the DOM rather than
+   * threading a ref through every input, because `aria-invalid` is already on
+   * exactly the controls in question and the order it finds them in is the
+   * order they appear on screen.
+   */
+  useEffect(() => {
+    if (Object.keys(fieldErrors).length === 0) return;
+
+    const first = formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
+    /* No `aria-invalid` when the only problem is the category group — nothing
+       there is a single control to focus, and its message sits beside the
+       checkboxes where the eye already is. */
+    if (!first) return;
+
+    first.scrollIntoView({ block: "center", behavior: "smooth" });
+    first.focus({ preventScroll: true });
+  }, [fieldErrors]);
+
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+    /* Clear this field's complaint as soon as it is touched. Leaving it under
+       an input the operator has just rewritten makes a corrected field look
+       still-broken, and they stop trusting the markers. */
+    clearFieldError(key as string);
+  }
+
+  function clearFieldError(path: string) {
+    setFieldErrors((current) => {
+      if (!(path in current)) return current;
+      const next = { ...current };
+      delete next[path];
+      return next;
+    });
   }
 
   /**
@@ -267,41 +407,78 @@ export function BookForm({
     return !known.categories.some((category) => form.categorySlugs.includes(category.slug));
   });
 
+  /**
+   * What the banner says: the field summary when any field was rejected,
+   * otherwise the whole-request message. Recomputed every render, so fixing a
+   * field updates it rather than leaving a count that no longer holds.
+   */
+  const banner = Object.keys(fieldErrors).length > 0 ? summarise(fieldErrors) : error;
+
   async function submit(event: FormEvent) {
     event.preventDefault();
 
     if (missingGroups.length > 0) {
-      setError(`Pick at least one ${missingGroups.map((entry) => entry.label).join(" and one ")}.`);
+      const wanted = missingGroups.map((entry) => entry.label).join(" and one ");
+      setError(null);
+      setFieldErrors({ categorySlugs: `Pick at least one ${wanted}.` });
       return;
     }
 
     setSaving(true);
     setError(null);
+    setFieldErrors({});
     try {
       await onSubmit(toRequest(form));
     } catch (err) {
-      setError(err instanceof AdminApiError ? err.message : "Could not save this book.");
+      /* Both the local pre-flight parse and the API raise AdminApiError with
+         `fields`, so there is one branch here rather than one per source. See
+         `validate` in lib/api/admin.ts. */
+      if (err instanceof AdminApiError && err.fields.length > 0) {
+        const byPath: Record<string, string> = {};
+        for (const field of err.fields) {
+          /* First issue per field wins: Zod can report several on one value
+             ("expected int" and "too small"), and the first is the one that
+             names the immediate problem. `path` is dotted for nested values —
+             `galleryImageUrls.0` — so the head is what identifies the input. */
+          const head = field.path.split(".")[0] || field.path;
+          byPath[head] ??= humanise(head, field.code, field.message);
+        }
+        setFieldErrors(byPath);
+        setError(null);
+      } else if (err instanceof AdminApiError) {
+        /* No field detail — a conflict on the slug, an expired session, an
+           unreachable API. The server's own sentence is the best thing to
+           show, and there is nothing to mark up. */
+        setFieldErrors({});
+        setError(err.message);
+      } else {
+        setFieldErrors({});
+        setError("Could not save this book.");
+      }
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-8">
+    <form ref={formRef} onSubmit={(event) => void submit(event)} className="flex flex-col gap-8">
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Input
           label="Title"
+          error={fieldErrors.title}
           required
           value={form.title}
           onChange={(event) => set("title", event.target.value)}
         />
         <Input
           label="Subtitle"
+          error={fieldErrors.subtitle}
           value={form.subtitle}
           onChange={(event) => set("subtitle", event.target.value)}
         />
         <Input
           label="Authors (comma-separated)"
+          error={fieldErrors.authorNames}
           required
           hint="New names are added to the author list automatically."
           value={form.authorNames}
@@ -309,6 +486,7 @@ export function BookForm({
         />
         <Input
           label="Publisher"
+          error={fieldErrors.publisherName}
           required
           hint="New names are added automatically."
           value={form.publisherName}
@@ -316,26 +494,31 @@ export function BookForm({
         />
         <Input
           label="ISBN-10"
+          error={fieldErrors.isbn10}
           value={form.isbn10}
           onChange={(event) => set("isbn10", event.target.value)}
         />
         <Input
           label="ISBN-13"
+          error={fieldErrors.isbn13}
           value={form.isbn13}
           onChange={(event) => set("isbn13", event.target.value)}
         />
         <Input
           label="Edition"
+          error={fieldErrors.edition}
           value={form.edition}
           onChange={(event) => set("edition", event.target.value)}
         />
         <Input
           label="Language"
+          error={fieldErrors.language}
           value={form.language}
           onChange={(event) => set("language", event.target.value)}
         />
         <Input
           label="Published date"
+          error={fieldErrors.publishedDate}
           type="date"
           hint={
             form.availability === "pre_order"
@@ -347,6 +530,7 @@ export function BookForm({
         />
         <Input
           label="Page count"
+          error={fieldErrors.pageCount}
           type="number"
           min={1}
           value={form.pageCount}
@@ -354,6 +538,7 @@ export function BookForm({
         />
         <Input
           label="Weight (grams)"
+          error={fieldErrors.weightGrams}
           type="number"
           min={1}
           value={form.weightGrams}
@@ -363,6 +548,7 @@ export function BookForm({
 
       <Textarea
         label="Description"
+        error={fieldErrors.description}
         required
         rows={5}
         value={form.description}
@@ -372,6 +558,9 @@ export function BookForm({
       {categoryGroups.length > 0 ? (
         <div>
           <p className="text-caption tracking-eyebrow text-muted mb-2 uppercase">Categories</p>
+          {fieldErrors.categorySlugs ? (
+            <p className="text-13.5 text-clay-deep mb-2">{fieldErrors.categorySlugs}</p>
+          ) : null}
           <div className="flex flex-col gap-4">
             {categoryGroups.map((group) => {
               /* Skill and level are the two the book cannot be saved without,
@@ -420,23 +609,38 @@ export function BookForm({
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Input
           label="Price (cents)"
+          error={fieldErrors.priceCents}
           type="number"
           required
           min={0}
+          /* Whole cents only. Without a step the browser accepts "12.50" in a
+             field whose label says cents, the schema rejects the fraction, and
+             the save fails on a value that looked perfectly reasonable to type.
+             `step` makes the browser refuse it at the point of entry. */
+          step={1}
+          hint="Whole cents — 1200 is ৳12.00."
           value={form.priceCents}
           onChange={(event) => set("priceCents", event.target.value)}
         />
         <Input
           label="Compare-at price (cents)"
+          error={fieldErrors.compareAtPriceCents}
           type="number"
           min={0}
-          hint="Optional — must be higher than the price."
+          step={1}
+          hint="Optional — whole cents, and higher than the price."
           value={form.compareAtPriceCents}
           onChange={(event) => set("compareAtPriceCents", event.target.value)}
         />
-        <Input label="SKU" value={form.sku} onChange={(event) => set("sku", event.target.value)} />
+        <Input
+          label="SKU"
+          error={fieldErrors.sku}
+          value={form.sku}
+          onChange={(event) => set("sku", event.target.value)}
+        />
         <Select
           label="Availability"
+          error={fieldErrors.availability}
           hint={
             form.availability === "coming_soon"
               ? "Never orderable — stock is forced to 0."
@@ -454,6 +658,7 @@ export function BookForm({
         />
         <Input
           label="Stock quantity"
+          error={fieldErrors.stockQuantity}
           type="number"
           min={0}
           disabled={form.availability === "coming_soon"}
@@ -467,6 +672,7 @@ export function BookForm({
         />
         <Input
           label="Low stock threshold"
+          error={fieldErrors.lowStockThreshold}
           type="number"
           min={0}
           hint="Blank defaults to 5."
@@ -492,6 +698,7 @@ export function BookForm({
           />
           <Input
             label="Cover image URL"
+            error={fieldErrors.coverImageUrl}
             required
             hint="Set automatically by the upload above — or paste one directly."
             value={form.coverImageUrl}
@@ -499,6 +706,7 @@ export function BookForm({
           />
           <Input
             label="Cover image alt text"
+            error={fieldErrors.coverImageAlt}
             value={form.coverImageAlt}
             onChange={(event) => set("coverImageAlt", event.target.value)}
           />
@@ -524,6 +732,7 @@ export function BookForm({
           />
           <Input
             label="PDF URL"
+            error={fieldErrors.pdfUrl}
             hint="Optional — a sample chapter, not the full book."
             value={form.pdfUrl}
             onChange={(event) => set("pdfUrl", event.target.value)}
@@ -566,19 +775,28 @@ export function BookForm({
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Input
           label="Meta title"
+          error={fieldErrors.metaTitle}
           hint="SEO — leave blank to fall back to the title."
           value={form.metaTitle}
           onChange={(event) => set("metaTitle", event.target.value)}
         />
         <Input
           label="Meta description"
+          error={fieldErrors.metaDescription}
           hint="SEO — leave blank to fall back to the description."
           value={form.metaDescription}
           onChange={(event) => set("metaDescription", event.target.value)}
         />
       </section>
 
-      {error ? <p className="text-13.5 text-clay-deep">{error}</p> : null}
+      {banner ? (
+        <p
+          role="alert"
+          className="rounded-control border-clay bg-tint text-13.5 text-clay-deep border px-4 py-3"
+        >
+          {banner}
+        </p>
+      ) : null}
 
       <div>
         <Button type="submit" loading={saving} loadingLabel="Saving">

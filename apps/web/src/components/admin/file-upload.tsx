@@ -27,6 +27,8 @@ export function FileUpload({
   const id = useId();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Uploading cannot work at all here, as opposed to this file having failed. */
+  const [blocked, setBlocked] = useState(false);
 
   async function handleChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -36,10 +38,18 @@ export function FileUpload({
 
     setUploading(true);
     setError(null);
+    setBlocked(false);
     try {
       onUploaded(await uploadFn(file));
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Upload failed.");
+      /* An unconfigured bucket is not something the operator can retry their
+         way out of, and the message alone ("set SUPABASE_URL and
+         SUPABASE_SERVICE_ROLE_KEY") reads as someone else's problem while the
+         book they were filling in stays unsaveable. The URL field below takes
+         a pasted link and is the way through, so say so here rather than
+         leaving them to notice its hint. */
+      setBlocked(err instanceof AdminApiError && err.code === "STORAGE_NOT_CONFIGURED");
     } finally {
       setUploading(false);
     }
@@ -60,6 +70,11 @@ export function FileUpload({
       />
       {uploading ? <p className="text-13.5 text-muted mt-1">Uploading…</p> : null}
       {error ? <p className="text-13.5 text-clay-deep mt-1">{error}</p> : null}
+      {blocked ? (
+        <p className="text-13.5 text-secondary mt-1">
+          Paste a link into the URL field below instead — the book saves either way.
+        </p>
+      ) : null}
     </div>
   );
 }
