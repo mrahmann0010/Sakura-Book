@@ -132,7 +132,7 @@
       "subtotal_one": "{{count}}টি বইয়ের মূল্য",
       "subtotal_other": "{{count}}টি বইয়ের মূল্য",
       "delivery": "ডেলিভারি",
-      "deliveryPending": "বিভাগ নির্বাচনের পর",
+      "deliveryPending": "ঠিকানা অনুযায়ী",
       "deliveryFree": "{{threshold}}-এর বেশি হলে ফ্রি",
       "total": "মোট",
       "totalPending": "—",
