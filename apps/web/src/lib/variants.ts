@@ -223,7 +223,12 @@ export type StatusPillVariants = VariantProps<typeof statusPill>;
    -------------------------------------------------------------------------- */
 
 export const badge = cva(
-  "inline-flex items-center rounded-md px-2.5 py-1 font-mono text-10 tracking-eyebrow uppercase",
+  /* The transparent border is load-bearing, not a default: `outline` below
+     draws a real one, and without a matching border on every other tone that
+     badge stands 2px taller than its neighbours. The badge is what a card's
+     title sits under, so those 2px became a visible stagger across a grid row
+     — the pre-order title one step lower than the three beside it. */
+  "inline-flex items-center rounded-md border border-transparent px-2.5 py-1 font-mono text-10 tracking-eyebrow uppercase",
   {
     variants: {
       tone: {
@@ -238,7 +243,7 @@ export const badge = cva(
             deliberately one-accent (principle 02) and that accent is spoken
             for by editor's pick, so the only texture left to spend here is
             line vs. fill, not a new hue. */
-        outline: "border border-ink/40 text-ink",
+        outline: "border-ink/40 text-ink",
       },
     },
     defaultVariants: { tone: "neutral" },
