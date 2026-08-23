@@ -7,6 +7,7 @@ import { PaymentVerificationService } from "../payment-verification";
 import { PaymentsService } from "../payments";
 import { toOrderResponse } from "./order.mapper";
 import { findOrder } from "./order.query";
+import { findTransactionIdClaim } from "./transaction-id-claim";
 
 /**
  * The automated half of payment confirmation.
@@ -47,6 +48,25 @@ export class OrderAutoVerifyService {
 
     const row = await findOrder(this.dbService.db, eq(orders.orderNumber, order.orderNumber));
     if (!row || !row.transactionId) return order;
+
+    /* Belt to checkout's braces. Checkout refuses a reused receipt before the
+       order exists, so reaching this normally means two checkouts committed in
+       the same instant and both slipped past that read — the one case a
+       transaction-scoped check cannot catch. Whatever the cause, an automated
+       grant is the last thing that should happen: no human is watching this
+       path, so it is the one where a duplicate turns into a shipped book. */
+    const claim = await findTransactionIdClaim(this.dbService.db, row.transactionId, {
+      excludeOrderId: row.id,
+    });
+
+    if (claim) {
+      this.logger.error(
+        `Auto-confirm refused for ${row.orderNumber}: its transaction ID is already recorded ` +
+          `against ${claim.orderNumber}. Leaving it pending for review.`,
+      );
+
+      return order;
+    }
 
     try {
       const verification = await this.paymentVerificationService.verify({

@@ -17,6 +17,9 @@ export { toOrderResponse, type OrderRow } from "./order.mapper";
 // differently from the way checkout and guest lookup assemble theirs.
 export { findOrder } from "./order.query";
 export { generateOrderNumber, ORDER_NUMBER_ATTEMPTS } from "./order-number";
+// The reuse guard, shared with the admin desk so the panel cannot confirm a
+// receipt that checkout and auto-verify would both have refused.
+export { findTransactionIdClaim, type TransactionIdClaim } from "./transaction-id-claim";
 export { ORDER_STATUS_CHANGED, type OrderStatusChangedEvent } from "./order.events";
 export {
   ORDER_STATUS_TRANSITIONS,
@@ -31,4 +34,5 @@ export {
   CouponNotApplicableError,
   InvalidStatusTransitionError,
   OrderNumberExhaustedError,
+  TransactionIdAlreadyUsedError,
 } from "./order.errors";

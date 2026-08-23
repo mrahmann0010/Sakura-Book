@@ -14,7 +14,9 @@ import {
   CartNotOrderableError,
   CouponNotApplicableError,
   OrderNumberExhaustedError,
+  TransactionIdAlreadyUsedError,
 } from "./order.errors";
+import { findTransactionIdClaim } from "./transaction-id-claim";
 import { toOrderResponse, type OrderRow } from "./order.mapper";
 import { findOrder } from "./order.query";
 
@@ -96,6 +98,12 @@ export class CheckoutService {
     idempotencyKey: string,
     tx: Transaction,
   ): Promise<string> {
+    /* Before anything is priced or decremented: is this receipt already spent?
+       First because it is the cheapest refusal available and the only one that
+       touches no other row — a checkout rejected here has moved no stock and
+       consumed no coupon, so there is nothing for the rollback to undo. */
+    await this.rejectReusedTransactionId(request, tx);
+
     const priced = await this.repriceForOrder(request, tx);
 
     // Sequential, not Promise.all. These are guarded UPDATEs against rows two
@@ -252,6 +260,32 @@ export class CheckoutService {
     }
 
     return existing;
+  }
+
+  /**
+   * Refuse a checkout whose transaction ID is already on another live order.
+   *
+   * Reads through the checkout's own transaction, which is what makes this a
+   * guard rather than advice: two simultaneous checkouts quoting one receipt
+   * are serialised by Postgres, and the second sees the first's row once it
+   * commits. Two that commit in the same instant can still both pass — closing
+   * that needs the partial unique index, which needs a migration. This stops
+   * the sequential reuse that is the actual exposure.
+   */
+  private async rejectReusedTransactionId(
+    request: PlaceOrderRequest,
+    tx: Transaction,
+  ): Promise<void> {
+    const transactionId = request.customer.transactionId;
+    const claim = await findTransactionIdClaim(tx, transactionId);
+
+    if (!claim) return;
+
+    this.logger.warn(
+      `Checkout rejected: transaction ID already recorded against ${claim.orderNumber}`,
+    );
+
+    throw new TransactionIdAlreadyUsedError(transactionId ?? "", claim.orderNumber);
   }
 
   private async findByIdempotencyKey(key: string): Promise<OrderRow | undefined> {
