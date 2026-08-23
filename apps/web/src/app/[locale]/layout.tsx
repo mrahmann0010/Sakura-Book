@@ -72,7 +72,7 @@ export async function generateMetadata({ params }: LayoutProps<"/[locale]">): Pr
        a valid og:url. */
     metadataBase: new URL(siteUrl()),
     title: {
-      default: "Nihonova Books",
+      default: "Nihonova Books — Handpicked Books to Learn Japanese",
       template: "%s · Nihonova Books",
     },
     description,
@@ -81,7 +81,7 @@ export async function generateMetadata({ params }: LayoutProps<"/[locale]">): Pr
       type: "website",
       siteName: "Nihonova Books",
       locale,
-      title: "Nihonova Books",
+      title: "Nihonova Books — Handpicked Books to Learn Japanese",
       description,
       url: localeAlternates(locale).canonical,
     },
