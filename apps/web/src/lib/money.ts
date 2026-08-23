@@ -35,6 +35,17 @@ export function formatMoney(minor: number, locale = "en-GB", currency = CURRENCY
   return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
+    /* "৳12.00", not "BDT 12.00". Intl's default `currencyDisplay` is the ISO
+       code wherever a locale has no symbol of its own for the currency, which
+       for BDT is every locale this app ships except `bn` — so English and
+       Japanese readers were shown an accounting code where the price should
+       be, three characters and a space wider than the number beside it. The
+       taka sign is what this file's own examples assume throughout.
+
+       `narrowSymbol` rather than `symbol`: `symbol` still falls back to the
+       code in exactly the locales that lack one, which is the case being
+       fixed. */
+    currencyDisplay: "narrowSymbol",
   }).format(minor / 100);
 }
 
