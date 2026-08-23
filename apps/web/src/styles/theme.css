@@ -160,6 +160,12 @@
   --font-serif: var(--font-lora), Georgia, serif;
   --font-sans: var(--font-public-sans), Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, Menlo, Monaco, "Cascadia Mono", monospace;
+  /* Display face for page openers — Playfair Display, whose high stroke
+     contrast is what makes a 64px line read as a bookshop's masthead rather
+     than a larger body serif. An addition to §3, which specifies Lora at every
+     size: it is scoped to the landing hero and falls back to Lora, so a failed
+     font load lands exactly on the reference rather than on a system serif. */
+  --font-display: var(--font-playfair), var(--font-lora), Georgia, serif;
 
   /* --- Named type scale ----------------------------------------------- */
   --text-display: 3.5rem; /* 56 */
@@ -235,6 +241,11 @@
   /* Base unit is 8px. Tailwind's 0.25rem step means the 8px scale is
      `2 4 6 8 10 14 22 28`; these aliases name them by role. */
   --spacing-gutter: 2.5rem; /* 40 — grid gutter */
+  /* CAUTION: Tailwind builds an `inline-size` utility off this scale, so this
+     key makes `inline-block` mean two things at once — `display:inline-block`
+     AND `inline-size:3.5rem`. Both compile, the width wins, and any element
+     given the class is pinned to 56px while its content paints at full size.
+     Write `[display:inline-block]` instead; `w-fit` is the other way out. */
   --spacing-block: 3.5rem; /* 56 — block spacing in a section */
   --spacing-section: 7rem; /* 112 — section to section */
   --spacing-page-mobile: 1.5rem; /* 24 */
@@ -312,7 +323,24 @@
   --animate-hero-title: hero-fade-up var(--duration-slide) var(--ease-standard) both;
   --animate-hero-subtitle: hero-fade-up var(--duration-slide) var(--ease-standard) 90ms both;
 
+  /* The landing hero's entrance, one word at a time. No delay in the shorthand
+     — the delay is the stagger, and it is set inline per word because it
+     depends on the word's index in a translated string, which no stylesheet
+     can know. `both` holds each word invisible until its turn comes.
+
+     Longer than --duration-slide on purpose: this is the one place in the app
+     where the motion is the greeting rather than a confirmation, and a 240ms
+     word cannot be seen to arrive. It still runs once, on load only, and is
+     flattened globally under prefers-reduced-motion (globals.css). */
+  --animate-hero-word: hero-word 700ms var(--ease-out-soft) both;
+  /* The hairline under the hero, drawn from the centre outwards once the words
+     have landed. Scale rather than width so it costs no layout. */
+  --animate-hero-rule: hero-rule var(--duration-slide) var(--ease-out-soft) both;
+
   --ease-standard: ease-in-out;
+  /* Decelerating, for entrances — motion that arrives and settles rather than
+     easing in and out of a state change. */
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes shimmer {
@@ -345,5 +373,33 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Each word rises out of focus into focus. The blur is what makes it read as
+   type being set rather than a list of fading spans; the 1.5deg tilt keeps the
+   line from arriving as a rigid block. Both resolve to zero, so the settled
+   headline is ordinary, selectable, unfiltered text. */
+@keyframes hero-word {
+  from {
+    opacity: 0;
+    transform: translateY(0.7em) rotate(1.5deg);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+    filter: blur(0);
+  }
+}
+
+@keyframes hero-rule {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
   }
 }

@@ -80,7 +80,7 @@ export default async function ContactPage({ params }: PageProps<"/[locale]/conta
           href={facebookHref}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-caption text-secondary hover:text-ink mt-6 inline-block"
+          className="text-caption text-secondary hover:text-ink mt-6 [display:inline-block]"
         >
           facebook.com/nihonovaacademy
         </a>

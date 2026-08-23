@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { Suspense } from "react";
+import { Fragment, Suspense } from "react";
 
-import { BookCard, BookGrid, HowItWorks, ProofPoints } from "@/components/domain";
+import { AddToCartButton } from "@/components/cart/add-to-cart-button";
+import { BookCard, BookGrid, BookGridSkeleton, HowItWorks, ProofPoints } from "@/components/domain";
 import { AppNav, PageShell, Shell, SiteFooter } from "@/components/layout";
-import { LinkButton, Skeleton } from "@/components/ui";
+import { LinkButton } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
 import { listBooks } from "@/lib/api/catalog";
@@ -12,13 +12,20 @@ import { footerColumns } from "@/lib/books";
 import { toBookSummaries } from "@/lib/book-view";
 import { routes } from "@/lib/routes";
 import { localeAlternates } from "@/lib/site";
-import { iconButton } from "@/lib/variants";
-import type { BookSummary } from "@/components/domain";
 
 /* Landing page, per the Landing Wireframe (sheet 05, option 1a/1b): a brief
-   centred hero, then straight into the books: one shelf of panel cards at
-   3-up, the catalogue CTA beneath it, then the "Why Nihonova" proof band and
-   the "How It Works" journey closing the page.
+   centred hero, then straight into the books: one shelf, the catalogue CTA
+   beneath it, then the "Why Nihonova" proof band and the "How It Works"
+   journey closing the page.
+
+   The shelf is the catalog's grid, not a shelf of its own: the same
+   `BookCard` in its `bare` reference variant, the same `AddToCartButton`
+   footer, the same 2/3/4-up `grid-books`. It used to be `variant="panel"` on a
+   6-up rail with a quick-view glyph and everything past the second card hidden
+   below `lg` — three separate ways for a book to look different here than it
+   does on /catalog, which made the landing cards read as a downgrade of the
+   real thing and put the buy button a click further away on the page most
+   visitors land on first.
 
    Book titles and authors stay untranslated — they are proper nouns.
 
@@ -79,89 +86,166 @@ export async function generateMetadata({ params }: PageProps<"/[locale]">): Prom
   return { alternates: localeAlternates(locale) };
 }
 
-/** The wireframe's quick-view control. No modal exists yet, so it goes to the
-    book rather than rendering a button that does nothing. */
-function QuickView({ book, label }: { book: BookSummary; label: string }) {
-  if (!book.href) return null;
+type T = Awaited<ReturnType<typeof getTranslation>>["t"];
+
+/**
+ * How many books the landing shelf shows.
+ *
+ * Eight rather than the old twelve, because the shelf no longer hides
+ * anything: the panel rail showed 2 of 12 below `lg` and revealed the rest at
+ * desktop, whereas `grid-books` shows every card it is given at every width.
+ * Eight fills its rows exactly — 4 down on mobile, 3 across on tablet, 2 rows
+ * of 4 on desktop — with no orphan on the last row, and keeps the catalogue
+ * CTA, the proof band and the journey within reach of the fold. It is also the
+ * catalog's own skeleton count, so both pages wait at the same size.
+ */
+const HOME_SHELF_COUNT = 8;
+
+/* Word-by-word stagger for the hero headline. Base is the beat before the
+   first word — long enough to read as a deliberate entrance, short enough that
+   a headline is not missing on arrival. Step is the gap between words: at
+   55ms a fourteen-word tagline finishes inside 1.5s including the last word's
+   own 700ms. */
+const HERO_WORD_BASE_MS = 80;
+const HERO_WORD_STEP_MS = 55;
+
+/**
+ * The landing headline, set one word at a time.
+ *
+ * Each word is an inline-block that rises out of a blur into place, a beat
+ * behind the one before it. The delays have to be inline: they are a function
+ * of each word's index in a translated string, which no stylesheet can know.
+ *
+ * The space between words is a real text node outside the spans rather than
+ * `whitespace-pre` inside them. That matters for `ja`, where the tagline has
+ * no spaces at all and is therefore one span: an inline-block shrinks to fit
+ * and breaks internally between kana, whereas `whitespace-pre` would forbid
+ * every break and run the headline off the side of the page.
+ *
+ * `font-display` — Playfair Display, falling back to the reference's Lora —
+ * and the animation are both scoped here rather than to `h1` globally: this is
+ * the one headline in the app that is the page's welcome rather than its label.
+ *
+ * Two class-name hazards this markup has to steer around, both silent:
+ *
+ *   `[display:inline-block]`, not `inline-block`. Tailwind generates an
+ *   `inline-size` utility off the spacing scale, and this theme has a
+ *   `--spacing-block` (56px) — so `inline-block` compiles to BOTH
+ *   `display:inline-block` and `inline-size:var(--spacing-block)`, pinning
+ *   every word to 56px wide while its glyphs paint at their real width. The
+ *   result is a headline stacked on top of itself. See the note beside
+ *   `--spacing-block` in theme.css.
+ *
+ *   A plain class string, not `cn()`. tailwind-merge cannot tell this theme's
+ *   `text-36` (a font size) from `text-ink` (a colour) — same `text-*` prefix,
+ *   a value it has no entry for — so it treats the pair as a conflict and drops
+ *   the earlier one. The size vanishes and the headline silently falls back to
+ *   the base `h1` rule's 44px. Nothing here needs merging anyway.
+ */
+function HeroTitle({ text }: { text: string }) {
+  const words = text.split(" ").filter(Boolean);
 
   return (
-    <Link
-      href={book.href}
-      aria-label={label}
-      title={label}
-      className={iconButton({ variant: "outline", size: "sm" })}
-    >
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <path
-          d="M7 13L13 7M13 7H8M13 7v5"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="square"
-        />
-      </svg>
-    </Link>
+    <h1 className="max-w-measure-intro text-36 text-ink sm:text-48 lg:text-64 font-display leading-[1.04] tracking-[-0.015em]">
+      {words.map((word, index) => (
+        <Fragment key={`${index}-${word}`}>
+          <span
+            className="animate-hero-word [display:inline-block]"
+            style={{ animationDelay: `${HERO_WORD_BASE_MS + index * HERO_WORD_STEP_MS}ms` }}
+          >
+            {word}
+          </span>
+          {index < words.length - 1 ? " " : null}
+        </Fragment>
+      ))}
+    </h1>
   );
 }
 
-type T = Awaited<ReturnType<typeof getTranslation>>["t"];
+/**
+ * Hero — headline, subtitle, closing hairline.
+ *
+ * One component rather than three because the timing is a sequence: the
+ * subtitle waits for the last word to start and the rule waits for the
+ * subtitle, so the delay each one needs depends on how many words the
+ * translated tagline turned out to have. Every delay downstream of the words
+ * is therefore computed here and passed inline, overriding the fixed 90ms the
+ * `animate-hero-subtitle` shorthand carries for other callers.
+ */
+function Hero({ tagline, subhead }: { tagline: string; subhead: string }) {
+  const wordCount = tagline.split(" ").filter(Boolean).length || 1;
+  const subtitleDelayMs = HERO_WORD_BASE_MS + wordCount * HERO_WORD_STEP_MS;
 
-/* Shown past the top 2 — the mobile/tablet shelf shows one row of the two
-   best-sellers; desktop (`lg:`) reveals the full 2×6.
+  return (
+    <Shell
+      as="section"
+      className="lg:pt-page-desktop lg:pb-block flex flex-col items-center py-20 text-center"
+    >
+      <HeroTitle text={tagline} />
 
-   Two variants because the two things being hidden have different native
-   `display`: the panel card's own layout is `flex flex-col` (it seats
-   `footerAction`/actions with `mt-auto`), so it must come back as `lg:flex`,
-   not `lg:block` — the skeleton's wrapper `<div>` has no such requirement and
-   stacks fine as a block. */
-const CARD_BEYOND_MOBILE_ROW = "hidden lg:flex";
-const SKELETON_BEYOND_MOBILE_ROW = "hidden lg:block";
+      <p
+        className="animate-hero-subtitle text-15 text-secondary max-w-measure-lede sm:text-17 lg:text-19 mt-4"
+        style={{ animationDelay: `${subtitleDelayMs}ms` }}
+      >
+        {subhead}
+      </p>
 
+      {/* Closing mark, drawn outwards from the centre once the words have
+          landed — the one thing separating the hero from the shelf below it,
+          in place of a heavier rule or a scroll cue. */}
+      <span
+        aria-hidden
+        className="animate-hero-rule bg-rule mt-9 block h-px w-16 origin-center"
+        style={{ animationDelay: `${subtitleDelayMs + 140}ms` }}
+      />
+    </Shell>
+  );
+}
+
+/**
+ * The landing shelf — the catalog's grid, card for card.
+ *
+ * Everything the card renders is the catalog's: the `bare` reference variant
+ * (§10.7), stacked author and price rather than one inline meta line, and the
+ * same `secondary` add-to-cart closing the cell. Any change to how a book
+ * looks belongs in `BookCard` so both pages take it, not here.
+ */
 async function RecentGrid({ locale, t }: { locale: Locale; t: T }) {
   const recent = await listBooks(
     { q: "", genres: [], sort: "recent", page: 1 },
-    { pageSize: 12 },
+    { pageSize: HOME_SHELF_COUNT },
   );
   const bestSellers = toBookSummaries(recent.items, locale);
 
   return (
     <>
       <h2 className="sr-only">{t("home.recent.title")}</h2>
-      <BookGrid columns={6}>
-        {bestSellers.map((book, index) => (
+      <BookGrid>
+        {bestSellers.map((book) => (
           <BookCard
             key={book.id}
             book={book}
             locale={locale}
-            variant="panel"
-            inlineMeta
-            className={index >= 2 ? CARD_BEYOND_MOBILE_ROW : undefined}
-            action={<QuickView book={book} label={t("home.quickView", { title: book.title })} />}
+            footerAction={
+              <AddToCartButton
+                bookId={book.id}
+                title={book.title}
+                soldOut={book.soldOut}
+                comingSoon={book.flag === "coming-soon"}
+                variant="secondary"
+                block
+              />
+            }
           />
         ))}
       </BookGrid>
 
-      <div className="mt-9 flex justify-center">
+      <div className="mt-12 flex justify-center">
         <LinkButton href={routes(locale).catalog} variant="secondary">
           {t("home.recent.seeMore")}
         </LinkButton>
       </div>
     </>
-  );
-}
-
-/* Mirrors RecentGrid's 2×6 grid so nothing shifts when the real content lands
-   (§9, same convention as the pre-order page's skeleton). */
-function RecentGridSkeleton() {
-  return (
-    <div className="grid-books-6">
-      {Array.from({ length: 12 }, (_, i) => (
-        <div key={i} className={i >= 2 ? SKELETON_BEYOND_MOBILE_ROW : undefined}>
-          <Skeleton className="aspect-2/3 w-full rounded-md" index={i} />
-          <Skeleton className="mt-3 h-4 w-3/4" index={i} />
-          <Skeleton className="mt-2 h-3.5 w-1/2" index={i} />
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -180,24 +264,14 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
         />
       }
     >
-      {/* Hero — tagline and subtitle, centred, fading up on load. */}
-      <Shell
-        as="section"
-        className="lg:pt-page-desktop lg:pb-block flex flex-col items-center py-20 text-center"
-      >
-        <h1 className="animate-hero-title max-w-measure-intro text-36 text-ink sm:text-48 lg:text-64 font-serif leading-[1.04]">
-          {t("home.hero.tagline")}
-        </h1>
-        <p className="animate-hero-subtitle text-15 text-secondary max-w-measure-lede sm:text-17 lg:text-19 mt-4">
-          {t("home.hero.subhead")}
-        </p>
-      </Shell>
+      {/* Hero — tagline set word by word, then the subtitle, then the rule. */}
+      <Hero tagline={t("home.hero.tagline")} subhead={t("home.hero.subhead")} />
 
-      {/* Best-selling, buyable-now books — 12 panel cards, 2 up on mobile
-          (the top 2 sellers), 6 up on desktop, then the way through to the
-          catalogue. */}
+      {/* Best-selling, buyable-now books — the catalog's grid at the catalog's
+          card, 2 up on mobile, 3 on tablet, 4 on desktop, then the way through
+          to the rest of the catalogue. */}
       <Shell>
-        <Suspense fallback={<RecentGridSkeleton />}>
+        <Suspense fallback={<BookGridSkeleton count={HOME_SHELF_COUNT} footer />}>
           <RecentGrid locale={locale} t={t} />
         </Suspense>
       </Shell>

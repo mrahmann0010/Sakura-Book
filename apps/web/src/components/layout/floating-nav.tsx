@@ -298,8 +298,10 @@ export function FloatingNav({
           "pointer-events-none fixed inset-x-0 top-0 z-40",
           /* The bar floats: full-width header, inset content. The page margin is
            narrower here than --spacing-page-mobile so the items keep their own
-           padding at 375px rather than surrendering it to the gutter. */
-          "sm:px-page-tablet px-4 pt-4 sm:pt-5",
+           padding at 375px rather than surrendering it to the gutter — and
+           narrower again below the tablet floor, where every px it gives back
+           is a px the item list does not have to scroll. */
+          "lg:px-page-tablet px-3 pt-4 sm:px-5 sm:pt-5",
           className,
         )}
       >
@@ -310,10 +312,15 @@ export function FloatingNav({
              flush to the start against an invisible 0-width actions div.
              Centering here instead keeps the pill bar visually balanced. */
             "max-w-shell pointer-events-auto mx-auto flex items-center justify-center gap-1 sm:justify-between",
-            "rounded-pill border sm:gap-6",
+            "rounded-pill border sm:gap-3 lg:gap-6",
             /* Padding shrinks with the viewport; the nav never collapses to a
-             hamburger, so every item stays reachable at every width. */
-            "py-1.5 pr-1 pl-1 sm:pr-3 sm:pl-5",
+             hamburger, so every item stays reachable at every width — which
+             means the padding, not the item set, is what gives way. Three
+             steps rather than two: 640px is the tightest width in the whole
+             range, because it is where the wordmark, the full labels, the
+             locale pill and the Cart link all appear and the viewport has not
+             grown to carry them yet. */
+            "py-1.5 pr-1 pl-1 sm:pr-2 sm:pl-3 lg:pr-3 lg:pl-5",
             "transition-[background-color,border-color,backdrop-filter]",
             "ease-standard duration-(--duration-slide)",
             scrolled
@@ -385,7 +392,13 @@ export function FloatingNav({
                   onPointerEnter: () => setTargetIndex(index),
                   onFocus: () => setTargetIndex(index),
                   className: cn(
-                    "text-13.5 rounded-pill flex items-center gap-1.5 px-2 py-2 whitespace-nowrap sm:px-3.5",
+                    /* Tight horizontal padding until the desktop floor. The
+                       squeeze is worst at exactly 640px, where the wordmark,
+                       the long "Track Order" label, the locale pill and the
+                       Cart link all arrive at once and the bar is still only
+                       640 wide — the gap between labels is what pays for them.
+                       It opens back up to 14px at `lg`, where there is room. */
+                    "text-13.5 rounded-pill flex items-center gap-1.5 px-1.5 py-2 whitespace-nowrap lg:px-3.5",
                     "transition-colors duration-(--duration-press)",
                     /* The base :focus-visible rule squares the outline to
                      --radius-xs; the pill's radius is restated so the ring
@@ -424,7 +437,7 @@ export function FloatingNav({
             </ul>
           </nav>
 
-          <div className="flex shrink-0 items-center gap-2">{actions}</div>
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">{actions}</div>
         </div>
       </header>
     </>

@@ -45,7 +45,22 @@ export function AppNav({ brandHref }: { brandHref?: string } = {}) {
     return [
       { kind: "link", label: "Home", href: base },
       { kind: "link", label: "Books", href: `${base}/catalog` },
-      { kind: "link", label: "Track Order", href: `${base}/orders` },
+      /* "Orders" below the tablet floor, "Track Order" above it. The full
+         wording is the longest item in the bar and, at 360px, the difference
+         between four items that fit and a header the reader has to swipe.
+         `label` stays the long form either way, so the accessible name and the
+         active-route match are unaffected by which half is on screen. */
+      {
+        kind: "link",
+        label: "Track Order",
+        href: `${base}/orders`,
+        content: (
+          <>
+            <span className="sm:hidden">Orders</span>
+            <span className="hidden sm:inline">Track Order</span>
+          </>
+        ),
+      },
       /* Mobile only. Above the tablet floor the cart keeps its place in the
          right-hand actions, where the wordmark and the language switcher give
          it a side of the bar to sit on. Below it, there is no room for a
@@ -73,7 +88,10 @@ export function AppNav({ brandHref }: { brandHref?: string } = {}) {
       brandHref={brandHref ?? `/${locale ?? "en"}`}
       actions={
         <>
-          <ThemeToggle />
+          {/* 32px pucks on a phone, the standard 36 from the tablet floor —
+              the two icons sit beside four nav items down there and the bar
+              must not scroll. */}
+          <ThemeToggle className="size-8 sm:size-9" />
           <LanguageSwitcher />
           {/* Tablet and up only — below that the cart is a nav item instead,
               so this would be the same destination twice in one bar. */}

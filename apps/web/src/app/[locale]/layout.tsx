@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Lora, Public_Sans } from "next/font/google";
+import { Lora, Playfair_Display, Public_Sans } from "next/font/google";
 import "../globals.css";
 
 import { I18nProvider } from "@/i18n/client";
@@ -36,6 +36,17 @@ const lora = Lora({
   subsets: ["latin"],
   weight: ["400", "500"],
   style: ["normal", "italic"],
+  display: "swap",
+});
+
+/* Playfair Display for the landing hero only — see --font-display in
+   theme.css for why the reference's Lora is not used at that one size. One
+   weight, because a display line is never bolded; `swap` so a slow font never
+   holds the first paint of the page's largest text. */
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
+  weight: ["500"],
   display: "swap",
 });
 
@@ -82,7 +93,10 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[lo
   const { locale } = (await params) as { locale: Locale };
 
   return (
-    <html lang={locale} className={`${lora.variable} ${publicSans.variable} h-full antialiased`}>
+    <html
+      lang={locale}
+      className={`${lora.variable} ${playfair.variable} ${publicSans.variable} h-full antialiased`}
+    >
       <body className="flex min-h-full flex-col">
         <script dangerouslySetInnerHTML={{ __html: NO_FLASH_SCRIPT }} />
         <StoreProvider>
