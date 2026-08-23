@@ -7,12 +7,20 @@ import type {
   AdminBookUpdateRequest,
 } from "@sakura/contracts";
 import { eq, sql } from "drizzle-orm";
-import { ResourceNotFoundError } from "../../common/errors";
+import { ResourceConflictError, ResourceNotFoundError } from "../../common/errors";
 import { slugify } from "../../common/slugify";
 import { AuditService } from "../../audit";
 import { DbService } from "../../db/db.service";
 import type { Transaction } from "../../db/db.types";
-import { authors, bookAuthors, bookCategories, books, publishers } from "../../db/schema";
+import {
+  authors,
+  bookAuthors,
+  bookCategories,
+  bookReviews,
+  books,
+  orderItems,
+  publishers,
+} from "../../db/schema";
 import { adminBookFilters, adminBookOrder } from "./admin-book.query";
 import { toAdminBookDetail, toAdminBookSummary } from "./admin-book.mapper";
 
@@ -124,11 +132,12 @@ function updateColumns(request: AdminBookUpdateRequest): BookColumns {
  * because there is no domain service for "author/publisher find-or-create
  * plus a junction-table replace" to delegate to.
  *
- * No hard delete. `order_items` references `books`, so a title that has ever
- * sold cannot be removed without either breaking historical orders or
- * cascading their line items away — deactivation (`isActive: false`, via the
- * same `update`) is the only removal path, the same choice `admin_users`
- * makes for staff who leave.
+ * `remove` hard-deletes a book, but only when it has never sold: `order_items`
+ * references `books`, so a title with order history cannot be removed without
+ * either breaking historical orders or cascading their line items away.
+ * Deactivation (`isActive: false`, via `update`) stays the only removal path
+ * for a title that has sold — the same choice `admin_users` makes for staff
+ * who leave.
  */
 @Injectable()
 export class AdminBooksService {
@@ -259,6 +268,48 @@ export class AdminBooksService {
     });
 
     return this.detail(id);
+  }
+
+  /**
+   * Hard-delete a book, refusing when it has order history.
+   *
+   * The junction rows (`book_authors`, `book_categories`) and any reviews are
+   * this book's alone and go with it. `order_items.bookId` is left standing —
+   * a book with any order line is rejected before the transaction opens, so
+   * that column is never actually reached by this method.
+   */
+  async remove(id: string, actor: AdminActor): Promise<void> {
+    const existing = await this.requireBook(id);
+
+    const [{ count: orderCount }] = await this.dbService.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(orderItems)
+      .where(eq(orderItems.bookId, id));
+
+    if (orderCount > 0) {
+      throw new ResourceConflictError(
+        "This book has order history and cannot be deleted — deactivate it instead.",
+        { bookId: id, orderCount },
+      );
+    }
+
+    await this.dbService.db.transaction(async (tx) => {
+      await tx.delete(bookReviews).where(eq(bookReviews.bookId, id));
+      await tx.delete(bookAuthors).where(eq(bookAuthors.bookId, id));
+      await tx.delete(bookCategories).where(eq(bookCategories.bookId, id));
+      await tx.delete(books).where(eq(books.id, id));
+
+      await this.auditService.record(
+        {
+          actor,
+          action: "DELETE",
+          entityType: "books",
+          entityId: id,
+          before: { title: existing.title, slug: existing.slug },
+        },
+        tx,
+      );
+    });
   }
 
   private async requireBook(id: string) {

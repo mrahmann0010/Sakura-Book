@@ -74,11 +74,7 @@ export function AppNav({ brandHref }: { brandHref?: string } = {}) {
       actions={
         <>
           <ThemeToggle />
-          {/* Locale is a settings-shaped choice, not navigation — it stands
-              down at mobile, where the width belongs to the nav items. */}
-          <span className="hidden sm:block">
-            <LanguageSwitcher />
-          </span>
+          <LanguageSwitcher />
           {/* Tablet and up only — below that the cart is a nav item instead,
               so this would be the same destination twice in one bar. */}
           <Link

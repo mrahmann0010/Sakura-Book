@@ -40,13 +40,14 @@ const REFERENCE_REVALIDATE = 300;
  * strict, and a spread would forward the forgiving shape's junk straight into
  * a VALIDATION_FAILED.
  */
-export function listBooks(query: CatalogQuery): Promise<BookList> {
+export function listBooks(query: CatalogQuery, opts: { pageSize?: number } = {}): Promise<BookList> {
   return apiFetch("/books", bookListSchema, {
     query: {
       q: query.q,
       genre: query.genres,
       sort: query.sort,
       page: query.page,
+      pageSize: opts.pageSize,
     },
     revalidate: CATALOG_REVALIDATE,
   });

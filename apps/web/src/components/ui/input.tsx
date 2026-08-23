@@ -3,7 +3,7 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 import { input, type InputVariants } from "@/lib/variants";
-import { cn, type Variants } from "@/lib/utils";
+import { cn, scrollFieldIntoView, type Variants } from "@/lib/utils";
 
 import { FieldFrame } from "./field";
 
@@ -26,6 +26,7 @@ export function Input({
   state,
   className,
   fieldClassName,
+  onFocus,
   ...props
 }: InputProps) {
   /* An error always wins over whatever state was passed. */
@@ -39,6 +40,10 @@ export function Input({
           aria-describedby={describedBy}
           aria-invalid={error ? true : undefined}
           className={cn(input({ state: resolved }), className)}
+          onFocus={(event) => {
+            onFocus?.(event);
+            scrollFieldIntoView(event);
+          }}
           {...props}
         />
       )}
@@ -58,6 +63,7 @@ export function Textarea({
   rows = 4,
   className,
   fieldClassName,
+  onFocus,
   ...props
 }: TextareaProps) {
   const resolved = error ? "error" : state;
@@ -71,6 +77,10 @@ export function Textarea({
           aria-describedby={describedBy}
           aria-invalid={error ? true : undefined}
           className={cn(input({ state: resolved }), "resize-y", className)}
+          onFocus={(event) => {
+            onFocus?.(event);
+            scrollFieldIntoView(event);
+          }}
           {...props}
         />
       )}

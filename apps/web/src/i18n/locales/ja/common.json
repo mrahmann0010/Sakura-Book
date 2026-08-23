@@ -19,11 +19,11 @@
   },
   "home": {
     "hero": {
-      "subhead": "ブリストルから届ける、手で選んだ小さな目録です。売り切れた本は追加で仕入れず、棚から下ろします。",
+      "subhead": "語彙、漢字、文法、読解、聴解—JLPT対策に必要な本がすべてここに。",
       "tagline": "ページをめくれば、日本への新しい旅がここから始まります—Nihonova Books Collectionとともに。"
     },
     "recent": {
-      "title": "新着",
+      "title": "人気の本",
       "seeMore": "目録をすべて見る"
     },
     "quickView": "{{title}}を見る",
@@ -73,12 +73,12 @@
       "label": "目録を検索",
       "placeholder": "書名または著者名で検索"
     },
-    "genres": {
-      "fiction": "小説",
-      "essays": "随筆",
-      "poetry": "詩",
-      "translated": "翻訳",
-      "nature": "自然"
+    "categories": {
+      "vocabulary": "語彙",
+      "kanji": "漢字",
+      "grammar": "文法",
+      "reading": "読解",
+      "listening": "聴解"
     },
     "sort": {
       "recent": "新着順",

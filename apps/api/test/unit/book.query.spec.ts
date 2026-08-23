@@ -23,8 +23,9 @@ describe("bookOrder", () => {
 
   it("falls back to the default ordering for an unknown sort", () => {
     // The schema's default means this is unreachable through HTTP, but a
-    // direct caller passing junk must get the shelf, not an empty ORDER BY.
-    expect(bookOrder("nonsense" as never)).toHaveLength(2);
+    // direct caller passing junk must get the shelf, not an empty ORDER BY —
+    // it should get exactly what "recent" gets, since that is the default.
+    expect(bookOrder("nonsense" as never)).toHaveLength(bookOrder("recent").length);
   });
 });
 

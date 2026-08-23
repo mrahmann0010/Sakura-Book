@@ -20,6 +20,19 @@
     font-weight: 400;
   }
 
+  /* Dark mode reads as a navy wash on the page background, not a flat block —
+     only `body` gets the gradient; every `bg-page`/`bg-surface`/`bg-tint`
+     component keeps reading the flat variable from theme.css. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) body {
+      background-image: linear-gradient(180deg, #0b1220 0%, #141d34 45%, #0b1220 100%);
+    }
+  }
+
+  :root[data-theme="dark"] body {
+    background-image: linear-gradient(180deg, #0b1220 0%, #141d34 45%, #0b1220 100%);
+  }
+
   /* Titles are Lora. Interface sub-heads (h4+) stay in the sans — see §3.2. */
   h1,
   h2,
@@ -162,6 +175,19 @@
   }
   @media (width >= 64rem) {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@utility grid-books-6 {
+  /* The landing shelf's best-sellers rail: 2 up through tablet, 6 up at
+     desktop. The caller hides every card past the second below `lg`, so the
+     grid itself only needs the two end states. */
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-gutter);
+
+  @media (width >= 64rem) {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
 

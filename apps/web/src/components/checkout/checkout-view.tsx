@@ -142,7 +142,7 @@ export function CheckoutView({ locale }: { locale: Locale }) {
 
           <div className="mt-8 flex flex-wrap gap-3">
             <LinkButton href={path.catalog}>{t("checkout.placed.action")}</LinkButton>
-            <LinkButton href={path.orders} variant="secondary">
+            <LinkButton href={path.order(placedOrder.id)} variant="secondary">
               {t("checkout.placed.track")}
             </LinkButton>
           </div>

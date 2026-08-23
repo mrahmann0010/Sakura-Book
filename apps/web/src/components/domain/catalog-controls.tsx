@@ -87,7 +87,7 @@ export function CatalogControls({ query, facets }: CatalogControlsProps) {
      translation key, and showing its English name beats showing the raw slug
      or, worse, the missing-key string. */
   const label = (slug: string, fallback: string) =>
-    t(`catalog.genres.${slug}`, { defaultValue: fallback });
+    t(`catalog.categories.${slug}`, { defaultValue: fallback });
 
   const groups = facets.map((entry) => ({
     group: entry.group,

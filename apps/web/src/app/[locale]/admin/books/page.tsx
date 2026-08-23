@@ -6,8 +6,8 @@ import { useEffect, useState } from "react";
 import type { AdminBookSummary } from "@sakura/contracts";
 
 import { AdminShell } from "@/components/admin/admin-shell";
-import { Button, LinkButton } from "@/components/ui";
-import { AdminApiError, listAdminBooks } from "@/lib/api/admin";
+import { Button, LinkButton, Modal } from "@/components/ui";
+import { AdminApiError, deleteAdminBook, listAdminBooks } from "@/lib/api/admin";
 import { formatMoney } from "@/lib/money";
 import { useAdminGate } from "@/lib/use-admin-gate";
 
@@ -19,6 +19,10 @@ export default function AdminBooksPage() {
   const [total, setTotal] = useState(0);
   const [q, setQ] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const [pendingDelete, setPendingDelete] = useState<AdminBookSummary | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!checking) void load();
@@ -33,6 +37,29 @@ export default function AdminBooksPage() {
       setTotal(list.total);
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Could not load the catalog.");
+    }
+  }
+
+  function askDelete(book: AdminBookSummary) {
+    setDeleteError(null);
+    setPendingDelete(book);
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAdminBook(pendingDelete.id);
+      setItems((current) => current.filter((book) => book.id !== pendingDelete.id));
+      setTotal((current) => current - 1);
+      setPendingDelete(null);
+    } catch (err) {
+      setDeleteError(
+        err instanceof AdminApiError ? err.message : "Could not delete this book.",
+      );
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -103,13 +130,20 @@ export default function AdminBooksPage() {
                     {book.isActive ? "Active" : "Inactive"}
                     {book.isFeatured ? " · Featured" : ""}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
                     <Link
                       href={`/${locale}/admin/books/${book.id}/edit`}
                       className="text-clay hover:text-clay-deep"
                     >
                       Edit
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => askDelete(book)}
+                      className="text-clay-deep hover:text-clay ml-4"
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -124,6 +158,29 @@ export default function AdminBooksPage() {
           </table>
         </div>
       </div>
+
+      <Modal
+        open={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        title="Delete this book?"
+        description={
+          pendingDelete
+            ? `"${pendingDelete.title}" will be permanently removed. This cannot be undone.`
+            : undefined
+        }
+        actions={
+          <>
+            <Button onClick={() => void confirmDelete()} loading={deleting} loadingLabel="Deleting">
+              Delete
+            </Button>
+            <Button variant="ghost" onClick={() => setPendingDelete(null)} disabled={deleting}>
+              Cancel
+            </Button>
+          </>
+        }
+      >
+        {deleteError ? <p className="text-13.5 text-clay-deep">{deleteError}</p> : null}
+      </Modal>
     </AdminShell>
   );
 }

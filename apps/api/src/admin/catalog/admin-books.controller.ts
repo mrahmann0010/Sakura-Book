@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   adminBookCreateRequestSchema,
@@ -24,9 +24,9 @@ class AdminBookUpdateDto extends createZodDto(adminBookUpdateRequestSchema) {}
  * sells is day-to-day catalog work, not the money-moving action ADMIN is
  * reserved for on the orders controller.
  *
- * No DELETE route. See AdminBooksService for why — a book that has ever sold
- * is referenced by `order_items`, so deactivation (`PATCH` with
- * `isActive: false`) is the only removal path.
+ * `DELETE` hard-removes a book with no order history; see AdminBooksService
+ * for why one with order history is refused instead — deactivation (`PATCH`
+ * with `isActive: false`) stays the only removal path for those.
  */
 @ApiTags("admin-catalog")
 @Controller("admin/books")
@@ -62,5 +62,12 @@ export class AdminBooksController {
     @CurrentAdmin() admin: AccessClaims,
   ): Promise<AdminBookDetail> {
     return this.booksService.update(id, body, { sub: admin.sub, email: admin.email });
+  }
+
+  @Delete(":id")
+  @HttpCode(204)
+  @ApiOperation({ summary: "Delete a book. Refused (409) if it has any order history." })
+  async remove(@Param("id") id: string, @CurrentAdmin() admin: AccessClaims): Promise<void> {
+    await this.booksService.remove(id, { sub: admin.sub, email: admin.email });
   }
 }

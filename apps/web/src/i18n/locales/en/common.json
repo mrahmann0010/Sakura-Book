@@ -19,11 +19,11 @@
   },
   "home": {
     "hero": {
-      "subhead": "A small catalogue, chosen by hand and posted from Bristol. When a title sells out we take it down rather than order more.",
+      "subhead": "Vocabulary, kanji, grammar, reading and listening — every JLPT prep book you need, in one place.",
       "tagline": "Turn the page and start your journey into Japan — with the Nihonova Books Collection."
     },
     "recent": {
-      "title": "Recently added",
+      "title": "Our best-selling books",
       "seeMore": "See the whole catalogue"
     },
     "quickView": "View {{title}}",
@@ -74,12 +74,12 @@
       "label": "Search the catalogue",
       "placeholder": "Search by title or author"
     },
-    "genres": {
-      "fiction": "Fiction",
-      "essays": "Essays",
-      "poetry": "Poetry",
-      "translated": "Translated",
-      "nature": "Nature"
+    "categories": {
+      "vocabulary": "Vocabulary",
+      "kanji": "Kanji",
+      "grammar": "Grammar",
+      "reading": "Reading",
+      "listening": "Listening"
     },
     "sort": {
       "recent": "Recently added",

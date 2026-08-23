@@ -178,8 +178,17 @@ export function BookCard({
           "group bg-tint rounded-control relative flex flex-col p-5",
           /* Offset 2 rather than the bare card's 6: the panel already has an
              edge, so the ring sits just off it instead of floating. */
-          "outline-1 outline-offset-2 outline-transparent transition-[outline-color] duration-150",
+          "outline-1 outline-offset-2 outline-transparent duration-150",
           "hover:outline-ink has-[a:focus-visible]:outline-ink",
+          /* One transition list covering both the hover ring and the tap
+             scale below — two separate `transition-*` utilities would each
+             set `transition-property` and the later one would silently drop
+             the other's property from the list. */
+          "transition-[outline-color,transform]",
+          /* A tap-scale on touch, so the best-sellers shelf feels pressed
+             rather than static on a phone. Harmless on desktop, where a mouse
+             click is brief enough that the transform barely registers. */
+          "active:scale-[0.97]",
           book.soldOut && "opacity-55",
           className,
         )}
