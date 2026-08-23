@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { FieldErrors, UseFormRegister, UseFormSetValue } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
@@ -29,12 +29,18 @@ export function PaymentSection({
   errors,
   method,
   onMethodChange,
+  amount,
+  breakdown,
 }: {
   register: UseFormRegister<CheckoutValues>;
   setValue: UseFormSetValue<CheckoutValues>;
   errors: FieldErrors<CheckoutValues>;
   method: AcceptedPaymentMethod;
   onMethodChange: (method: AcceptedPaymentMethod) => void;
+  /** The order total and its rows, handed to the transfer card — the shopper
+      is about to type this figure into a banking app. */
+  amount?: ReactNode;
+  breakdown?: ReactNode;
 }) {
   const { t } = useTranslation();
   const [provider, setProvider] = useState<MobileMoneyProviderId | null>(null);
@@ -50,6 +56,8 @@ export function PaymentSection({
         setValue={setValue}
         errors={errors}
         provider={provider}
+        amount={amount}
+        breakdown={breakdown}
         onProviderChange={(next) => {
           setProvider(next);
           if (next && method !== "manual-transfer") onMethodChange("manual-transfer");

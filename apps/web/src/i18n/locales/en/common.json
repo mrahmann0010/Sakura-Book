@@ -132,8 +132,10 @@
       "subtotal_one": "Subtotal · {{count}} book",
       "subtotal_other": "Subtotal · {{count}} books",
       "delivery": "Delivery",
+      "deliveryPending": "After division",
       "deliveryFree": "Free over {{threshold}}",
       "total": "Total",
+      "totalPending": "—",
       "checkout": "Proceed to checkout",
       "note": "Postage is calculated from the address you give at checkout."
     },
@@ -195,6 +197,7 @@
       "mobileMoneyLegend": "Mobile money",
       "mobileMoneyMeta": "manual transfer",
       "sendTo": "Send the total to this {{provider}} number",
+      "amount": "Amount to send",
       "sendToHint": "Open your {{provider}} app, send the amount, then come back here.",
       "verifyHint": "Now enter the details from the payment you just sent.",
       "reference": "Reference (optional)",

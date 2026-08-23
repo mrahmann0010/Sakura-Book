@@ -33,10 +33,21 @@ export function ShippingFields({
   register,
   errors,
   setValue,
+  onDivisionChange,
 }: {
   register: UseFormRegister<CheckoutValues>;
   errors: FieldErrors<CheckoutValues>;
   setValue: UseFormSetValue<CheckoutValues>;
+  /**
+   * Fires with the chosen division, "" until one is.
+   *
+   * The recap needs to know whether a division has actually been picked, and
+   * `region` cannot tell it: that field is seeded to "inside-dhaka" by
+   * `checkoutDefaults`, so it is truthy before the shopper has chosen
+   * anything. This local state is the only honest signal, so it is reported
+   * up rather than re-derived.
+   */
+  onDivisionChange?: (division: string) => void;
 }) {
   const { t } = useTranslation();
 
@@ -142,6 +153,7 @@ export function ShippingFields({
             setDivision(value);
             setDistrict("");
             sync({ division: value, district: "" });
+            onDivisionChange?.(value);
           }}
         />
         <Select

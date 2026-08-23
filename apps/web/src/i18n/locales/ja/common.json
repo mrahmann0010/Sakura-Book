@@ -130,8 +130,10 @@
       "subtotal_one": "小計 · {{count}}冊",
       "subtotal_other": "小計 · {{count}}冊",
       "delivery": "配送料",
+      "deliveryPending": "地域選択後",
       "deliveryFree": "{{threshold}}以上で無料",
       "total": "合計",
+      "totalPending": "—",
       "checkout": "レジに進む",
       "note": "配送料はレジで入力された住所に基づいて計算されます。"
     },
@@ -193,6 +195,7 @@
       "mobileMoneyLegend": "モバイルマネー",
       "mobileMoneyMeta": "手動振込",
       "sendTo": "この{{provider}}番号へ合計額を送金してください",
+      "amount": "送金額",
       "sendToHint": "{{provider}}アプリを開いて送金し、完了したらこちらに戻ってください。",
       "verifyHint": "送金内容の詳細をご入力ください。",
       "reference": "参照番号（任意）",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import type { FieldErrors, UseFormRegister, UseFormSetValue } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
@@ -80,6 +81,8 @@ export function MobileMoneyPayment({
   errors,
   provider,
   onProviderChange,
+  amount,
+  breakdown,
   className,
 }: {
   register: UseFormRegister<CheckoutValues>;
@@ -91,6 +94,17 @@ export function MobileMoneyPayment({
   errors: FieldErrors<CheckoutValues>;
   provider: MobileMoneyProviderId | null;
   onProviderChange: (provider: MobileMoneyProviderId | null) => void;
+  /**
+   * The order total, preformatted — the amount to actually send.
+   *
+   * This control's whole job is the hand-off to a banking app, and until now
+   * it named the number but never the figure: the shopper had to scroll back
+   * to the summary to find out what to type. Optional so a caller with no
+   * priced cart behind it still renders.
+   */
+  amount?: ReactNode;
+  /** The rows that total is made of, shown under it. */
+  breakdown?: ReactNode;
   className?: string;
 }) {
   const { t } = useTranslation();
@@ -127,6 +141,8 @@ export function MobileMoneyPayment({
             onSelect={() => selectProvider(entry.id)}
             register={register}
             errors={errors}
+            amount={amount}
+            breakdown={breakdown}
           />
         ))}
       </PaymentOptionList>
@@ -150,12 +166,16 @@ function ProviderOption({
   onSelect,
   register,
   errors,
+  amount,
+  breakdown,
 }: {
   entry: { id: PaymentProvider; number: string };
   checked: boolean;
   onSelect: () => void;
   register: UseFormRegister<CheckoutValues>;
   errors: FieldErrors<CheckoutValues>;
+  amount?: ReactNode;
+  breakdown?: ReactNode;
 }) {
   const { t } = useTranslation();
   const label = t(`checkout.payment.${entry.id}`);
@@ -175,6 +195,8 @@ function ProviderOption({
             providerLabel={label}
             register={register}
             errors={errors}
+            amount={amount}
+            breakdown={breakdown}
           />
         ) : undefined
       }
@@ -187,16 +209,33 @@ function TransferDetails({
   providerLabel,
   register,
   errors,
+  amount,
+  breakdown,
 }: {
   number: string;
   providerLabel: string;
   register: UseFormRegister<CheckoutValues>;
   errors: FieldErrors<CheckoutValues>;
+  amount?: ReactNode;
+  breakdown?: ReactNode;
 }) {
   const { t } = useTranslation();
 
   return (
     <div className={cn(paymentOption({ selected: false }), "bg-tint border-none px-4 py-3.5")}>
+      {/* The figure first, above the number: "how much" and "where to" are one
+          instruction, and splitting them across the page is what sent the
+          shopper back to the summary mid-transfer. The breakdown rides under
+          it so the delivery charge is accounted for at the moment the total
+          is being typed into a banking app, not only in the rail. */}
+      {amount ? (
+        <div className="hairline mb-3.5 pb-3.5">
+          <p className="text-caption text-secondary">{t("checkout.payment.amount")}</p>
+          <p className="text-22 text-ink mt-1 font-semibold">{amount}</p>
+          {breakdown ? <div className="mt-2.5 flex flex-col gap-2">{breakdown}</div> : null}
+        </div>
+      ) : null}
+
       <p className="text-caption text-secondary">
         {t("checkout.payment.sendTo", { provider: providerLabel })}
       </p>

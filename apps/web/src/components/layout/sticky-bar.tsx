@@ -15,6 +15,7 @@ export function StickyBar({
   label,
   value,
   action,
+  breakdown,
   note,
   className,
 }: {
@@ -23,6 +24,17 @@ export function StickyBar({
   /** The figure. */
   value?: ReactNode;
   action: ReactNode;
+  /**
+   * The rows the total is made of — subtotal, delivery, any waiver — sitting
+   * above it behind a hairline.
+   *
+   * Optional because the cart's bar does not want them: postage there is
+   * still an estimate, and the summary rail above it already says so. On
+   * checkout the bar is the only money the shopper sees while filling the
+   * form, and a lump sum with no delivery line beside it is the thing they
+   * scroll back up to check.
+   */
+  breakdown?: ReactNode;
   /** One quiet line under the button — reassurance, or a cut-off time. */
   note?: ReactNode;
   className?: string;
@@ -35,8 +47,15 @@ export function StickyBar({
       )}
     >
       <div className="shell py-4">
+        {breakdown ? <div className="mb-3 flex flex-col gap-2">{breakdown}</div> : null}
+
         {label || value ? (
-          <div className="mb-3 flex items-baseline justify-between gap-5">
+          <div
+            className={cn(
+              "mb-3 flex items-baseline justify-between gap-5",
+              breakdown && "hairline pt-3",
+            )}
+          >
             <span className="text-13.5 text-secondary">{label}</span>
             <span className="text-17 text-ink font-semibold">{value}</span>
           </div>

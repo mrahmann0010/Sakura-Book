@@ -88,11 +88,14 @@ export function CheckoutView({ locale }: { locale: Locale }) {
   /* useWatch rather than `watch()`: watch returns a fresh function each render,
      which opts the whole component out of the React Compiler's memoisation. */
   const method = useWatch({ control, name: "method" }) as AcceptedPaymentMethod;
-  /* The region the address form derived from the chosen division — undefined
-     until then, so the cart quotes at the flat rate exactly as it did before
-     an address existed, and only re-quotes once there is a real zone to price. */
+  /* The region the address form derived from the chosen division. */
   const region = useWatch({ control, name: "region" });
-  const cart = useCart(region || undefined);
+  /* Whether the shopper has actually chosen a division. Not derivable from
+     `region`: checkoutDefaults seeds it to "inside-dhaka", so it is a real
+     zone from the first render and would price delivery before anyone said
+     where the books are going. ShippingFields reports the choice up. */
+  const [divisionChosen, setDivisionChosen] = useState(false);
+  const cart = useCart(divisionChosen ? region || undefined : undefined);
 
   async function placeOrder(values: CheckoutValues) {
     setSubmitError(null);
@@ -112,9 +115,7 @@ export function CheckoutView({ locale }: { locale: Locale }) {
       setVerification(order.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");
     } catch (err) {
       setVerification(null);
-      setSubmitError(
-        err instanceof ApiError ? err.message : t("checkout.submitError"),
-      );
+      setSubmitError(err instanceof ApiError ? err.message : t("checkout.submitError"));
     }
   }
 
@@ -182,6 +183,14 @@ export function CheckoutView({ locale }: { locale: Locale }) {
      cannot end up formatted for a different locale than the total below it. */
   const money = intlLocale(locale);
 
+  /* Delivery is priced per zone, and the zone comes from the division the
+     address picker resolves. Until that happens the quote is still carrying
+     the flat placeholder rate, so the rail says so instead of showing a
+     figure the shopper would read as final — and the total, which cannot be
+     known without it, waits with it. Both fill in together the moment a
+     division is chosen. */
+  const deliveryKnown = divisionChosen;
+
   const rows = summaryLines(
     cart,
     {
@@ -190,11 +199,12 @@ export function CheckoutView({ locale }: { locale: Locale }) {
       deliveryFree: t("cart.summary.deliveryFree", {
         threshold: formatMoney(FREE_DELIVERY_THRESHOLD, money),
       }),
+      deliveryUnknown: deliveryKnown ? undefined : t("cart.summary.deliveryPending"),
     },
     money,
   );
 
-  const total = formatMoney(cart.total, money);
+  const total = deliveryKnown ? formatMoney(cart.total, money) : t("cart.summary.totalPending");
 
   const recapLines: RecapLine[] = cart.lines.map((line) => ({
     book: line.book,
@@ -291,7 +301,12 @@ export function CheckoutView({ locale }: { locale: Locale }) {
             className="mt-9 flex flex-col gap-10"
           >
             <div className={step === "delivery" ? undefined : "hidden"}>
-              <ShippingFields register={register} errors={errors} setValue={setValue} />
+              <ShippingFields
+                register={register}
+                errors={errors}
+                setValue={setValue}
+                onDivisionChange={(division) => setDivisionChosen(Boolean(division))}
+              />
             </div>
 
             {step === "payment" ? (
@@ -309,6 +324,10 @@ export function CheckoutView({ locale }: { locale: Locale }) {
                   setValue={setValue}
                   errors={errors}
                   method={method}
+                  amount={total}
+                  breakdown={rows.map((row) => (
+                    <SummaryRow key={row.key} label={row.label} value={row.value} tone={row.tone} />
+                  ))}
                   onMethodChange={(next) =>
                     setValue("method", next, { shouldValidate: true, shouldDirty: true })
                   }
@@ -334,7 +353,19 @@ export function CheckoutView({ locale }: { locale: Locale }) {
         </RailLayout>
       </Shell>
 
-      <StickyBar label={t("cart.summary.total")} value={total} action={primaryAction} />
+      <StickyBar
+        label={t("cart.summary.total")}
+        value={total}
+        /* The same rows the desktop rail draws, from the same derivation — so
+           the delivery line the shopper reads at the bottom of a phone is the
+           one the rail would have shown them, pending label and all, and the
+           total above the button is only a figure once there is a division to
+           price it against. */
+        breakdown={rows.map((row) => (
+          <SummaryRow key={row.key} label={row.label} value={row.value} tone={row.tone} />
+        ))}
+        action={primaryAction}
+      />
 
       <PaymentVerificationModal status={verification} onSeeOrder={seeOrder} />
     </>

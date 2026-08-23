@@ -132,8 +132,10 @@
       "subtotal_one": "উপমোট · {{count}}টি বই",
       "subtotal_other": "উপমোট · {{count}}টি বই",
       "delivery": "ডেলিভারি",
+      "deliveryPending": "বিভাগ বাছুন",
       "deliveryFree": "{{threshold}}-এর বেশি হলে ফ্রি",
       "total": "মোট",
+      "totalPending": "—",
       "checkout": "চেকআউটে যান",
       "note": "চেকআউটে দেওয়া ঠিকানা অনুযায়ী ডেলিভারি খরচ হিসাব হবে।"
     },
@@ -195,6 +197,7 @@
       "mobileMoneyLegend": "মোবাইল ব্যাংকিং",
       "mobileMoneyMeta": "ম্যানুয়াল ট্রান্সফার",
       "sendTo": "এই {{provider}} নম্বরে মোট টাকা পাঠান",
+      "amount": "যে পরিমাণ পাঠাবেন",
       "sendToHint": "আপনার {{provider}} অ্যাপ খুলুন, টাকা পাঠান, তারপর এখানে ফিরে আসুন।",
       "verifyHint": "এখন আপনার পাঠানো পেমেন্টের তথ্য দিন।",
       "reference": "রেফারেন্স (ঐচ্ছিক)",
