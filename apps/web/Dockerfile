@@ -55,6 +55,39 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_SITE_URL
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 
+# Fail the build rather than ship a bundle with these inlined wrong. Both vars
+# are frozen into client JavaScript by the step below, so a missing one cannot
+# be corrected on the running container — only by rebuilding and redeploying.
+# Without this check that mistake produces a *successful* build and a site that
+# loads fine, and surfaces days later as localhost URLs in Search Console.
+#
+# The scheme is checked, not just emptiness: "example.com" without it yields
+# canonical tags a crawler reads as relative paths. The trailing-slash rule on
+# SITE_URL matches apps/web/.env.example, and exists because lib/site.ts joins
+# paths onto it directly — a trailing slash gives every URL a double slash.
+#
+# This runs as its own layer ahead of the build so the failure names the
+# variable instead of surfacing as a confusing 40-line Next stack trace.
+RUN set -e; \
+    for v in NEXT_PUBLIC_API_URL NEXT_PUBLIC_SITE_URL; do \
+      eval "val=\$$v"; \
+      if [ -z "$val" ]; then \
+        echo "ERROR: $v is empty."; \
+        echo "  Next inlines it at build time, so setting it on the running"; \
+        echo "  container is too late. Pass it explicitly:"; \
+        echo "    docker build --build-arg $v=https://... -f apps/web/Dockerfile ."; \
+        exit 1; \
+      fi; \
+      case "$val" in \
+        http://*|https://*) ;; \
+        *) echo "ERROR: $v must include a scheme (got '$val')."; exit 1 ;; \
+      esac; \
+    done; \
+    case "$NEXT_PUBLIC_SITE_URL" in \
+      */) echo "ERROR: NEXT_PUBLIC_SITE_URL must not end in '/' (got '$NEXT_PUBLIC_SITE_URL')."; exit 1 ;; \
+    esac; \
+    echo "build args ok: API=$NEXT_PUBLIC_API_URL SITE=$NEXT_PUBLIC_SITE_URL"
+
 # G_ANALYTICS is deliberately NOT a build arg. It is served at request time by
 # app/api/analytics-config/route.ts, so setting it on the running container is
 # enough and a rebuild is not — which is the point: the ID can be added, changed

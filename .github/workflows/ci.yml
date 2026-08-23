@@ -94,3 +94,69 @@ jobs:
             git status --porcelain drizzle
             exit 1
           fi
+
+  # The two Dockerfiles that actually ship, built on every PR. Nothing else in
+  # this workflow touches them: lint, typecheck and test all run against the
+  # source tree, so every rule the images depend on is invisible here.
+  #
+  # And those rules are easy to break from a distance. outputFileTracingRoot
+  # decides whether public/ lands where the standalone server looks for it.
+  # @nestjs/cli is not hoisted, so a copy of the root node_modules alone loses
+  # the `nest` binary. The prune stage is sequenced after build on purpose —
+  # two concurrent npm installs of this workspace exhaust a small build host.
+  # None of that is enforced by a typechecker; it is only enforced by building.
+  #
+  # Without this job the first thing to run these files is a deploy, which is
+  # the worst place to learn that one of them no longer works.
+  images:
+    name: Production images build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Placeholders, and that is the whole intent: this job proves the image
+      # can be assembled, not that production is configured. The real values
+      # live in the deploy environment. They still have to satisfy the build-arg
+      # guard in apps/web/Dockerfile, which is itself worth exercising here.
+      - name: Build web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: false
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://api.example.com
+            NEXT_PUBLIC_SITE_URL=https://example.com
+          # Layer cache in the Actions cache, so a PR that touches only app code
+          # reuses the npm install instead of repeating it. mode=max keeps the
+          # intermediate stages too, which is what makes the multi-stage API
+          # build benefit rather than just the final layer.
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      - name: Build api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      # A build arg omitted must fail the build. This asserts the guard still
+      # fires — a guard that silently stops working is worse than none, because
+      # it is trusted. Runs last: it is the only step expected to fail, and the
+      # layers it needs are already cached by the web build above.
+      - name: Guard rejects a missing build arg
+        run: |
+          if docker build -f apps/web/Dockerfile \
+               --build-arg NEXT_PUBLIC_API_URL=https://api.example.com \
+               -t sakura/web:guard-check . >/dev/null 2>&1; then
+            echo "::error::The build-arg guard in apps/web/Dockerfile did not fire."
+            echo "A build with NEXT_PUBLIC_SITE_URL unset is supposed to fail."
+            exit 1
+          fi
+          echo "Guard fired as expected."
