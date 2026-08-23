@@ -25,17 +25,11 @@ export function BookGrid({
   className,
 }: {
   children: ReactNode;
-  columns?: 3 | 4 | 6 | "4-mobile";
+  columns?: 3 | 4 | 6;
   className?: string;
 }) {
   const gridClass =
-    columns === 3
-      ? "grid-books-3"
-      : columns === 6
-        ? "grid-books-6"
-        : columns === "4-mobile"
-          ? "grid-books-mobile-4"
-          : "grid-books";
+    columns === 3 ? "grid-books-3" : columns === 6 ? "grid-books-6" : "grid-books";
 
   return <div className={cn(gridClass, className)}>{children}</div>;
 }
@@ -139,7 +133,7 @@ export function BookGridSkeleton({
   className,
 }: {
   count?: number;
-  columns?: 3 | 4 | 6 | "4-mobile";
+  columns?: 3 | 4 | 6;
   footer?: boolean;
   className?: string;
 }) {

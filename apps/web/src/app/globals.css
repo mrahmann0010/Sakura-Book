@@ -162,14 +162,6 @@
   }
 }
 
-@utility grid-books-mobile-4 {
-  /* The landing shelf: 4 up at every width, mobile included, so the shelf
-     never drops below the desktop's row count while scaling down. */
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--spacing-gutter);
-}
-
 @utility grid-books-3 {
   /* The landing shelf: 1 up mobile, 2 up tablet, 3 up desktop at the shelf's
      tighter 28px gutter. Panel cards are wider than a bare cover, so the

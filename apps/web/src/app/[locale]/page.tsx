@@ -220,7 +220,7 @@ async function RecentGrid({ locale, t }: { locale: Locale; t: T }) {
   return (
     <>
       <h2 className="sr-only">{t("home.recent.title")}</h2>
-      <BookGrid columns="4-mobile">
+      <BookGrid>
         {bestSellers.map((book) => (
           <BookCard
             key={book.id}
@@ -271,9 +271,7 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
           card, 2 up on mobile, 3 on tablet, 4 on desktop, then the way through
           to the rest of the catalogue. */}
       <Shell>
-        <Suspense
-          fallback={<BookGridSkeleton count={HOME_SHELF_COUNT} columns="4-mobile" footer />}
-        >
+        <Suspense fallback={<BookGridSkeleton count={HOME_SHELF_COUNT} footer />}>
           <RecentGrid locale={locale} t={t} />
         </Suspense>
       </Shell>
