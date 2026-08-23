@@ -6,3 +6,8 @@ dist
 .turbo
 coverage
 *.tsbuildinfo
+
+# Generated: pdf.js worker/cmaps/fonts copied from node_modules by
+# apps/web/scripts/copy-pdfjs-assets.mjs. `npm run format` would otherwise
+# rewrite a 1.2MB vendor bundle.
+apps/web/public/pdfjs

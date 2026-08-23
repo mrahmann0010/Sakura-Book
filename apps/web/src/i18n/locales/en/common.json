@@ -290,6 +290,9 @@
       "action": "Preview",
       "title": "Preview",
       "lede": "A sample of the book — a few pages to read before you decide.",
+      "loading": "Loading the sample…",
+      "page": "Page {{page}} of {{total}}",
+      "error": "The sample could not be loaded here. Opening it in a new tab usually works.",
       "openInNewTab": "Open in a new tab",
       "close": "Close",
       "fallback": "Trouble reading it here? Open it in a new tab."

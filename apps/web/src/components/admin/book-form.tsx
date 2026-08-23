@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type {
   AdminBookCreateInput,
@@ -12,6 +13,12 @@ import { Button, Checkbox, Input, Select, Textarea } from "@/components/ui";
 import { FileUpload } from "@/components/admin/file-upload";
 import { AdminApiError, uploadAdminCover, uploadAdminPdf } from "@/lib/api/admin";
 import { getCategories } from "@/lib/api/catalog";
+
+/* Lazy for the same reason the storefront's is: pdf.js is a large chunk, and
+   most visits to this form are editing a price, not re-checking a sample. */
+const PdfReader = dynamic(() => import("@/components/domain/pdf-reader").then((m) => m.PdfReader), {
+  ssr: false,
+});
 
 /**
  * The payload this form produces — the schema's *input*, not its output, so
@@ -822,9 +829,13 @@ export function BookForm({
           />
           {form.pdfUrl ? (
             <>
-              <iframe
-                src={form.pdfUrl}
-                title={form.pdfFileName || "PDF preview"}
+              {/* The same reader the storefront uses, not an <iframe>, for two
+                  reasons: the iframe was blank on any phone (see
+                  pdf-reader.tsx), and an admin checking an upload should be
+                  looking at what a shopper will actually see rather than at
+                  whatever viewer this particular desktop happens to ship. */}
+              <PdfReader
+                url={form.pdfUrl}
                 className="rounded-control border-rule h-64 w-full border"
               />
               <a
