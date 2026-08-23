@@ -233,6 +233,12 @@ export const badge = cva(
         neutral: "bg-tint text-secondary",
         /** On a tinted surface the neutral badge takes the page cream. */
         onTint: "bg-page text-secondary",
+        /** Pre-order — an outline rather than a fill, so it reads apart from
+            the neutral metadata flags without a second colour. This theme is
+            deliberately one-accent (principle 02) and that accent is spoken
+            for by editor's pick, so the only texture left to spend here is
+            line vs. fill, not a new hue. */
+        outline: "border border-ink/40 text-ink",
       },
     },
     defaultVariants: { tone: "neutral" },

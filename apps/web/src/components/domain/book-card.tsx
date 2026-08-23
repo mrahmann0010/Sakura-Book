@@ -117,6 +117,19 @@ export function BookCard({
       ? "Out of stock"
       : formatMoney(book.priceCents, intlLocale(locale));
 
+  /* "Ships around <Month year>" — the same fact the detail page's buy card
+     states in full sentence form (`book.preOrder.shipsAround`), shortened to
+     fit the caption row a grid card has for it. English only, like every
+     other word this component prints — `flagLabels` never went through i18n
+     either, and a card is not the place to start. */
+  const shipDateLine =
+    book.flag === "pre-order" && book.expectedShipDate
+      ? `Ships around ${new Intl.DateTimeFormat(intlLocale(locale), {
+          year: "numeric",
+          month: "long",
+        }).format(new Date(book.expectedShipDate))}`
+      : undefined;
+
   const title = book.href ? (
     /* The title anchor stretches over the card, so the whole card is one
        target. Controls opt out by raising themselves above it — `z-10` on the
@@ -133,6 +146,7 @@ export function BookCard({
     <p className="text-13 text-secondary mt-1.5">
       {book.author}
       {showPrice ? ` · ${priceLine}` : null}
+      {shipDateLine ? ` · ${shipDateLine}` : null}
     </p>
   ) : (
     <>
@@ -142,6 +156,7 @@ export function BookCard({
           {priceLine}
         </p>
       ) : null}
+      {shipDateLine ? <p className="text-caption text-secondary mt-1">{shipDateLine}</p> : null}
     </>
   );
 
@@ -239,7 +254,11 @@ export function BookCard({
 
       {flag ? (
         <p className="mt-4">
-          <Badge tone={flag === "editors-pick" ? "accent" : "neutral"}>{flagLabels[flag]}</Badge>
+          <Badge
+          tone={flag === "editors-pick" ? "accent" : flag === "pre-order" ? "outline" : "neutral"}
+        >
+          {flagLabels[flag]}
+        </Badge>
         </p>
       ) : null}
 
