@@ -30,6 +30,7 @@ export function BuyNowButton({
   soldOut = false,
   comingSoon = false,
   size = "sm",
+  variant = "secondary",
   block = false,
 }: {
   bookId: string;
@@ -38,6 +39,14 @@ export function BuyNowButton({
   soldOut?: boolean;
   comingSoon?: boolean;
   size?: "sm" | "md";
+  /**
+   * Defaults to `secondary`, because the usual context is a grid: a shelf of
+   * clay buttons spends the one accent a dozen times over, against principle
+   * 02. A page passes `primary` for the single button it wants pressed —
+   * exactly one per screen, or the principle is broken in the other
+   * direction.
+   */
+  variant?: "primary" | "secondary";
   block?: boolean;
 }) {
   const { t } = useTranslation();
@@ -68,7 +77,7 @@ export function BuyNowButton({
 
   return (
     <Button
-      variant="secondary"
+      variant={variant}
       size={size}
       block={block}
       onClick={() => {

@@ -246,6 +246,26 @@ function preOrderFirst(books: BookSummary[]): BookSummary[] {
 }
 
 /**
+ * Which card, if any, gets the page's one clay button.
+ *
+ * The landing page had no primary action anywhere: every add-to-cart on the
+ * shelf was `secondary` (correct on /catalog, where a grid of primaries would
+ * spend the accent a dozen times over, against principle 02) and the
+ * catalogue CTA is secondary too. A page whose whole job is to get a visitor
+ * to buy something ended up with nothing on it weighted to be pressed.
+ *
+ * Principle 02 reads "one accent, used sparingly — if two things on a screen
+ * are clay, one of them is wrong". So: exactly one. It goes to the first card
+ * a visitor can actually act on, which after `preOrderFirst` is normally the
+ * shelf's lead. `-1` when nothing on the shelf is orderable — a whole page of
+ * coming-soon titles has no action to promote, and inventing one by making a
+ * disabled button clay would be worse than the flat page it replaced.
+ */
+function leadBuyable(books: BookSummary[]): number {
+  return books.findIndex((book) => !book.soldOut && book.flag !== "coming-soon");
+}
+
+/**
  * The landing shelf — the catalog's grid, card for card.
  *
  * Everything the card renders is the catalog's: the `bare` reference variant
@@ -259,6 +279,7 @@ async function RecentGrid({ locale, t }: { locale: Locale; t: T }) {
     { pageSize: HOME_SHELF_COUNT },
   );
   const bestSellers = preOrderFirst(toBookSummaries(recent.items, locale));
+  const leadIndex = leadBuyable(bestSellers);
 
   return (
     <>
@@ -290,6 +311,7 @@ async function RecentGrid({ locale, t }: { locale: Locale; t: T }) {
                   title={book.title}
                   soldOut={book.soldOut}
                   comingSoon={book.flag === "coming-soon"}
+                  variant={index === leadIndex ? "primary" : "secondary"}
                   block
                 />
               }
