@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 // import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { BuyNowButton } from "@/components/cart/buy-now-button";
-import { BookCover, BookMeta } from "@/components/domain";
+import { BookCover, BookMeta, BookPreview } from "@/components/domain";
 import {
   AppNav,
   Breadcrumbs,
@@ -156,6 +156,12 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
           size="md"
           block
         />
+
+        {/* Read-before-you-buy, under the purchase control rather than above
+            it: it is the quieter question, and a ghost control leaves Buy Now
+            as the card's one primary (§2). Renders nothing when the shop has
+            not uploaded a sample, so the card does not grow a dead row. */}
+        <BookPreview pdfUrl={book.pdfUrl} bookTitle={book.title} />
       </div>
 
       {/* Reassurance at the decision moment — the same delivery facts the

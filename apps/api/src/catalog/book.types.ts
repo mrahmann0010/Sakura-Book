@@ -72,6 +72,7 @@ export type BookDetailRow = BookSummaryRow & {
   language: string;
   publishedDate: Date | null;
   galleryImageUrls: string[] | null;
+  pdfUrl: string | null;
   publisher: { slug: string; name: string } | null;
   categories: { category: { slug: string; name: string; group: string | null } }[];
 };

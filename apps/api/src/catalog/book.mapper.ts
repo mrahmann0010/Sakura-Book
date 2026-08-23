@@ -74,5 +74,10 @@ export function toBookDetail(row: BookDetailRow, aggregate?: RatingAggregate): B
     // is an empty one to every client, and normalising it here means no
     // component has to write `?? []`.
     galleryImageUrls: row.galleryImageUrls ?? [],
+    /* The sample chapters, or null when the shop has not uploaded any. The
+       sibling `pdfFileName` stays admin-only: the reader is titled with the
+       book, and the stored filename is whatever the shop happened to call the
+       file on its own disk. */
+    pdfUrl: row.pdfUrl,
   };
 }

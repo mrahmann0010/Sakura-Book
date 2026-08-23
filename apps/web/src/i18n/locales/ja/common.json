@@ -280,6 +280,14 @@
       "published": "{{date}}刊行",
       "language": "{{language}}"
     },
+    "preview": {
+      "action": "試し読み",
+      "title": "試し読み",
+      "lede": "本のサンプルです。ご注文の前に数ページお読みいただけます。",
+      "openInNewTab": "新しいタブで開く",
+      "close": "閉じる",
+      "fallback": "うまく表示されない場合は、新しいタブで開いてください。"
+    },
     "notFound": {
       "eyebrow": "棚にありません",
       "title": "その本が見つかりません",

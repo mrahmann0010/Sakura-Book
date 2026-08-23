@@ -8,6 +8,7 @@ export { BookCard } from "./book-card";
 export type { BookCardProps } from "./book-card";
 
 export { BookCover } from "./book-cover";
+export { BookPreview } from "./book-preview";
 export type { BookCoverProps } from "./book-cover";
 
 export {

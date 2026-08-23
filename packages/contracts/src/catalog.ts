@@ -107,6 +107,22 @@ export const bookDetailSchema = bookSummarySchema.extend({
     z.object({ slug: z.string(), name: z.string(), group: z.string().nullable() }),
   ),
   galleryImageUrls: z.array(z.string()),
+
+  /**
+   * A sample the customer may read before buying — a few chapters, never the
+   * whole book (see the `pdf_url` column comment).
+   *
+   * On the detail schema only, not the summary: a catalog grid has no room to
+   * offer a reader, and putting the field on every card would send a URL per
+   * book on every page of browsing to draw nothing.
+   *
+   * This is the one admin-side upload that is deliberately public. The shop
+   * has to be able to hand the sample to an anonymous visitor — that is what
+   * the sample is for — so the bucket is public and the link is unsigned. Do
+   * not reach for this field to serve anything that is not meant to be read by
+   * whoever asks.
+   */
+  pdfUrl: z.string().nullable(),
 });
 
 export const bookListSchema = paginated(bookSummarySchema);
