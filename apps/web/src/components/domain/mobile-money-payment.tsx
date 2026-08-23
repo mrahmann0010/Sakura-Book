@@ -221,7 +221,9 @@ function SendMoneyStep({
         </div>
       </div>
 
-      <p className="text-caption text-secondary mt-3">{t("checkout.payment.sendToHint")}</p>
+      <p className="text-caption text-secondary mt-3">
+        {t("checkout.payment.sendToHint", { provider: providerLabel })}
+      </p>
 
       <Button type="button" size="sm" className="mt-3.5" onClick={onSent}>
         {t("checkout.payment.completeTransaction")}
