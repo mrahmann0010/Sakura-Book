@@ -13,7 +13,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { InvalidInputError, ResourceNotFoundError } from "../../common/errors";
 import { DbService } from "../../db/db.service";
 import { orderItems, orders } from "../../db/schema";
-import { findOrder, type OrderRow } from "../../orders";
+import { findOrder, findTransactionIdClaim, type OrderRow } from "../../orders";
 import { OrdersService } from "../../orders";
 import { PaymentsService } from "../../payments";
 import { AuditService } from "../../audit";
@@ -168,9 +168,27 @@ export class AdminOrdersService {
       provider: order.provider ?? undefined,
     });
 
+    /* Said first, and said even when the gateway matched — especially then. A
+       reused receipt matches the gateway by construction: it is a real payment,
+       for the right amount, that another order has already been granted
+       against. "Verified" is exactly what this looks like from the gateway's
+       side, so the summary has to lead with the part the gateway cannot know.
+
+       The record keeps the true gateway verdict rather than being overwritten,
+       because the two facts are independent and staff need both: whether the
+       money arrived, and whether it has already been spent. */
+    const claim = await findTransactionIdClaim(this.dbService.db, order.transactionId, {
+      excludeOrderId: order.id,
+    });
+
+    const summary = summarizeVerification(verification, order.totalCents);
+
     return {
       record: toVerificationRecord(verification, order.totalCents),
-      summary: summarizeVerification(verification, order.totalCents),
+      summary: claim
+        ? `This transaction ID is already recorded against order ${claim.orderNumber} (${claim.status}). ` +
+          `Confirming payment here is blocked. Gateway says: ${summary}`
+        : summary,
     };
   }
 
@@ -247,6 +265,30 @@ export class AdminOrdersService {
       throw new InvalidInputError(
         "Cash-on-delivery orders are confirmed by marking them delivered, not by recording a transfer.",
         { orderNumber, paymentMethod: order.paymentMethod },
+      );
+    }
+
+    /* The admin path is the one an attacker's duplicate actually reaches:
+       auto-verify already refuses it, so the order lands in the queue looking
+       like any other pending transfer, and the gateway will happily confirm
+       the receipt is genuine. Refused outright rather than warned about,
+       because there is no override flag yet — the escape hatch, when a staff
+       member genuinely knows better, is to cancel the older order, which
+       releases its claim on the receipt. */
+    const claim = await findTransactionIdClaim(this.dbService.db, order.transactionId, {
+      excludeOrderId: order.id,
+    });
+
+    if (claim) {
+      this.logger.warn(
+        `${context.actor.email} tried to confirm ${orderNumber}, whose transaction ID is ` +
+          `already recorded against ${claim.orderNumber}`,
+      );
+
+      throw new InvalidInputError(
+        `This order's transaction ID is already recorded against order ${claim.orderNumber}. ` +
+          `Confirm the payment there, or cancel that order first if this one is the real claim.`,
+        { orderNumber, claimedBy: claim.orderNumber, claimedByStatus: claim.status },
       );
     }
 

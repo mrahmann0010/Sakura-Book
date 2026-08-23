@@ -70,6 +70,30 @@ export class CouponNotApplicableError extends BusinessRuleError {
 }
 
 /**
+ * The transaction ID on this order is already attached to another one.
+ *
+ * A BusinessRuleError (422) rather than a conflict, and the distinction is the
+ * usual one: retrying changes nothing, because the receipt genuinely belongs
+ * to an order that already exists. The customer has to send a new payment, or
+ * stop trying to place a second order against the old one.
+ *
+ * `claimedBy` carries the order number that holds the receipt, because the
+ * most likely reader is not an attacker but a customer who believes their
+ * first order failed — telling them where their money already went resolves
+ * the situation, where a bare refusal starts a support conversation.
+ */
+export class TransactionIdAlreadyUsedError extends BusinessRuleError {
+  readonly code = "TRANSACTION_ID_ALREADY_USED";
+
+  constructor(transactionId: string, claimedBy: string) {
+    super(
+      `Transaction ID '${transactionId}' is already recorded against order ${claimedBy}`,
+      { transactionId, claimedBy },
+    );
+  }
+}
+
+/**
  * An order number could not be minted in ORDER_NUMBER_ATTEMPTS draws.
  *
  * Retryable in principle, hence a conflict — but in practice this means the
