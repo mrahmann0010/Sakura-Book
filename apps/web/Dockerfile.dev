@@ -2,26 +2,42 @@
 ARG NODE_VERSION=20.20-alpine
 FROM node:${NODE_VERSION}
 WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
 
+# Every workspace manifest, even the ones this image does not install: npm ci
+# validates the full set against package-lock.json and refuses a partial one
+# with "Missing: @sakura/api from lock file".
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/api/package.json apps/api/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
+
+# Scoped to the two workspaces this container runs. Unscoped, this also
+# installs the API's tree — @nestjs/*, its Postgres driver, the whole CLI —
+# into an image that never starts Nest, which is most of the install time and
+# most of the 1.6GB the two dev images used to weigh. --include-workspace-root
+# keeps the root manifest's deps and the node_modules/@sakura/* symlinks.
 RUN --mount=type=cache,target=/root/.npm,sharing=locked \
-    npm ci --no-audit --no-fund
+    npm ci --no-audit --no-fund \
+      --include-workspace-root \
+      --workspace @sakura/web \
+      --workspace @sakura/contracts
 
-COPY . .
-
-# @sakura/contracts resolves through its compiled dist/, which .dockerignore
-# keeps out of the build context on purpose. Without this the image starts with
-# the workspace symlink in place but nothing behind it, and Next fails with
-# "Can't resolve '@sakura/contracts'".
-RUN npm run build --workspace @sakura/contracts
+# Deliberately no `COPY . .`. Compose bind-mounts apps/web and
+# packages/contracts over anything baked in here, so copying source would be
+# invalidated by every edit — busting this layer and re-running the install on
+# rebuilds — to produce files that are then hidden by the mounts anyway.
+#
+# Nor is contracts compiled here, for the same reason: packages/contracts is
+# mounted, so an in-image dist/ is shadowed at start. The CMD below builds it
+# against the mounted sources instead, which is the copy Next actually reads.
+#
+# The consequence is that this image only runs under Compose. That is the
+# intent — the deployable image is apps/web/Dockerfile.
 
 EXPOSE 3000
 ENV PORT=3000 HOSTNAME=0.0.0.0
 # Not through turbo: it runs tasks in strict env mode and strips anything it
 # was not told about, including the addresses Compose injects (see
-# API_INTERNAL_URL / REDIS_URL in docker-compose.yml). Contracts is built
-# here rather than leaned on turbo's ^build for the same reason.
+# API_INTERNAL_URL in docker-compose.yml).
 CMD ["sh", "-c", "npm run build --workspace @sakura/contracts && npm run dev --workspace @sakura/web"]

@@ -2,24 +2,32 @@
 ARG NODE_VERSION=20.20-alpine
 FROM node:${NODE_VERSION}
 WORKDIR /app
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 
+# All four manifests: npm ci validates them against package-lock.json and
+# refuses a partial set, even for workspaces it is not installing.
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
+
+# Scoped, mirroring the runtime install in apps/api/Dockerfile. Unscoped this
+# pulls in the web app's tree — next, react, the Tailwind packages, pdfjs-dist
+# — none of which Nest loads. --include-workspace-root keeps the root deps and
+# the node_modules/@sakura/* symlinks intact.
 RUN --mount=type=cache,target=/root/.npm,sharing=locked \
-    npm ci --no-audit --no-fund
+    npm ci --no-audit --no-fund \
+      --include-workspace-root \
+      --workspace @sakura/api \
+      --workspace @sakura/contracts
 
-COPY . .
-
-# See apps/web/Dockerfile.dev: contracts ships as dist/, which is not in the
-# build context, so it has to be compiled inside the image.
-RUN npm run build --workspace @sakura/contracts
+# See apps/web/Dockerfile.dev for why no source is copied and contracts is not
+# compiled here: apps/api and packages/contracts are both bind-mounted, so
+# anything baked in is shadowed at start, and the CMD builds contracts from the
+# mounted sources — the copy Nest actually resolves through.
 
 EXPOSE 4000
 ENV PORT=4000
 # Not through turbo: it runs tasks in strict env mode and strips anything it
-# was not told about, including the addresses Compose injects (see
-# API_INTERNAL_URL / REDIS_URL in docker-compose.yml). Contracts is built
-# here rather than leaned on turbo's ^build for the same reason.
+# was not told about, including the addresses Compose injects.
 CMD ["sh", "-c", "npm run build --workspace @sakura/contracts && npm run dev --workspace @sakura/api"]

@@ -50,6 +50,11 @@ COPY apps/web apps/web
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
+# Same rule, and the one crawlers care about: without it every canonical tag,
+# hreflang and sitemap URL is built from the localhost fallback in lib/site.ts.
+ARG NEXT_PUBLIC_SITE_URL
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+
 # G_ANALYTICS is deliberately NOT a build arg. It is served at request time by
 # app/api/analytics-config/route.ts, so setting it on the running container is
 # enough and a rebuild is not — which is the point: the ID can be added, changed
