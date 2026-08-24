@@ -9,6 +9,7 @@ import { AdminShell } from "@/components/admin/admin-shell";
 import { Button, LinkButton, Modal } from "@/components/ui";
 import { AdminApiError, deleteAdminBook, listAdminBooks } from "@/lib/api/admin";
 import { formatMoney } from "@/lib/money";
+import { fileUrl } from "@/lib/storage-url";
 import { useAdminGate } from "@/lib/use-admin-gate";
 
 export default function AdminBooksPage() {
@@ -112,7 +113,7 @@ export default function AdminBooksPage() {
                   <td className="flex items-center gap-3 px-4 py-3">
                     {/* eslint-disable-next-line @next/next/no-img-element -- admin-supplied/external URL */}
                     <img
-                      src={book.coverImageUrl}
+                      src={fileUrl(book.coverImageUrl) ?? undefined}
                       alt=""
                       className="border-rule h-12 w-9 rounded-xs border object-cover"
                     />

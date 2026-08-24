@@ -35,7 +35,15 @@ const PdfReader = dynamic(() => import("./pdf-reader").then((m) => m.PdfReader),
    -------------------------------------------------------------------------- */
 
 export function BookPreview({
-  /** The sample's public URL. Render nothing when the shop has not set one. */
+  /**
+   * Where to fetch the sample from — already rewritten onto this app's own
+   * `/api/files/…` path by the caller (lib/storage-url.ts), not the storage
+   * provider's URL. It is both what the reader loads and what the
+   * "open in a new tab" link points at, so passing a raw storage URL here
+   * would put it in the page's href where anyone can read it.
+   *
+   * Null when the shop has not uploaded a sample; renders nothing.
+   */
   pdfUrl,
   /** Titles the reader, so the dialog says which book this is a sample of. */
   bookTitle,
