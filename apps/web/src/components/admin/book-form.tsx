@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import type {
   AdminBookCreateInput,
   AdminBookDetail,
@@ -362,14 +362,50 @@ export function BookForm({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const formRef = useRef<HTMLFormElement | null>(null);
 
-  useEffect(() => {
+  /**
+   * Whether the taxonomy arrived.
+   *
+   * It used to be fetched and the failure swallowed, on the reasoning that
+   * "this only degrades the checkbox list, it does not block saving a book".
+   * That stopped being true the moment a skill and a JLPT level became
+   * required: with the fetch failed there were no boxes to tick, the section
+   * rendered as nothing at all, and the only thing on screen was a validation
+   * error demanding a choice the form gave no way to make. Losing the API for
+   * a moment turned the page into a dead end that explained nothing.
+   */
+  const [categoryState, setCategoryState] = useState<"loading" | "ready" | "failed">("loading");
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+
+  /**
+   * The fetch alone, with no synchronous state write, so the mount effect can
+   * call it without kicking off a cascading render — `categoryState` already
+   * starts at "loading", so there is nothing for the first run to set.
+   */
+  const fetchCategories = useCallback(() => {
     getCategories()
-      .then(setCategoryGroups)
-      .catch(() => {
-        // The form still works with no categories selected — this only
-        // degrades the checkbox list, it does not block saving a book.
+      .then((groups) => {
+        setCategoryGroups(groups);
+        setCategoryState("ready");
+      })
+      .catch((err: unknown) => {
+        setCategoryState("failed");
+        /* The API's own words when it gave any — most often it did not answer
+           at all, which is the case worth naming, because the fix is to start
+           it rather than to keep pressing Save. */
+        setCategoryError(err instanceof Error ? err.message : null);
       });
   }, []);
+
+  /** The Retry button's job: reset to loading, then go again. */
+  const retryCategories = useCallback(() => {
+    setCategoryState("loading");
+    setCategoryError(null);
+    fetchCategories();
+  }, [fetchCategories]);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
 
   /**
    * Put the cursor on the first rejected field.
@@ -443,8 +479,26 @@ export function BookForm({
    * missing — the form must not become unsubmittable because a taxonomy
    * request did not come back; the server still enforces the rule.
    */
+  /**
+   * Required groups the taxonomy does not describe at all.
+   *
+   * Distinct from "nothing ticked": the fetch succeeded and simply came back
+   * without a `skill` or `level` group, which is what an unseeded `categories`
+   * table looks like from here — a 200 carrying `[]`. That rendered as a
+   * heading with nothing under it and a validation error demanding a choice
+   * the page could not offer, which is indistinguishable from a broken form.
+   */
+  const absentGroups = REQUIRED_CATEGORY_GROUPS.filter(
+    ({ group }) => !categoryGroups.some((candidate) => candidate.group === group),
+  );
+
   const missingGroups = REQUIRED_CATEGORY_GROUPS.filter(({ group }) => {
     const known = categoryGroups.find((candidate) => candidate.group === group);
+    /* A group the taxonomy never described cannot be judged. Reporting it as
+       satisfied is what let the form post an empty `categorySlugs` and bounce
+       off the schema with a message the operator could not act on; the submit
+       guard below refuses outright while the list is missing, which is both
+       true and fixable. */
     if (!known) return false;
     return !known.categories.some((category) => form.categorySlugs.includes(category.slug));
   });
@@ -458,6 +512,28 @@ export function BookForm({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+
+    /* Refuse before the schema does. The schema's own message — "Pick a skill
+       and a JLPT level" — is correct and useless when the list those come from
+       never loaded, because there is nothing on screen to pick. */
+    if (categoryState !== "ready") {
+      setFieldErrors({});
+      setError(
+        categoryState === "loading"
+          ? "Still loading the category list — give it a moment and try again."
+          : "The category list could not be loaded, so a skill and a JLPT level cannot be chosen. Retry it under Categories, then save.",
+      );
+      return;
+    }
+
+    if (categoryState === "ready" && absentGroups.length > 0) {
+      setFieldErrors({});
+      setError(
+        `The category list has no ${absentGroups.map((entry) => entry.label).join(" and no ")} to choose from, ` +
+          "so this cannot be saved. The reference data needs seeding — see the note under Categories.",
+      );
+      return;
+    }
 
     if (missingGroups.length > 0) {
       const wanted = missingGroups.map((entry) => entry.label).join(" and one ");
@@ -633,16 +709,58 @@ export function BookForm({
         onChange={(event) => set("description", event.target.value)}
       />
 
-      {categoryGroups.length > 0 ? (
-        <div>
-          <p className="text-caption tracking-eyebrow text-muted mb-2 uppercase">Categories</p>
-          {fieldErrors.categorySlugs ? (
-            <p className="text-13.5 text-clay-deep mb-2">{fieldErrors.categorySlugs}</p>
-          ) : (
-            <p className="text-13.5 text-muted mb-2">
-              Tick boxes · at least one Skill and one JLPT Level are required. Genre is optional.
+      {/* Always rendered, whatever happened to the fetch. Two of these groups
+          are required, and a required control that disappears when a request
+          fails leaves nothing to act on but a validation error. */}
+      <div>
+        <p className="text-caption tracking-eyebrow text-muted mb-2 uppercase">Categories</p>
+        {fieldErrors.categorySlugs ? (
+          <p className="text-13.5 text-clay-deep mb-2">{fieldErrors.categorySlugs}</p>
+        ) : (
+          <p className="text-13.5 text-muted mb-2">
+            Tick boxes · at least one Skill and one JLPT Level are required. Genre is optional.
+          </p>
+        )}
+
+        {categoryState === "loading" ? (
+          <p className="text-13.5 text-muted">Loading the category list…</p>
+        ) : null}
+
+        {categoryState === "ready" && absentGroups.length > 0 ? (
+          <div className="rounded-control border-clay bg-tint border px-4 py-3">
+            <p className="text-13.5 text-clay-deep">
+              The category list loaded, but it has no{" "}
+              {absentGroups.map((entry) => entry.label).join(" and no ")} in it — so there is
+              nothing to tick, and a book cannot be saved without one of each.
             </p>
-          )}
+            <p className="text-13.5 text-secondary mt-1">
+              These are seeded reference data, not something this form creates. Whoever administers
+              the database needs to restore them.
+            </p>
+          </div>
+        ) : null}
+
+        {categoryState === "failed" ? (
+          <div className="rounded-control border-clay bg-tint border px-4 py-3">
+            <p className="text-13.5 text-clay-deep">
+              Could not load the category list, so there is nothing to tick yet.
+              {categoryError ? ` ${categoryError}` : ""}
+            </p>
+            <p className="text-13.5 text-secondary mt-1">
+              This list comes from the API — if it is not running, start it and retry.
+            </p>
+            <div className="mt-3">
+              <Button type="button" variant="secondary" size="sm" onClick={retryCategories}>
+                Retry
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Inside the same block as the heading above, not a sibling of it —
+            the form is a `gap-8` column, so a separate element would sit 32px
+            below its own label and read as an unrelated section. */}
+        {categoryGroups.length > 0 ? (
           <div className="flex flex-col gap-4">
             {categoryGroups.map((group) => {
               /* Skill and level are the two the book cannot be saved without,
@@ -685,8 +803,8 @@ export function BookForm({
               );
             })}
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Input
