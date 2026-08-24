@@ -1,4 +1,4 @@
-import { and, ne, notInArray, sql } from "drizzle-orm";
+import { and, eq, ne, notInArray } from "drizzle-orm";
 import type { Executor } from "../db/db.types";
 import { orders } from "../db/schema";
 import { normaliseTransactionId } from "../payment-verification";
@@ -33,7 +33,7 @@ import type { OrderStatus } from "./order-status.machine";
  * blocked. Every other status — including PENDING — counts, because PENDING
  * is exactly the state a receipt is sitting in while it waits to be checked.
  */
-const RELEASED_STATUSES: OrderStatus[] = ["CANCELLED", "REFUNDED"];
+export const RELEASED_STATUSES: OrderStatus[] = ["CANCELLED", "REFUNDED"];
 
 /** The order that already holds a receipt, as much of it as a caller needs. */
 export type TransactionIdClaim = {
@@ -46,17 +46,21 @@ export type TransactionIdClaim = {
  * The order already holding `transactionId`, or undefined if the receipt is
  * unspent.
  *
- * Matched on the normalised form — uppercased, whitespace removed — computed
- * in SQL over the stored column, because the column holds whatever the
- * customer typed. `PAY123`, `pay123` and `PAY 123` are one receipt, and a
- * check that compared raw text would be defeated by pressing shift.
+ * Matched against `orders.transaction_id_normalised`, the column Postgres
+ * generates from whatever the customer typed. `PAY123`, `pay123`, `PAY 123`
+ * and `PAY-123` are one receipt, and a check that compared raw text would be
+ * defeated by pressing shift.
  *
- * That normalisation is applied per-row, so this cannot use the
- * `orders_transaction_id_idx` index and reads as a scan. Accepted knowingly:
- * it runs once per checkout and once per verification against a table of
- * orders, not events, and a correct scan today beats an indexed check that
- * needs a migration to exist. The expression matches
- * `normaliseTransactionId` exactly — if one changes, so must the other.
+ * This used to normalise per-row in the WHERE clause, which meant it could not
+ * use an index and read as a full scan on the checkout path. Against a stored
+ * generated column it is an index seek, and — more importantly — the value
+ * being searched for is produced by the same expression that produced the
+ * values being searched, so the two cannot disagree.
+ *
+ * Note this finds a claim regardless of whether the database would also refuse
+ * it. `orders_transaction_id_live_unique_idx` is the backstop for the race
+ * this query cannot win; this query is what turns a bare 23505 into a sentence
+ * naming the order that already holds the receipt.
  *
  * @param excludeOrderId the order doing the asking, so an order does not
  *   report itself as the thief of its own receipt.
@@ -81,7 +85,7 @@ export async function findTransactionIdClaim(
     .from(orders)
     .where(
       and(
-        sql`upper(regexp_replace(${orders.transactionId}, '\\s', '', 'g')) = ${normalised}`,
+        eq(orders.transactionIdNormalised, normalised),
         notInArray(orders.status, RELEASED_STATUSES),
         options.excludeOrderId ? ne(orders.id, options.excludeOrderId) : undefined,
       ),

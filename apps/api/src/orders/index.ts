@@ -19,7 +19,14 @@ export { findOrder } from "./order.query";
 export { generateOrderNumber, ORDER_NUMBER_ATTEMPTS } from "./order-number";
 // The reuse guard, shared with the admin desk so the panel cannot confirm a
 // receipt that checkout and auto-verify would both have refused.
-export { findTransactionIdClaim, type TransactionIdClaim } from "./transaction-id-claim";
+export {
+  findTransactionIdClaim,
+  RELEASED_STATUSES,
+  type TransactionIdClaim,
+} from "./transaction-id-claim";
+// The written record of every gateway check, and the page-wide duplicate
+// lookup the admin queue's badges are computed from.
+export { PaymentVerificationLogService } from "./payment-verification-log.service";
 export { ORDER_STATUS_CHANGED, type OrderStatusChangedEvent } from "./order.events";
 export {
   ORDER_STATUS_TRANSITIONS,

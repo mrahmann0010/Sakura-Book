@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import type { AdminOrderSummary, OrderStatus } from "@sakura/contracts";
 
 import { AdminShell } from "@/components/admin/admin-shell";
+import { PaymentSafetyBadges } from "@/components/admin/payment-safety";
 import { Button } from "@/components/ui";
 import { AdminApiError, listAdminOrders } from "@/lib/api/admin";
 import { formatMoney } from "@/lib/money";
@@ -111,13 +112,18 @@ export default function AdminOrdersPage() {
         {error ? <p className="text-13.5 text-clay-deep">{error}</p> : null}
 
         <div className="rounded-container border-rule bg-surface overflow-x-auto border">
-          <table className="text-13.5 w-full min-w-[820px] text-left">
+          <table className="text-13.5 w-full min-w-[940px] text-left">
             <thead>
               <tr className="border-rule text-caption text-muted border-b uppercase">
                 <th className="px-4 py-3 font-medium">Order</th>
                 <th className="px-4 py-3 font-medium">Customer</th>
                 <th className="px-4 py-3 font-medium">Placed</th>
                 <th className="px-4 py-3 font-medium">Payment</th>
+                {/* Next to the payment method, not at the end of the row: a
+                    duplicate receipt is a fact about the payment, and a badge
+                    parked past the total is one nobody scans on a busy
+                    morning. */}
+                <th className="px-4 py-3 font-medium">Receipt</th>
                 <th className="px-4 py-3 font-medium">Total</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3" />
@@ -137,6 +143,12 @@ export default function AdminOrdersPage() {
                   <td className="text-secondary px-4 py-3">
                     {order.paymentProvider ?? order.paymentMethod}
                   </td>
+                  <td className="px-4 py-3">
+                    <PaymentSafetyBadges
+                      receipt={order.receipt}
+                      verification={order.verification}
+                    />
+                  </td>
                   <td className="text-ink px-4 py-3">
                     {formatMoney(order.totalCents, "en-GB", order.currency)}
                   </td>
@@ -153,7 +165,7 @@ export default function AdminOrdersPage() {
               ))}
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-muted px-4 py-6 text-center">
+                  <td colSpan={8} className="text-muted px-4 py-6 text-center">
                     No orders in this view.
                   </td>
                 </tr>

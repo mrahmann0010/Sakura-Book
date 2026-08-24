@@ -6,6 +6,7 @@ import { ShippingModule } from "../shipping";
 import { CheckoutService } from "./checkout.service";
 import { GuestOrdersController } from "./guest-orders.controller";
 import { OrdersService } from "./orders.service";
+import { PaymentVerificationLogService } from "./payment-verification-log.service";
 
 /**
  * Checkout, and the order lifecycle.
@@ -18,7 +19,11 @@ import { OrdersService } from "./orders.service";
 @Module({
   imports: [PricingModule, InventoryModule, CouponsModule, ShippingModule],
   controllers: [GuestOrdersController],
-  providers: [CheckoutService, OrdersService],
-  exports: [CheckoutService, OrdersService],
+  providers: [CheckoutService, OrdersService, PaymentVerificationLogService],
+  // The log is exported because the admin desk both writes to it (a staff
+  // member pressing Verify) and reads it (the queue's badges). It stays
+  // defined here, with the table it writes, rather than in the panel — the
+  // automatic check at checkout writes to it too.
+  exports: [CheckoutService, OrdersService, PaymentVerificationLogService],
 })
 export class OrdersModule {}

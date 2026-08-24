@@ -14,17 +14,13 @@ import { InvalidInputError, ResourceNotFoundError } from "../../common/errors";
 import { DbService } from "../../db/db.service";
 import { orderItems, orders } from "../../db/schema";
 import { findOrder, findTransactionIdClaim, type OrderRow } from "../../orders";
-import { OrdersService } from "../../orders";
+import { OrdersService, PaymentVerificationLogService } from "../../orders";
 import { PaymentsService } from "../../payments";
 import { AuditService } from "../../audit";
-import {
-  PaymentVerificationService,
-  toVerificationRecord,
-  type PaymentVerification,
-} from "../../payment-verification";
+import { PaymentVerificationService, type PaymentVerification } from "../../payment-verification";
 import type { AccessClaims } from "../auth/tokens";
 import { adminOrderFilters, adminOrderOrder } from "./admin-order.query";
-import { toAdminOrderDetail, toAdminOrderSummary } from "./admin-order.mapper";
+import { receiptUniquenessOf, toAdminOrderDetail, toAdminOrderSummary } from "./admin-order.mapper";
 
 /** Who did it and from where, threaded through to every audit entry. */
 export type AdminContext = {
@@ -65,6 +61,7 @@ export class AdminOrdersService {
     private readonly paymentsService: PaymentsService,
     private readonly auditService: AuditService,
     private readonly paymentVerificationService: PaymentVerificationService,
+    private readonly verificationLog: PaymentVerificationLogService,
   ) {}
 
   /**
@@ -95,6 +92,7 @@ export class AdminOrdersService {
           provider: orders.provider,
           totalCents: orders.totalCents,
           internalNote: orders.internalNote,
+          transactionIdNormalised: orders.transactionIdNormalised,
         })
         .from(orders)
         .where(where)
@@ -107,10 +105,26 @@ export class AdminOrdersService {
         .where(where),
     ]);
 
-    const counts = await this.itemCounts(rows.map((row) => row.id));
+    /* Three page-wide lookups rather than three per row. The queue renders
+       twenty-five orders and each badge needs a fact this row does not carry;
+       asking per row would turn one table into seventy-five round trips. */
+    const [counts, duplicated, verifications] = await Promise.all([
+      this.itemCounts(rows.map((row) => row.id)),
+      this.verificationLog.findDuplicatedReceipts(
+        rows.flatMap((row) => (row.transactionIdNormalised ? [row.transactionIdNormalised] : [])),
+      ),
+      this.verificationLog.latestFor(rows.map((row) => row.id)),
+    ]);
 
     return {
-      items: rows.map((row) => toAdminOrderSummary(row, counts.get(row.id))),
+      items: rows.map((row) =>
+        toAdminOrderSummary(
+          row,
+          counts.get(row.id),
+          receiptUniquenessOf(row, duplicated),
+          PaymentVerificationLogService.stateOf(verifications, row.id),
+        ),
+      ),
       total,
       page: query.page,
       // Zero, not one, when nothing matched — see the same note in the catalog.
@@ -129,9 +143,36 @@ export class AdminOrdersService {
    */
   async detail(orderNumber: string): Promise<AdminOrderDetail> {
     const row = await this.requireOrder(orderNumber);
-    const paymentRows = await this.paymentsService.forOrder(row.id);
 
-    return toAdminOrderDetail(row, paymentRows);
+    const [paymentRows, claim, verifications, latest] = await Promise.all([
+      this.paymentsService.forOrder(row.id),
+      /* One order, so the named lookup is affordable here in a way it is not
+         for a page of the queue — and the name is the useful half of the
+         finding. "Duplicate" tells staff to stop; "already on NB-40718" tells
+         them where to go. */
+      findTransactionIdClaim(this.dbService.db, row.transactionId, { excludeOrderId: row.id }),
+      this.verificationLog.historyFor(row.id),
+      // The history's newest row again, but carrying who ran it — the one fact
+      // the wire record deliberately omits, since a customer-facing shape has
+      // no business naming staff.
+      this.verificationLog.latestFor([row.id]),
+    ]);
+
+    const receipt = receiptUniquenessOf(
+      row,
+      // A set of one: the claim lookup has already decided this, so the
+      // page-wide grouped query would be asking the same question twice.
+      claim && row.transactionIdNormalised ? new Set([row.transactionIdNormalised]) : new Set(),
+      claim?.orderNumber ?? null,
+    );
+
+    return toAdminOrderDetail(
+      row,
+      paymentRows,
+      receipt,
+      PaymentVerificationLogService.stateOf(latest, row.id),
+      verifications,
+    );
   }
 
   /**
@@ -148,7 +189,10 @@ export class AdminOrdersService {
    * was required, has nothing to look up, and reporting that as NOT_FOUND
    * would misdescribe an absent receipt as an unmatched one.
    */
-  async verifyPayment(orderNumber: string): Promise<AdminOrderVerifyPaymentResult> {
+  async verifyPayment(
+    orderNumber: string,
+    context: AdminContext,
+  ): Promise<AdminOrderVerifyPaymentResult> {
     const order = await this.requireOrder(orderNumber);
 
     if (!order.transactionId) {
@@ -183,13 +227,102 @@ export class AdminOrdersService {
 
     const summary = summarizeVerification(verification, order.totalCents);
 
+    /* Written before the answer is returned, so the panel's badge and the
+       sentence the admin is about to read come from the same check. Named to
+       the actor: the history's whole value is distinguishing the automatic
+       check at checkout from a person deciding to look. */
+    const record = await this.verificationLog.record(
+      order.id,
+      verification,
+      order.totalCents,
+      context.actor.email,
+    );
+
     return {
-      record: toVerificationRecord(verification, order.totalCents),
+      record,
       summary: claim
         ? `This transaction ID is already recorded against order ${claim.orderNumber} (${claim.status}). ` +
           `Confirming payment here is blocked. Gateway says: ${summary}`
         : summary,
     };
+  }
+
+  /**
+   * Refuse to grant an order whose receipt is already on another live one.
+   *
+   * The single place both grant paths pass through — `confirmPayment` and a
+   * `transition` to PAYMENT_CONFIRMED — so neither can be hardened or relaxed
+   * without the other following. That is the entire point of it being a
+   * method rather than two copies of a check.
+   *
+   * A duplicate is genuine at the gateway by construction: it is a real
+   * payment, of the right amount, that another order has already been granted
+   * against. No amount of verification catches it, which is why this runs
+   * independently of whether the gateway said MATCHED.
+   *
+   * The override is a typed reason, not a flag, and it is recorded to the
+   * audit log before the grant proceeds. It exists because the previous escape
+   * hatch was to *cancel the other order* to release its claim — destructive,
+   * lossy, and a genuinely bad thing to ask of someone who simply knows the
+   * customer paid for two orders from one wallet.
+   */
+  private async guardDuplicateReceipt(
+    order: OrderRow,
+    override: string | undefined,
+    context: AdminContext,
+  ): Promise<void> {
+    const claim = await findTransactionIdClaim(this.dbService.db, order.transactionId, {
+      excludeOrderId: order.id,
+    });
+
+    if (!claim) return;
+
+    if (override) {
+      this.logger.warn(
+        `${context.actor.email} overrode the duplicate-receipt block on ${order.orderNumber} ` +
+          `(also on ${claim.orderNumber}): ${override}`,
+      );
+
+      /* `record` rather than `recordDetached`, in a transaction of its own and
+         before the caller grants anything.
+
+         It is not atomic with the grant — the grant belongs to
+         `confirmPayment` or `transitionAndCommit` and this method has no
+         handle on it. What it does guarantee is the direction that matters: if
+         the justification cannot be written, `record` throws, this method
+         throws, and the grant never runs. An override that happened with no
+         record of why is the one outcome worth failing a request over, since
+         nothing else on the order records it — unlike a transition, which
+         order_status_history captures regardless. */
+      await this.dbService.db.transaction((tx) =>
+        this.auditService.record(
+          {
+            ...auditContext(context),
+            action: "DUPLICATE_RECEIPT_OVERRIDE",
+            entityType: "orders",
+            entityId: order.orderNumber,
+            before: { claimedBy: claim.orderNumber, claimedByStatus: claim.status },
+            after: { overridden: true },
+            note: override,
+          },
+          tx,
+        ),
+      );
+
+      return;
+    }
+
+    this.logger.warn(
+      `${context.actor.email} tried to confirm ${order.orderNumber}, whose transaction ID is ` +
+        `already recorded against ${claim.orderNumber}`,
+    );
+
+    throw new InvalidInputError(
+      `This order's transaction ID is already recorded against order ${claim.orderNumber} ` +
+        `(${claim.status}). Confirm the payment there, or — if this order is the real claim — ` +
+        `re-send with a reason to override.`,
+      { orderNumber: order.orderNumber, claimedBy: claim.orderNumber, claimedByStatus: claim.status },
+    );
   }
 
   /**
@@ -220,6 +353,19 @@ export class AdminOrdersService {
   ): Promise<AdminOrderDetail> {
     const order = await this.requireOrder(orderNumber);
     const from = order.status;
+
+    /* The other door into the same room.
+
+       `confirmPayment` has refused duplicate receipts since the check existed,
+       and this method — which reaches PAYMENT_CONFIRMED just as effectively,
+       via the state machine — did not. The panel happened not to offer that
+       route for a pending order, so the gap was invisible from the UI; the
+       endpoint was open to any admin token, any script, and any future change
+       to which buttons get rendered. A guard on one of two paths to the same
+       outcome is not a guard. */
+    if (request.status === "PAYMENT_CONFIRMED") {
+      await this.guardDuplicateReceipt(order, request.duplicateReceiptOverride, context);
+    }
 
     await this.ordersService.transitionAndCommit(
       order.id,
@@ -268,29 +414,7 @@ export class AdminOrdersService {
       );
     }
 
-    /* The admin path is the one an attacker's duplicate actually reaches:
-       auto-verify already refuses it, so the order lands in the queue looking
-       like any other pending transfer, and the gateway will happily confirm
-       the receipt is genuine. Refused outright rather than warned about,
-       because there is no override flag yet — the escape hatch, when a staff
-       member genuinely knows better, is to cancel the older order, which
-       releases its claim on the receipt. */
-    const claim = await findTransactionIdClaim(this.dbService.db, order.transactionId, {
-      excludeOrderId: order.id,
-    });
-
-    if (claim) {
-      this.logger.warn(
-        `${context.actor.email} tried to confirm ${orderNumber}, whose transaction ID is ` +
-          `already recorded against ${claim.orderNumber}`,
-      );
-
-      throw new InvalidInputError(
-        `This order's transaction ID is already recorded against order ${claim.orderNumber}. ` +
-          `Confirm the payment there, or cancel that order first if this one is the real claim.`,
-        { orderNumber, claimedBy: claim.orderNumber, claimedByStatus: claim.status },
-      );
-    }
+    await this.guardDuplicateReceipt(order, request.duplicateReceiptOverride, context);
 
     const { confirmed } = await this.paymentsService.confirmManually(order.paymentMethod, {
       referenceId: order.orderNumber,

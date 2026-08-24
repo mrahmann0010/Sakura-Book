@@ -1,5 +1,5 @@
 import { pgEnum } from "drizzle-orm/pg-core";
-import { paymentProviders } from "@sakura/contracts";
+import { paymentProviders, paymentVerificationOutcomes } from "@sakura/contracts";
 
 export const bookAuthorRoleEnum = pgEnum("book_author_role", [
   "AUTHOR",
@@ -61,6 +61,20 @@ export const paymentMethodEnum = pgEnum("payment_method", [
  */
 export const paymentProviderEnum = pgEnum("payment_provider", paymentProviders);
 
+/**
+ * What a gateway cross-check concluded, as stored.
+ *
+ * Built from the contract's `paymentVerificationOutcomes` rather than
+ * restating the four names, so the database, the API and the panel cannot
+ * disagree about what outcomes exist. `NO_RECEIPT` is deliberately absent —
+ * it is the admin endpoint's way of saying there was nothing to look up, and
+ * no check happened, so there is no row to write.
+ */
+export const paymentVerificationOutcomeEnum = pgEnum(
+  "payment_verification_outcome",
+  paymentVerificationOutcomes,
+);
+
 export const paymentStatusEnum = pgEnum("payment_status", [
   "PENDING",
   "SUCCEEDED",
@@ -90,4 +104,8 @@ export const auditActionEnum = pgEnum("audit_action", [
   "LOGOUT",
   "TRANSITION",
   "ADJUST",
+  /* Staff confirmed an order whose receipt was already on another live order,
+     with a written reason. Its own value so "every time the duplicate-payment
+     block was bypassed" is an indexed filter rather than a text search. */
+  "DUPLICATE_RECEIPT_OVERRIDE",
 ]);

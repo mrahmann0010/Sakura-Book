@@ -1,9 +1,12 @@
 import type {
   AdminOrderDetail,
   AdminOrderSummary,
+  AdminOrderVerificationState,
   AdminPayment,
   PaymentMethod,
   PaymentProvider,
+  PaymentVerificationRecord,
+  ReceiptUniqueness,
 } from "@sakura/contracts";
 import type { InferSelectModel } from "drizzle-orm";
 import type { orders, payments, ShippingAddress } from "../../db/schema";
@@ -38,11 +41,48 @@ type OrderListRow = Pick<
   | "provider"
   | "totalCents"
   | "internalNote"
+  // Not rendered, and never sent: the receipt is what the uniqueness badge is
+  // computed from, not something the queue displays.
+  | "transactionIdNormalised"
 >;
+
+/**
+ * Which of the four uniqueness states an order is in.
+ *
+ * Derived from the row plus one page-wide set of duplicated receipts, so a
+ * list of fifty orders costs one extra query rather than fifty. The order of
+ * the checks matters: cash on delivery is answered before the receipt is
+ * examined at all, because "no receipt" is only a finding for a method that
+ * should have one.
+ */
+export function receiptUniquenessOf(
+  row: { paymentMethod: string; transactionIdNormalised: string | null },
+  duplicatedReceipts: ReadonlySet<string>,
+  claimedByOrderNumber: string | null = null,
+): ReceiptUniqueness {
+  if (row.paymentMethod !== "manual-transfer") {
+    return { state: "NOT_APPLICABLE", claimedByOrderNumber: null };
+  }
+
+  const receipt = row.transactionIdNormalised;
+
+  // Null for cash on delivery, for orders placed before the receipt columns
+  // existed, and for a receipt that was pure punctuation. All three are the
+  // same finding for staff: there is nothing here to check.
+  if (!receipt) return { state: "MISSING", claimedByOrderNumber: null };
+
+  if (duplicatedReceipts.has(receipt)) {
+    return { state: "DUPLICATE", claimedByOrderNumber };
+  }
+
+  return { state: "UNIQUE", claimedByOrderNumber: null };
+}
 
 export function toAdminOrderSummary(
   row: OrderListRow,
   counts: { lineCount: number; itemCount: number } | undefined,
+  receipt: ReceiptUniqueness,
+  verification: AdminOrderVerificationState,
 ): AdminOrderSummary {
   return {
     orderNumber: row.orderNumber,
@@ -68,12 +108,18 @@ export function toAdminOrderSummary(
      * ends up in a screenshot.
      */
     hasInternalNote: Boolean(row.internalNote?.trim()),
+
+    receipt,
+    verification,
   };
 }
 
 export function toAdminOrderDetail(
   row: OrderRow,
   paymentRows: InferSelectModel<typeof payments>[],
+  receipt: ReceiptUniqueness,
+  verification: AdminOrderVerificationState,
+  verifications: PaymentVerificationRecord[],
 ): AdminOrderDetail {
   const customerView = toOrderResponse(row);
 
@@ -103,6 +149,10 @@ export function toAdminOrderDetail(
      * the machine's own tests rather than assumed here.
      */
     releasesStockOnCancel: releasesStock(row.status, "CANCELLED"),
+
+    receipt,
+    verification,
+    verifications,
   };
 }
 

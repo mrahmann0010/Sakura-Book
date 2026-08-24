@@ -2,7 +2,11 @@ import { z } from "zod";
 import { paymentMethods } from "./checkout";
 import { orderSchema, orderStatuses } from "./order";
 import { paginated, pageQuerySchema } from "./pagination";
-import { paymentProviders, paymentVerificationRecordSchema } from "./payment-verification";
+import {
+  paymentProviders,
+  paymentVerificationOutcomes,
+  paymentVerificationRecordSchema,
+} from "./payment-verification";
 
 /* --------------------------------------------------------------------------
    Order operations, as staff see them.
@@ -75,6 +79,55 @@ export type AdminOrderQuery = z.infer<typeof adminOrderQuerySchema>;
  * lines and its whole status timeline is a response measured in hundreds of
  * kilobytes to render a table that shows none of it.
  */
+/**
+ * Whether this order's receipt is its own.
+ *
+ * Separate from the gateway verification below, and deliberately not merged
+ * into one "verified" badge, because the two are independent and the dangerous
+ * case is exactly where they disagree: a reused receipt is *genuine* at the
+ * gateway — it is a real payment, of the right amount, that another order has
+ * already been granted against. A single combined badge would render that as
+ * "verified" and hide the only thing wrong with it.
+ *
+ * - UNIQUE — no other live order holds this receipt.
+ * - DUPLICATE — another live order does, and `claimedByOrderNumber` names it.
+ * - MISSING — a manual transfer with no receipt on file. Historic orders
+ *   placed before the columns existed land here, as does anything whose
+ *   receipt was pure punctuation.
+ * - NOT_APPLICABLE — cash on delivery. There is no receipt to be unique.
+ */
+export const receiptUniquenessStates = [
+  "UNIQUE",
+  "DUPLICATE",
+  "MISSING",
+  "NOT_APPLICABLE",
+] as const;
+export type ReceiptUniquenessState = (typeof receiptUniquenessStates)[number];
+
+export const receiptUniquenessSchema = z.object({
+  state: z.enum(receiptUniquenessStates),
+  /** Set only on DUPLICATE — the order that claimed the receipt first. */
+  claimedByOrderNumber: z.string().nullable(),
+});
+
+export type ReceiptUniqueness = z.infer<typeof receiptUniquenessSchema>;
+
+/**
+ * The last gateway cross-check, or that there has never been one.
+ *
+ * `UNCHECKED` is a real state and the most important one on this list: it is
+ * how an order that was confirmed on trust becomes visible afterwards. Every
+ * other value comes from `paymentVerificationOutcomes`.
+ */
+export const adminOrderVerificationStateSchema = z.object({
+  outcome: z.union([z.enum(paymentVerificationOutcomes), z.literal("UNCHECKED")]),
+  checkedAt: z.string().datetime().nullable(),
+  /** Null for the automatic check that runs at checkout. */
+  checkedByEmail: z.string().nullable(),
+});
+
+export type AdminOrderVerificationState = z.infer<typeof adminOrderVerificationStateSchema>;
+
 export const adminOrderSummarySchema = z.object({
   orderNumber: z.string(),
   status: z.enum(orderStatuses),
@@ -91,6 +144,18 @@ export const adminOrderSummarySchema = z.object({
   lineCount: z.number().int().nonnegative(),
   itemCount: z.number().int().nonnegative(),
   hasInternalNote: z.boolean(),
+
+  /**
+   * The two payment-safety indicators, on the queue row itself.
+   *
+   * On the summary and not only the detail, which is the point of them: a
+   * duplicate receipt that is only visible after opening an order is a
+   * duplicate nobody sees on a busy morning. The transaction ID itself stays
+   * off this schema — the badge is the finding, and the receipt number is not
+   * something to spray across a list view.
+   */
+  receipt: receiptUniquenessSchema,
+  verification: adminOrderVerificationStateSchema,
 });
 
 export type AdminOrderSummary = z.infer<typeof adminOrderSummarySchema>;
@@ -162,9 +227,44 @@ export const adminOrderDetailSchema = orderSchema.extend({
    * see and cannot undo.
    */
   releasesStockOnCancel: z.boolean(),
+
+  /** The same two indicators the queue row carries, so the panel renders one shape. */
+  receipt: receiptUniquenessSchema,
+  verification: adminOrderVerificationStateSchema,
+
+  /**
+   * Every gateway check ever run against this order, newest first.
+   *
+   * The whole list rather than the latest, because the sequence is the story:
+   * a receipt that was NOT_FOUND at 09:12 and MATCHED at 11:40 is an SMS that
+   * arrived late, which is normal, and one that was MATCHED and later
+   * UNAVAILABLE says something about the gateway rather than the customer.
+   */
+  verifications: z.array(paymentVerificationRecordSchema),
 });
 
 export type AdminOrderDetail = z.infer<typeof adminOrderDetailSchema>;
+
+/**
+ * The typed reason that lets a member of staff confirm an order whose receipt
+ * is already on another live order.
+ *
+ * Optional, and absent means "do not override" — a duplicate is refused by
+ * default and that stays the default. It exists because the previous escape
+ * hatch was to *cancel the other order*, which is destructive, loses that
+ * order's history, and is a terrible thing to ask of someone who simply knows
+ * the customer paid twice from one wallet and wants to say so.
+ *
+ * A free-text reason rather than a boolean flag, and a long-ish minimum,
+ * because the reason is the entire audit record of a deliberately bypassed
+ * safety check. "ok" is not a reason and the schema should not accept it.
+ */
+export const duplicateReceiptOverrideSchema = z
+  .string()
+  .trim()
+  .min(15, "Explain why this duplicate receipt is legitimate.")
+  .max(500)
+  .optional();
 
 /**
  * Moving an order along.
@@ -181,6 +281,8 @@ export const adminOrderTransitionRequestSchema = z.object({
    * on their tracking page. Staff-only remarks belong in the internal note.
    */
   note: z.string().trim().max(280).optional(),
+
+  duplicateReceiptOverride: duplicateReceiptOverrideSchema,
 });
 
 export type AdminOrderTransitionRequest = z.infer<typeof adminOrderTransitionRequestSchema>;
@@ -203,6 +305,8 @@ export const adminConfirmPaymentRequestSchema = z.object({
    */
   reference: z.string().trim().max(120).optional(),
   note: z.string().trim().max(280).optional(),
+
+  duplicateReceiptOverride: duplicateReceiptOverrideSchema,
 });
 
 export type AdminConfirmPaymentRequest = z.infer<typeof adminConfirmPaymentRequestSchema>;
