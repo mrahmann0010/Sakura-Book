@@ -1,6 +1,6 @@
 import { Test } from "@nestjs/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { AppModule } from "../../src/app.module";
+import type { AppModule as AppModuleType } from "../../src/app.module";
 
 /**
  * Does the application's dependency graph actually resolve?
@@ -41,12 +41,21 @@ describe("AppModule", () => {
   } as const;
 
   const saved = new Map<string, string | undefined>();
+  let AppModule: typeof AppModuleType;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     for (const [key, value] of Object.entries(required)) {
       saved.set(key, process.env[key]);
       process.env[key] = value;
     }
+
+    // Dynamic, not static: ConfigModule.forRoot(...) is a decorator argument
+    // on AppModule, which Nest — and JS itself — evaluates the moment the
+    // module is loaded, not when Nest later compiles it. A static import is
+    // hoisted above this beforeAll, so validateEnv would run before the env
+    // vars above are set. Importing after they're set is what makes this
+    // test able to set them at all.
+    ({ AppModule } = await import("../../src/app.module"));
   });
 
   afterAll(() => {
