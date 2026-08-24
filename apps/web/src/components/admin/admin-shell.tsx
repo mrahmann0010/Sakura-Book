@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { adminLogout } from "@/lib/api/admin";
 import { ADMIN_AUTHED_KEY } from "@/lib/admin-auth";
@@ -29,6 +29,13 @@ export function AdminShell({ children, checking }: { children: ReactNode; checki
   const { locale } = useParams<{ locale: string }>();
   const pathname = usePathname();
   const router = useRouter();
+  const [navOpen, setNavOpen] = useState(false);
+
+  // Close the mobile drawer whenever the route changes — otherwise it stays
+  // open over the new page after tapping a nav link.
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
 
   if (checking) {
     return (
@@ -49,45 +56,89 @@ export function AdminShell({ children, checking }: { children: ReactNode; checki
     router.push(`${base}/login`);
   }
 
+  const nav = (
+    <nav className="flex flex-col gap-1 px-3">
+      {NAV.map((item) => {
+        const href = `${base}${item.href}`;
+        const active = item.href === "" ? pathname === base : pathname.startsWith(href);
+
+        return (
+          <Link
+            key={item.href}
+            href={href}
+            className={`rounded-control text-13.5 px-3 py-2.5 transition-colors ${
+              active ? "bg-tint text-ink" : "text-secondary hover:bg-tint hover:text-ink"
+            }`}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+
+  const signOutButton = (
+    <button
+      type="button"
+      onClick={() => void signOut()}
+      className="rounded-control border-rule text-13.5 text-secondary hover:text-ink w-full border px-3 py-2.5 text-left transition-colors"
+    >
+      Sign out
+    </button>
+  );
+
   return (
-    <div className="bg-page text-body flex min-h-screen">
-      <aside className="border-rule bg-surface flex w-56 shrink-0 flex-col border-r">
+    <div className="bg-page text-body flex min-h-screen flex-col lg:flex-row">
+      {/* Mobile top bar — replaces the sidebar header below `lg`. */}
+      <header className="border-rule bg-surface flex items-center justify-between border-b px-4 py-3 lg:hidden">
+        <div>
+          <p className="text-h4 text-ink font-serif">Nihonova</p>
+          <p className="text-caption tracking-eyebrow text-muted uppercase">Admin</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setNavOpen((open) => !open)}
+          aria-expanded={navOpen}
+          aria-label={navOpen ? "Close menu" : "Open menu"}
+          className="rounded-control border-rule text-ink flex h-11 w-11 items-center justify-center border"
+        >
+          <span aria-hidden className="text-lg leading-none">
+            {navOpen ? "✕" : "☰"}
+          </span>
+        </button>
+      </header>
+
+      {/* Mobile drawer + scrim, shown only while open below `lg`. */}
+      {navOpen ? (
+        <div className="lg:hidden">
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={() => setNavOpen(false)}
+            className="fixed inset-0 z-40 bg-black/40"
+          />
+          <aside className="border-rule bg-surface fixed inset-y-0 left-0 z-50 flex w-64 max-w-[80vw] flex-col border-r">
+            <div className="px-6 py-6">
+              <p className="text-h4 text-ink font-serif">Nihonova</p>
+              <p className="text-caption tracking-eyebrow text-muted mt-1 uppercase">Admin</p>
+            </div>
+            {nav}
+            <div className="mt-auto px-3 py-6">{signOutButton}</div>
+          </aside>
+        </div>
+      ) : null}
+
+      {/* Persistent sidebar at `lg` and up. */}
+      <aside className="border-rule bg-surface hidden w-56 shrink-0 flex-col border-r lg:flex">
         <div className="px-6 py-6">
           <p className="text-h4 text-ink font-serif">Nihonova</p>
           <p className="text-caption tracking-eyebrow text-muted mt-1 uppercase">Admin</p>
         </div>
-
-        <nav className="flex flex-col gap-1 px-3">
-          {NAV.map((item) => {
-            const href = `${base}${item.href}`;
-            const active = item.href === "" ? pathname === base : pathname.startsWith(href);
-
-            return (
-              <Link
-                key={item.href}
-                href={href}
-                className={`rounded-control text-13.5 px-3 py-2 transition-colors ${
-                  active ? "bg-tint text-ink" : "text-secondary hover:bg-tint hover:text-ink"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="mt-auto px-3 py-6">
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            className="rounded-control border-rule text-13.5 text-secondary hover:text-ink w-full border px-3 py-2 text-left transition-colors"
-          >
-            Sign out
-          </button>
-        </div>
+        {nav}
+        <div className="mt-auto px-3 py-6">{signOutButton}</div>
       </aside>
 
-      <main className="min-w-0 flex-1 overflow-y-auto p-8">{children}</main>
+      <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">{children}</main>
     </div>
   );
 }

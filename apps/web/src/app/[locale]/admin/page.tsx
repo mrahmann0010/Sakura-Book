@@ -171,7 +171,7 @@ export default function AdminDashboardPage() {
 
               {report ? (
                 <>
-                  <div className="text-13.5 mt-4 grid grid-cols-3 gap-4">
+                  <div className="text-13.5 mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div>
                       <p className="text-caption text-muted uppercase">Orders</p>
                       <p className="text-h4 text-ink mt-1 font-serif">{report.totalOrders}</p>
