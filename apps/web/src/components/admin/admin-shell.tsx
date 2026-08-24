@@ -4,8 +4,16 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { adminLogout } from "@/lib/api/admin";
+import { adminLogout, adminRefreshSession } from "@/lib/api/admin";
 import { ADMIN_AUTHED_KEY } from "@/lib/admin-auth";
+
+/**
+ * Well under the 15-minute access token life (`ADMIN_ACCESS_TOKEN_TTL`), so a
+ * click never has to eat a failed request first — `adminFetch`'s reactive
+ * refresh-and-retry is the real safety net (it also covers a laptop that
+ * slept through this timer); this just keeps the common case silent.
+ */
+const SESSION_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 
 const NAV = [
   { href: "", label: "Dashboard" },
@@ -32,10 +40,30 @@ export function AdminShell({ children, checking }: { children: ReactNode; checki
   const [navOpen, setNavOpen] = useState(false);
 
   // Close the mobile drawer whenever the route changes — otherwise it stays
-  // open over the new page after tapping a nav link.
-  useEffect(() => {
+  // open over the new page after tapping a nav link. Adjusted during render
+  // rather than in an effect (React's documented pattern for resetting state
+  // on a prop change): an effect would close the drawer one paint after the
+  // new page was already visible underneath it.
+  const [drawerPathname, setDrawerPathname] = useState(pathname);
+  if (pathname !== drawerPathname) {
+    setDrawerPathname(pathname);
     setNavOpen(false);
-  }, [pathname]);
+  }
+
+  // Keep the session ahead of the access token's expiry while a page sits
+  // open and idle — signing out from under someone mid-task is the failure
+  // this exists to prevent. Not started until the gate clears, and it stops
+  // itself on unmount; a failed tick is silently left for the next one, or
+  // for the reactive retry in `adminFetch`, to sort out.
+  useEffect(() => {
+    if (checking) return;
+
+    const id = setInterval(() => {
+      void adminRefreshSession();
+    }, SESSION_REFRESH_INTERVAL_MS);
+
+    return () => clearInterval(id);
+  }, [checking]);
 
   if (checking) {
     return (
