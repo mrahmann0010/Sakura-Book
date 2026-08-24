@@ -105,13 +105,15 @@ export function PdfReader({ url, className }: { url: string; className?: string 
         const pdfjs = await loadPdfjs();
         const task = pdfjs.getDocument({
           url,
-          /* The sample lives on Supabase Storage, a different origin from the
-             shop. The bucket is public and answers with `Access-Control-Allow-
-             Origin: *`, so the plain cross-origin fetch pdf.js makes here
-             succeeds; it is worth knowing that a bucket turned private, or
-             moved somewhere that omits the header, breaks this reader while
-             leaving the "open in a new tab" link below working — which is
-             exactly the shape of bug report to expect if that ever happens. */
+          /* A same-origin `/api/files/…` path, not the storage URL: callers
+             route it through lib/storage-url.ts. That started out as a way to
+             keep the storage provider out of the page source, and it also
+             removed the one fragile thing about this fetch — it used to be
+             cross-origin and to work only because the bucket answered with
+             `Access-Control-Allow-Origin: *`, so turning the bucket private or
+             moving it anywhere that omits the header broke the reader while
+             leaving the "open in a new tab" link working. Nothing to depend on
+             now; the route handler is on this app's own origin. */
           cMapUrl: "/pdfjs/cmaps/",
           cMapPacked: true,
           standardFontDataUrl: "/pdfjs/standard_fonts/",

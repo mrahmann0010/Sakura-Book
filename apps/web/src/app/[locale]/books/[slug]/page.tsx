@@ -25,6 +25,7 @@ import { FREE_DELIVERY_THRESHOLD } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 import { localeAlternates, siteUrl } from "@/lib/site";
+import { absoluteFileUrl, fileUrl } from "@/lib/storage-url";
 
 /* Book detail, per the Detail Wireframe: 320px cover · content · 300px buy
    rail. The cards in the catalogue have always linked here; until now nothing
@@ -60,6 +61,7 @@ export async function generateMetadata({
   const book = await loadBook(slug);
 
   const description = book.description.slice(0, 160);
+  const ogImage = absoluteFileUrl(book.coverImageUrl);
 
   return {
     title: book.title,
@@ -70,9 +72,11 @@ export async function generateMetadata({
       title: book.title,
       description,
       url: localeAlternates(locale, `/books/${slug}`).canonical,
-      images: book.coverImageUrl
-        ? [{ url: book.coverImageUrl, alt: book.coverImageAlt ?? book.title }]
-        : undefined,
+      /* `absoluteFileUrl`, not the stored URL: the cover is served from this
+         shop's own /api/files path (lib/storage-url.ts), and a share card is
+         built by a scraper reading the raw HTML with no document base to
+         resolve a relative one against. */
+      images: ogImage ? [{ url: ogImage, alt: book.coverImageAlt ?? book.title }] : undefined,
     },
   };
 }
@@ -167,7 +171,11 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
             it: it is the quieter question, and a ghost control leaves Buy Now
             as the card's one primary (§2). Renders nothing when the shop has
             not uploaded a sample, so the card does not grow a dead row. */}
-        <BookPreview pdfUrl={book.pdfUrl} bookTitle={book.title} />
+        {/* The sample is handed to the reader as this shop's own
+            `/api/files/…` path, never the storage provider's URL — which also
+            makes it a same-origin fetch, so the reader no longer relies on the
+            bucket's CORS header. See lib/storage-url.ts. */}
+        <BookPreview pdfUrl={fileUrl(book.pdfUrl)} bookTitle={book.title} />
       </div>
 
       {/* Reassurance at the decision moment — the same delivery facts the
@@ -185,6 +193,8 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
      price, currency and availability in the search listing rather than a blue
      link. Built from the same `book` the page renders, so it can never claim a
      price the page does not show — the one rule structured data has. */
+  const jsonLdImage = absoluteFileUrl(book.coverImageUrl);
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Book",
@@ -201,7 +211,8 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
     ...(book.authors.length > 0
       ? { author: book.authors.map((name) => ({ "@type": "Person", name })) }
       : {}),
-    ...(book.coverImageUrl ? { image: book.coverImageUrl } : {}),
+    /* Absolute, and proxied, for the same two reasons as og:image above. */
+    ...(jsonLdImage ? { image: jsonLdImage } : {}),
     ...(book.rating != null && book.ratingCount
       ? {
           aggregateRating: {
@@ -312,7 +323,12 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
           {book.galleryImageUrls.length > 0 ? (
             <div className="mt-8 grid grid-cols-3 gap-4">
               {book.galleryImageUrls.map((url) => (
-                <BookCover key={url} src={url} title={book.title} radius="md" />
+                <BookCover
+                  key={url}
+                  src={fileUrl(url) ?? undefined}
+                  title={book.title}
+                  radius="md"
+                />
               ))}
             </div>
           ) : null}

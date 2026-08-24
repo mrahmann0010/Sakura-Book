@@ -13,6 +13,7 @@ import { Button, Checkbox, Input, Select, Textarea } from "@/components/ui";
 import { FileUpload } from "@/components/admin/file-upload";
 import { AdminApiError, uploadAdminCover, uploadAdminPdf } from "@/lib/api/admin";
 import { getCategories } from "@/lib/api/catalog";
+import { fileUrl } from "@/lib/storage-url";
 
 /* Lazy for the same reason the storefront's is: pdf.js is a large chunk, and
    most visits to this form are editing a price, not re-checking a sample. */
@@ -917,10 +918,14 @@ export function BookForm({
             value={form.coverImageAlt}
             onChange={(event) => set("coverImageAlt", event.target.value)}
           />
+          {/* Proxied for the preview, while the field above keeps the raw
+              stored URL. The two must differ: the input is what gets saved, and
+              rewriting it would put an `/api/files/…` path in the database that
+              nothing could resolve back to an object. See lib/storage-url.ts. */}
           {form.coverImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- an admin-supplied/external URL, not a Next-optimized asset
             <img
-              src={form.coverImageUrl}
+              src={fileUrl(form.coverImageUrl) ?? undefined}
               alt=""
               className="rounded-control border-rule h-40 w-28 border object-cover"
             />
@@ -953,11 +958,11 @@ export function BookForm({
                   looking at what a shopper will actually see rather than at
                   whatever viewer this particular desktop happens to ship. */}
               <PdfReader
-                url={form.pdfUrl}
+                url={fileUrl(form.pdfUrl) ?? form.pdfUrl}
                 className="rounded-control border-rule h-64 w-full border"
               />
               <a
-                href={form.pdfUrl}
+                href={fileUrl(form.pdfUrl) ?? form.pdfUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="text-13.5 text-clay hover:text-clay-deep"

@@ -2,6 +2,7 @@ import type { BookSummary as ApiBook } from "@sakura/contracts";
 
 import type { BookFlag, BookSummary } from "@/components/domain";
 import { routes } from "@/lib/routes";
+import { fileUrl } from "@/lib/storage-url";
 
 /* --------------------------------------------------------------------------
    The wire shape → the shape the cards read.
@@ -90,10 +91,17 @@ export function toBookSummary(
     author: credit(book.authors),
     priceCents: book.priceCents,
     href: routes(locale).book(book.slug),
-    /* An empty string is a missing cover, not a cover at "". BookCover draws
+    /* Through `fileUrl`, so what reaches the <img> is this shop's own
+       `/api/files/…` path rather than the storage provider's public URL — see
+       lib/storage-url.ts. Rewritten here rather than in BookCover because a
+       cover URL is also read as a string (og:image, JSON-LD) where no
+       component is involved, and one rewrite per source beats one per render.
+
+       An empty string is a missing cover, not a cover at "". BookCover draws
        its fallback panel off `undefined` and would render a broken image off
-       the empty string. */
-    coverUrl: book.coverImageUrl || undefined,
+       the empty string — `fileUrl` returns null for both, and `?? undefined`
+       is what BookCover's optional prop wants. */
+    coverUrl: fileUrl(book.coverImageUrl) ?? undefined,
     flag: flagFor(book),
     /* A coming-soon book always carries zero stock by design (enforced
        server-side) but is not "sold out" — it was never orderable to begin

@@ -2,6 +2,8 @@ import type { CartQuote } from "@sakura/contracts";
 
 import type { BookSummary } from "@/components/domain";
 
+import { fileUrl } from "@/lib/storage-url";
+
 import { formatCredit, formatMoney } from "./money";
 
 /* --------------------------------------------------------------------------
@@ -92,7 +94,10 @@ export function cartFromQuote(quote: CartQuote): Cart {
       author: line.authors.join(", "),
       priceCents: line.unitPriceCents,
       href: `/books/${line.slug}`,
-      coverUrl: line.coverImageUrl,
+      /* Through `fileUrl` for the same reason book-view.ts does it: the quote
+         carries the storage provider's public URL and the cart line renders
+         it in an <img>. See lib/storage-url.ts. */
+      coverUrl: fileUrl(line.coverImageUrl) ?? undefined,
       flag: line.availability === "pre_order" ? "pre-order" : undefined,
       expectedShipDate: line.expectedShipDate ?? undefined,
     },
