@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import type { AdminOrderDetail, AdminOrderVerifyPaymentResult, OrderStatus } from "@sakura/contracts";
 
 import { AdminShell } from "@/components/admin/admin-shell";
-import { Button, Textarea } from "@/components/ui";
+import { Button, Notice, Textarea } from "@/components/ui";
 import {
   AdminApiError,
   confirmAdminOrderPayment,
@@ -115,6 +115,9 @@ export default function AdminOrderDetailPage() {
   async function verify() {
     setVerifying(true);
     setError(null);
+    // Cleared before the call, not after: a second check that lands on a
+    // different outcome must not leave the first one on screen while it runs.
+    setVerifyResult(null);
     try {
       setVerifyResult(await verifyAdminOrderPayment(orderNumber));
     } catch (err) {
@@ -217,9 +220,13 @@ export default function AdminOrderDetailPage() {
                 >
                   Verify transaction
                 </Button>
-                {verifyResult ? (
-                  <p className="text-13.5 text-secondary mt-2">{verifyResult.summary}</p>
-                ) : null}
+                <div aria-live="polite" aria-busy={verifying}>
+                  {verifying ? (
+                    <p className="text-13.5 text-secondary mt-2">Checking the gateway…</p>
+                  ) : verifyResult ? (
+                    <VerifyResult result={verifyResult} currency={order.currency} />
+                  ) : null}
+                </div>
               </div>
             ) : null}
 
@@ -375,6 +382,57 @@ export default function AdminOrderDetailPage() {
         </section>
       </div>
     </AdminShell>
+  );
+}
+
+/**
+ * How each outcome is presented. The gateway's verdict is the heading, the
+ * server's sentence is the body, and the evidence follows as rows — because
+ * "Underpaid" alone is not actionable, but "৳900 received, ৳1,200 expected"
+ * is. Tone follows the design system: no green, success is ink, only a real
+ * problem with the money gets the clay rule.
+ */
+const VERIFY_OUTCOMES = {
+  MATCHED: { label: "Matched", tone: "info", heading: "text-ink" },
+  UNDERPAID: { label: "Underpaid", tone: "error", heading: "text-clay" },
+  NOT_FOUND: { label: "Not found yet", tone: "info", heading: "text-clay-deep" },
+  UNAVAILABLE: { label: "Could not check", tone: "info", heading: "text-clay-deep" },
+  NO_RECEIPT: { label: "No receipt on file", tone: "info", heading: "text-clay-deep" },
+} as const satisfies Record<string, { label: string; tone: "info" | "error"; heading: string }>;
+
+function VerifyResult({
+  result,
+  currency,
+}: {
+  result: AdminOrderVerifyPaymentResult;
+  currency: string;
+}) {
+  const { record, summary } = result;
+  const outcome = VERIFY_OUTCOMES[record.outcome];
+
+  return (
+    <Notice tone={outcome.tone} className="mt-3">
+      <p>
+        <strong className={`${outcome.heading} font-semibold`}>{outcome.label}.</strong> {summary}
+      </p>
+
+      {record.outcome !== "NO_RECEIPT" ? (
+        <dl className="text-13.5 border-rule mt-3 flex flex-col gap-2 border-t pt-3">
+          <Row label="Transaction ID" value={record.transactionId} />
+          {record.provider ? <Row label="Wallet" value={record.provider} /> : null}
+          {record.paidCents !== undefined ? (
+            <Row label="Received" value={formatMoney(record.paidCents, "en-GB", currency)} />
+          ) : null}
+          {record.expectedCents !== undefined ? (
+            <Row label="Expected" value={formatMoney(record.expectedCents, "en-GB", currency)} />
+          ) : null}
+          {record.receivedAt ? (
+            <Row label="Paid at" value={new Date(record.receivedAt).toLocaleString()} />
+          ) : null}
+          <Row label="Checked at" value={new Date(record.checkedAt).toLocaleString()} />
+        </dl>
+      ) : null}
+    </Notice>
   );
 }
 
