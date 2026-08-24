@@ -136,10 +136,46 @@ function validate<T extends z.ZodTypeAny>(schema: T, request: unknown): z.infer<
   );
 }
 
+/**
+ * Auth routes a 401 retry must not touch: retrying `login` would mask a wrong
+ * password as a network hiccup, and retrying `refresh` itself would recurse
+ * into the thing that is failing.
+ */
+const NO_REFRESH_RETRY_PATHS = new Set(["/admin/auth/login", "/admin/auth/refresh"]);
+
+let refreshInFlight: Promise<boolean> | null = null;
+
+/**
+ * Exchange the refresh cookie for a new access/refresh pair, in place.
+ *
+ * The refresh token rotates on every use and a token presented twice reads
+ * to the server as theft — it revokes the whole session family (see
+ * `AdminAuthService.refresh`). So concurrent 401s (five admin requests firing
+ * on a stale access token at once) must share one refresh call rather than
+ * each spending the cookie themselves; the single in-flight promise is what
+ * keeps that from happening.
+ */
+function refreshSession(): Promise<boolean> {
+  refreshInFlight ??= fetch(`${apiOrigin()}${API_PREFIX}/admin/auth/refresh`, {
+    method: "POST",
+    credentials: "include",
+    headers: { accept: "application/json" },
+    cache: "no-store",
+  })
+    .then((response) => response.ok)
+    .catch(() => false)
+    .finally(() => {
+      refreshInFlight = null;
+    });
+
+  return refreshInFlight;
+}
+
 async function adminFetch<T extends z.ZodTypeAny>(
   path: string,
   schema: T,
   init: { method?: string; body?: unknown } = {},
+  retriedAfterRefresh = false,
 ): Promise<z.infer<T>> {
   let response: Response;
   try {
@@ -168,6 +204,16 @@ async function adminFetch<T extends z.ZodTypeAny>(
   }
 
   if (!response.ok) {
+    /* The access token is a 15-minute JWT by design (AdminAuthService's class
+       comment) — a 401 partway through a session is the expected, common
+       case, not an error state. The 30-day refresh cookie sitting unused in
+       the browser is what this retries with, once, before falling through to
+       the same failure handling as any other rejected request. */
+    if (response.status === 401 && !retriedAfterRefresh && !NO_REFRESH_RETRY_PATHS.has(path)) {
+      const refreshed = await refreshSession();
+      if (refreshed) return adminFetch(path, schema, init, true);
+    }
+
     let message = `Request failed with ${response.status}`;
     let fields: FieldError[] = [];
     let code = "";
@@ -231,6 +277,7 @@ async function adminUpload<T extends z.ZodTypeAny>(
   path: string,
   schema: T,
   file: File,
+  retriedAfterRefresh = false,
 ): Promise<z.infer<T>> {
   const body = new FormData();
   body.append("file", file);
@@ -244,6 +291,12 @@ async function adminUpload<T extends z.ZodTypeAny>(
   });
 
   if (!response.ok) {
+    // Same 15-minute-access-token story as `adminFetch` — see its comment.
+    if (response.status === 401 && !retriedAfterRefresh) {
+      const refreshed = await refreshSession();
+      if (refreshed) return adminUpload(path, schema, file, true);
+    }
+
     let message = `Upload failed with ${response.status}`;
     let fields: FieldError[] = [];
     let code = "";
@@ -274,6 +327,16 @@ export function adminMe(): Promise<AdminSession> {
 
 export function adminLogout(): Promise<void> {
   return adminFetch("/admin/auth/logout", z.void());
+}
+
+/**
+ * Proactively rotate the session before the access token expires, rather
+ * than waiting for a request to hit a 401 and retry — see `AdminShell`'s
+ * background timer. Shares `adminFetch`'s dedup, so this and a concurrent
+ * reactive refresh never both spend the cookie.
+ */
+export function adminRefreshSession(): Promise<boolean> {
+  return refreshSession();
 }
 
 /* --------------------------------------------------------------------------
