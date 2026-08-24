@@ -5,7 +5,24 @@ import type { Transaction } from "../db/db.types";
 import { auditLog } from "../db/schema";
 
 export type AuditAction =
-  "CREATE" | "UPDATE" | "DELETE" | "LOGIN" | "LOGIN_FAILED" | "LOGOUT" | "TRANSITION" | "ADJUST";
+  | "CREATE"
+  | "UPDATE"
+  | "DELETE"
+  | "LOGIN"
+  | "LOGIN_FAILED"
+  | "LOGOUT"
+  | "TRANSITION"
+  | "ADJUST"
+  /**
+   * A member of staff confirmed an order whose receipt was already on another
+   * live order, giving a written reason.
+   *
+   * Its own action rather than an UPDATE with a telling note, because this is
+   * the log line someone will go looking for — "show me every time the
+   * duplicate-payment block was bypassed" should be a filter on this column,
+   * not a text search through notes.
+   */
+  | "DUPLICATE_RECEIPT_OVERRIDE";
 
 /**
  * Who acted.

@@ -79,8 +79,43 @@ export class CheckoutService {
     } catch (error) {
       const replayed = await this.replayOf(error, idempotencyKey);
       if (replayed) return { order: toOrderResponse(replayed), created: false };
+
+      await this.rethrowReusedTransactionId(error, request);
+
       throw error;
     }
+  }
+
+  /**
+   * Turn the unique index's 23505 into the same refusal the pre-flight read
+   * gives, for the one checkout that gets past that read.
+   *
+   * This is the losing half of the race `rejectReusedTransactionId` cannot
+   * see: both checkouts read an unspent receipt, both insert, and the second
+   * commit is refused by `orders_transaction_id_live_unique_idx`. Without this
+   * the customer would get postgres-error.mapper's generic 409 ALREADY_EXISTS,
+   * which is both unexplained and, to a customer who is not double-submitting,
+   * simply wrong.
+   *
+   * The claim is looked up again rather than assumed, because by now the
+   * winning row has committed and can be named — which is the whole reason a
+   * query still exists alongside the constraint.
+   */
+  private async rethrowReusedTransactionId(
+    error: unknown,
+    request: PlaceOrderRequest,
+  ): Promise<void> {
+    if (!isUniqueViolationOn(error, TRANSACTION_ID_CONSTRAINT)) return;
+
+    const transactionId = request.customer.transactionId ?? "";
+    const claim = await findTransactionIdClaim(this.dbService.db, transactionId);
+
+    this.logger.warn(
+      `Checkout lost the receipt race for transaction ID already recorded against ` +
+        `${claim?.orderNumber ?? "an order that is no longer readable"}`,
+    );
+
+    throw new TransactionIdAlreadyUsedError(transactionId, claim?.orderNumber ?? "another order");
   }
 
   /**
@@ -265,12 +300,19 @@ export class CheckoutService {
   /**
    * Refuse a checkout whose transaction ID is already on another live order.
    *
-   * Reads through the checkout's own transaction, which is what makes this a
-   * guard rather than advice: two simultaneous checkouts quoting one receipt
-   * are serialised by Postgres, and the second sees the first's row once it
-   * commits. Two that commit in the same instant can still both pass — closing
-   * that needs the partial unique index, which needs a migration. This stops
-   * the sequential reuse that is the actual exposure.
+   * This is the half that produces a good error message, not the half that
+   * makes the rule true. It reads at READ COMMITTED with no row lock, so two
+   * checkouts quoting one receipt can both see it unspent and both proceed —
+   * the window is the whole duration of the slower transaction, not an
+   * instant. An earlier version of this comment claimed Postgres serialised
+   * them; it does not, and building on that claim is how a duplicate reaches
+   * the queue looking legitimate.
+   *
+   * What makes the rule true is `orders_transaction_id_live_unique_idx`, which
+   * refuses the second commit outright. This read runs first anyway because it
+   * can name the order already holding the receipt, and "already used on
+   * NB-40718, track it here" is an answer a customer can act on where a
+   * constraint violation is not.
    */
   private async rejectReusedTransactionId(
     request: PlaceOrderRequest,
@@ -310,6 +352,9 @@ export class CheckoutService {
 /** Drizzle names a column-level unique constraint `<table>_<column>_unique`. */
 const IDEMPOTENCY_CONSTRAINT = "orders_idempotency_key_unique";
 const ORDER_NUMBER_CONSTRAINT = "orders_order_number_unique";
+
+/** The partial unique index on the normalised receipt — see orders' schema. */
+const TRANSACTION_ID_CONSTRAINT = "orders_transaction_id_live_unique_idx";
 
 /**
  * The `orders` row a request and its pricing produce, minus the order number.

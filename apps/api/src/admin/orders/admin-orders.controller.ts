@@ -76,8 +76,13 @@ export class AdminOrdersController {
   @ApiOperation({ summary: "Re-check the order's transaction ID against the SMS gateway." })
   async verifyPayment(
     @Param("orderNumber") orderNumber: string,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
   ): Promise<AdminOrderVerifyPaymentResult> {
-    return this.adminOrdersService.verifyPayment(orderNumber);
+    // The actor is threaded through even though this writes no order, because
+    // the check itself is now recorded and "who looked" is the point of
+    // recording it.
+    return this.adminOrdersService.verifyPayment(orderNumber, contextOf(admin, request));
   }
 
   /**

@@ -8,6 +8,7 @@ import { PaymentsService } from "../payments";
 import { toOrderResponse } from "./order.mapper";
 import { findOrder } from "./order.query";
 import { findTransactionIdClaim } from "./transaction-id-claim";
+import { PaymentVerificationLogService } from "./payment-verification-log.service";
 
 /**
  * The automated half of payment confirmation.
@@ -35,6 +36,7 @@ export class OrderAutoVerifyService {
     private readonly dbService: DbService,
     private readonly paymentVerificationService: PaymentVerificationService,
     private readonly paymentsService: PaymentsService,
+    private readonly verificationLog: PaymentVerificationLogService,
   ) {}
 
   /**
@@ -74,6 +76,13 @@ export class OrderAutoVerifyService {
         expectedCents: row.totalCents,
         provider: row.provider ?? undefined,
       });
+
+      /* Recorded whatever the outcome, and with a null actor to mark it as the
+         machine's check rather than a person's. Recording the non-matches is
+         the more useful half: a NOT_FOUND here is what puts "checked, nothing
+         there yet" on the queue badge, so staff can tell an order nobody has
+         looked at from one the gateway has already been asked about. */
+      await this.verificationLog.record(row.id, verification, row.totalCents, null);
 
       if (verification.outcome !== "MATCHED") return order;
 

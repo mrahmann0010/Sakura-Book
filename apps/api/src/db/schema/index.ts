@@ -28,3 +28,4 @@ export * from "./orders/order";
 export * from "./orders/order-item";
 export * from "./orders/order-status-history";
 export * from "./orders/payment";
+export * from "./orders/payment-verification";

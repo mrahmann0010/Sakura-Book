@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AdminOrderDetail, AdminOrderVerifyPaymentResult, OrderStatus } from "@sakura/contracts";
 
 import { AdminShell } from "@/components/admin/admin-shell";
+import { ReceiptBadge, VerificationBadge } from "@/components/admin/payment-safety";
 import { Button, Notice, Textarea } from "@/components/ui";
 import {
   AdminApiError,
@@ -30,13 +32,22 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
 
 export default function AdminOrderDetailPage() {
   const { checking } = useAdminGate();
-  const { orderNumber } = useParams<{ orderNumber: string }>();
+  const { orderNumber, locale } = useParams<{ orderNumber: string; locale: string }>();
 
   const [order, setOrder] = useState<AdminOrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const [note, setNote] = useState("");
+
+  /**
+   * The typed justification for confirming a duplicate receipt.
+   *
+   * Sent with the grant rather than saved separately, so the reason and the
+   * thing it justifies are one request — the API refuses the grant if it
+   * cannot record the reason.
+   */
+  const [overrideReason, setOverrideReason] = useState("");
 
   const [verifying, setVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<AdminOrderVerifyPaymentResult | null>(null);
@@ -84,12 +95,19 @@ export default function AdminOrderDetailPage() {
 
   async function accept() {
     if (!order) return;
+
+    // Sent only when there is a duplicate to override. Passing it otherwise
+    // would put a justification on the audit log for a block that never fired.
+    const duplicateReceiptOverride =
+      order.receipt.state === "DUPLICATE" ? overrideReason.trim() || undefined : undefined;
+
     if (order.paymentMethod === "manual-transfer") {
       await run(() =>
         confirmAdminOrderPayment(orderNumber, {
           amountCents: order.totalCents,
           reference: order.transactionId ?? undefined,
           note: note || undefined,
+          duplicateReceiptOverride,
         }),
       );
     } else {
@@ -97,6 +115,7 @@ export default function AdminOrderDetailPage() {
         transitionAdminOrder(orderNumber, {
           status: "PAYMENT_CONFIRMED",
           note: note || "Accepted by admin",
+          duplicateReceiptOverride,
         }),
       );
     }
@@ -109,7 +128,19 @@ export default function AdminOrderDetailPage() {
   }
 
   async function moveTo(status: OrderStatus) {
-    await run(() => transitionAdminOrder(orderNumber, { status, note: note || undefined }));
+    await run(() =>
+      transitionAdminOrder(orderNumber, {
+        status,
+        note: note || undefined,
+        // Same guard as Accept: a transition to PAYMENT_CONFIRMED is a grant,
+        // and the API now refuses it on a duplicate receipt just as it refuses
+        // confirmPayment.
+        duplicateReceiptOverride:
+          status === "PAYMENT_CONFIRMED" && order?.receipt.state === "DUPLICATE"
+            ? overrideReason.trim() || undefined
+            : undefined,
+      }),
+    );
   }
 
   async function verify() {
@@ -209,6 +240,39 @@ export default function AdminOrderDetailPage() {
               <Row label="Transaction ID" value={order.transactionId ?? "No receipt on file"} />
             </dl>
 
+            {/* Present on load, before anyone presses anything. The old panel
+                said nothing about a receipt until an admin ran a check, which
+                meant the duplicate case — the one that needs no gateway to
+                detect — was invisible right up to the moment of confirming. */}
+            {order.paymentMethod === "manual-transfer" ? (
+              <div className="border-rule mt-4 flex flex-col gap-2 border-t pt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-13.5 text-muted">Receipt</span>
+                  <ReceiptBadge receipt={order.receipt} />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-13.5 text-muted">Gateway</span>
+                  <VerificationBadge verification={order.verification} />
+                </div>
+
+                {order.receipt.claimedByOrderNumber ? (
+                  <Notice tone="error" className="mt-1">
+                    <p>
+                      <strong className="text-clay font-semibold">Duplicate receipt.</strong> This
+                      transaction ID is already recorded against order{" "}
+                      <Link
+                        href={`/${locale}/admin/orders/${order.receipt.claimedByOrderNumber}`}
+                        className="text-clay hover:text-clay-deep underline"
+                      >
+                        {order.receipt.claimedByOrderNumber}
+                      </Link>
+                      . Confirming payment here is blocked unless you give a reason to override.
+                    </p>
+                  </Notice>
+                ) : null}
+              </div>
+            ) : null}
+
             {order.paymentMethod === "manual-transfer" ? (
               <div className="mt-4">
                 <Button
@@ -228,6 +292,28 @@ export default function AdminOrderDetailPage() {
                   ) : null}
                 </div>
               </div>
+            ) : null}
+
+            {/* The sequence, not just the latest. A receipt that was NOT_FOUND
+                at 09:12 and MATCHED at 11:40 is an SMS that arrived late —
+                which is normal, and looks like nothing at all if only the last
+                check is kept. */}
+            {order.verifications.length > 0 ? (
+              <details className="mt-4">
+                <summary className="text-13.5 text-secondary hover:text-ink cursor-pointer">
+                  Verification history ({order.verifications.length})
+                </summary>
+                <ul className="mt-2 flex flex-col gap-1">
+                  {order.verifications.map((record, index) => (
+                    <li key={index} className="text-13.5 text-secondary">
+                      {new Date(record.checkedAt).toLocaleString()} · {record.outcome}
+                      {record.paidCents !== undefined
+                        ? ` · ${formatMoney(record.paidCents, "en-GB", order.currency)}`
+                        : ""}
+                    </li>
+                  ))}
+                </ul>
+              </details>
             ) : null}
 
             {order.payments.length > 0 ? (
@@ -283,6 +369,24 @@ export default function AdminOrderDetailPage() {
               rows={2}
               className="mt-3"
             />
+
+            {/* Only rendered when there is actually a duplicate to override.
+                An always-present "override" box is an invitation to fill it
+                in, and this is a control that should be awkward to reach for. */}
+            {order.receipt.state === "DUPLICATE" ? (
+              <Textarea
+                label={`Reason for overriding the duplicate receipt (also on ${order.receipt.claimedByOrderNumber})`}
+                value={overrideReason}
+                onChange={(event) => setOverrideReason(event.target.value)}
+                rows={2}
+                className="mt-3"
+                error={
+                  overrideReason.trim().length > 0 && overrideReason.trim().length < 15
+                    ? "Explain why this duplicate receipt is legitimate."
+                    : undefined
+                }
+              />
+            ) : null}
 
             <div className="mt-3 flex flex-wrap gap-2">
               {order.status === "PENDING" ? (
