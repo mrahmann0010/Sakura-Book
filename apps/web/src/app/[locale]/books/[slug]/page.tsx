@@ -22,7 +22,7 @@ import { footerColumns } from "@/lib/books";
 import { toBookSummary } from "@/lib/book-view";
 import { toSearchParams } from "@/lib/catalog";
 import { FREE_DELIVERY_THRESHOLD } from "@/lib/cart";
-import { formatMoney, intlLocale } from "@/lib/money";
+import { CURRENCY, formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 import { localeAlternates, siteUrl } from "@/lib/site";
 import { absoluteFileUrl, fileUrl } from "@/lib/storage-url";
@@ -226,7 +226,7 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
       "@type": "Offer",
       url: `${siteUrl()}${routes(locale).book(slug)}`,
       price: (book.priceCents / 100).toFixed(2),
-      priceCurrency: "GBP",
+      priceCurrency: CURRENCY,
       availability:
         book.stockQuantity > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
     },

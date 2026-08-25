@@ -1,5 +1,14 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AdminThemeLock } from "@/components/admin/theme-lock";
+
+/* Defense in depth alongside robots.ts's admin disallow rule: a disallow
+   rule stops a crawler from fetching the page at all, but doesn't de-index a
+   URL that was already indexed before the rule existed. This is what
+   actually keeps the panel out of search results. */
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 /**
  * Runs before the browser paints anything under it, which is what keeps the

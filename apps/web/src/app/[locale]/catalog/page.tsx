@@ -22,6 +22,7 @@ import { toBookSummaries } from "@/lib/book-view";
 // import type { BookSummary } from "@/components/domain";
 import { parseSearchParams, toSearchParams } from "@/lib/catalog";
 import { routes } from "@/lib/routes";
+import { catalogSeo } from "@/lib/seo";
 import { localeAlternates } from "@/lib/site";
 
 /* Catalog, per the Catalog Wireframe (option 1a/1b/1c): page title and count,
@@ -48,13 +49,14 @@ export async function generateMetadata({
   searchParams,
 }: PageProps<"/[locale]/catalog">): Promise<Metadata> {
   const { locale } = (await params) as { locale: Locale };
-  const { t } = await getTranslation(locale);
   const query = parseSearchParams(await searchParams);
 
   const isCanonicalView = !query.q && query.genres.length === 0 && query.page === 1;
+  const { title, description } = catalogSeo(locale);
 
   return {
-    title: t("catalog.title"),
+    title,
+    description,
     alternates: localeAlternates(locale, "/catalog"),
     robots: isCanonicalView ? undefined : { index: false, follow: true },
   };

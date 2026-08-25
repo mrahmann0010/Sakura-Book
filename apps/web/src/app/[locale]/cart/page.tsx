@@ -16,6 +16,10 @@ import type { Locale } from "@/i18n/settings";
 
 export const metadata: Metadata = {
   title: "Your cart · Nihonova Books",
+  /* robots.ts disallows crawling this path outright; this is the
+     defense-in-depth half — it de-indexes the URL if it was ever indexed
+     before that rule existed, the same reasoning as admin/layout.tsx. */
+  robots: { index: false, follow: false },
 };
 
 export default async function Page({ params }: PageProps<"/[locale]/cart">) {

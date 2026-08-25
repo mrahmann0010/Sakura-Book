@@ -5,6 +5,7 @@ import "../globals.css";
 import { I18nProvider } from "@/i18n/client";
 import { locales, type Locale } from "@/i18n/settings";
 import { QueryProvider } from "@/lib/api/query-provider";
+import { siteDefaultSeo } from "@/lib/seo";
 import { localeAlternates, siteUrl } from "@/lib/site";
 import { StoreProvider } from "@/store/provider";
 import { GoogleAnalytics } from "@/components/analytics";
@@ -65,7 +66,7 @@ const publicSans = Public_Sans({
    the template, the description and the Open Graph defaults for free. */
 export async function generateMetadata({ params }: LayoutProps<"/[locale]">): Promise<Metadata> {
   const { locale } = (await params) as { locale: Locale };
-  const description = "A small catalog of books, chosen by hand and posted from Bristol.";
+  const { title, description } = siteDefaultSeo(locale);
 
   return {
     /* Makes every relative URL in metadata below — and in the pages — resolve
@@ -73,7 +74,7 @@ export async function generateMetadata({ params }: LayoutProps<"/[locale]">): Pr
        a valid og:url. */
     metadataBase: new URL(siteUrl()),
     title: {
-      default: "Nihonova Books — Handpicked Books to Learn Japanese",
+      default: title,
       template: "%s · Nihonova Books",
     },
     description,
@@ -82,7 +83,7 @@ export async function generateMetadata({ params }: LayoutProps<"/[locale]">): Pr
       type: "website",
       siteName: "Nihonova Books",
       locale,
-      title: "Nihonova Books — Handpicked Books to Learn Japanese",
+      title,
       description,
       url: localeAlternates(locale).canonical,
     },
