@@ -145,11 +145,12 @@ async function CatalogResults({
           are placeholder values invented in `lib/books.ts`. Nothing goes
           in front of a buyer as social proof until real data backs it. */}
       <BookGrid>
-        {gridBooks.map((book) => (
+        {gridBooks.map((book, index) => (
           <BookCard
             key={book.id}
             book={book}
             locale={locale}
+            priority={index === 0}
             footerAction={
               /* <AddToCartButton
                 bookId={book.id}

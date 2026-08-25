@@ -40,6 +40,15 @@ export type BookCoverProps = Variants<VariantProps<typeof coverRadius>> & {
   fallback?: "wordmark" | "hatch";
   /** Sizing lives at the call site; the cover only owns the 2:3 crop. */
   className?: string;
+  /**
+   * Set on the one cover that is the page's LCP candidate — the book detail
+   * page's own cover, or the first card of a grid above the fold. Skips
+   * `next/image`'s default lazy-loading and preloads the image instead, so
+   * this specific image isn't waiting on an IntersectionObserver to start
+   * fetching. Left off everywhere else: marking every cover `priority` would
+   * make the browser fetch a whole grid at once and help nothing.
+   */
+  priority?: boolean;
 };
 
 /**
@@ -53,6 +62,7 @@ export function BookCover({
   fallback = "hatch",
   radius = "control",
   className,
+  priority = false,
 }: BookCoverProps) {
   const shape = cn(coverRadius({ radius }), className);
 
@@ -66,6 +76,7 @@ export function BookCover({
           height={600}
           sizes="(max-width: 768px) 45vw, 240px"
           className={shape}
+          priority={priority}
         />
       );
     }

@@ -280,6 +280,7 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
               title={book.title}
               author={view.author}
               fallback="wordmark"
+              priority
             />
           }
           rail={<div className="hidden lg:block">{buyCard}</div>}

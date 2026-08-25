@@ -109,6 +109,8 @@ export type BookCardProps = Omit<Variants<VariantProps<typeof cardTitle>>, "clam
    */
   mobileRow?: boolean;
   className?: string;
+  /** Forwarded to the card's `BookCover` — see its own doc for when to set it. */
+  priority?: boolean;
 };
 
 export function BookCard({
@@ -124,6 +126,7 @@ export function BookCard({
   variant = "bare",
   mobileRow = false,
   className,
+  priority = false,
 }: BookCardProps) {
   const flag = showFlag ? book.flag : undefined;
   /**
@@ -203,7 +206,13 @@ export function BookCard({
           className,
         )}
       >
-        <BookCover src={book.coverUrl} title={book.title} author={book.author} radius="xs" />
+        <BookCover
+          src={book.coverUrl}
+          title={book.title}
+          author={book.author}
+          radius="xs"
+          priority={priority}
+        />
         <div className="min-w-0">
           <h3 className={cardTitle({ size: "sm" })}>{title}</h3>
           <p className="text-12 text-secondary mt-1">{book.author}</p>
@@ -251,6 +260,7 @@ export function BookCard({
             title={book.title}
             author={book.author}
             fallback={book.coverUrl ? "hatch" : "wordmark"}
+            priority={priority}
           />
         </div>
 
@@ -294,6 +304,7 @@ export function BookCard({
              differs, and it says so at the call site rather than in the
              utility. */
           className="lg:aspect-[3/4]"
+          priority={priority}
         />
       </div>
 

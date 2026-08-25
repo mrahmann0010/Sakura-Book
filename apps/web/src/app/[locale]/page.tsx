@@ -297,6 +297,7 @@ async function RecentGrid({ locale, t }: { locale: Locale; t: T }) {
               book={book}
               locale={locale}
               mobileRow
+              priority={index === 0}
               footerAction={
                 /* <AddToCartButton
                   bookId={book.id}
