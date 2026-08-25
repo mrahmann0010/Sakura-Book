@@ -1,6 +1,19 @@
 import { cva, type VariantProps } from "class-variance-authority";
+import Image from "next/image";
 
 import { cn, type Variants } from "@/lib/utils";
+
+/**
+ * Covers uploaded through the admin form are rewritten by `fileUrl` to
+ * `/api/files/covers/<uuid>.<ext>` — same-origin, so `next/image` can
+ * optimize them without any `remotePatterns` entry. The admin form's cover
+ * field also accepts a pasted publisher URL verbatim, which stays absolute
+ * and external; those are left on a plain `<img>` rather than erroring at
+ * request time for a host nobody configured.
+ */
+function isOptimizable(src: string): boolean {
+  return src.startsWith("/");
+}
 
 const coverRadius = cva("cover", {
   variants: {
@@ -44,8 +57,21 @@ export function BookCover({
   const shape = cn(coverRadius({ radius }), className);
 
   if (src) {
-    /* eslint-disable-next-line @next/next/no-img-element -- covers come from
-       arbitrary publisher hosts; next/image config is an app-level decision. */
+    if (isOptimizable(src)) {
+      return (
+        <Image
+          src={src}
+          alt={`${title} — cover`}
+          width={400}
+          height={600}
+          sizes="(max-width: 768px) 45vw, 240px"
+          className={shape}
+        />
+      );
+    }
+
+    /* eslint-disable-next-line @next/next/no-img-element -- an admin-pasted
+       publisher URL, on a host next/image isn't configured to optimize. */
     return <img src={src} alt={`${title} — cover`} className={shape} />;
   }
 
