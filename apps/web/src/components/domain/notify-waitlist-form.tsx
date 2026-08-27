@@ -67,6 +67,16 @@ export type NotifyWaitlistFormProps = {
    * out of stock and the safe fallback when the catalog could not be read.
    */
   books?: { id: string; title: string }[];
+  /**
+   * A single title every signup through this form is for, with no choice
+   * offered — the picker is not drawn and `bookId` is submitted as this book.
+   *
+   * Distinct from a one-element `books`, which would still be a control asking
+   * a question with one answer. Null (the API being unreadable, or the book
+   * being back in stock) falls back to the general list, exactly as an empty
+   * `books` does. Takes precedence over `books` when both are given.
+   */
+  fixedBook?: { id: string; title: string } | null;
   /** Which entry point this form instance is — free text, stored as-is.
    *  Defaults to the one caller this component has today. */
   source?: string;
@@ -76,6 +86,7 @@ export type NotifyWaitlistFormProps = {
 export function NotifyWaitlistForm({
   locale,
   books = [],
+  fixedBook = null,
   source = "restock-notify-page",
   className,
 }: NotifyWaitlistFormProps) {
@@ -87,13 +98,18 @@ export function NotifyWaitlistForm({
    *  looked up locally — the server is what decided what was recorded. */
   const [listedFor, setListedFor] = useState<string | null>(null);
 
+  /* The picker is drawn only when there is a choice to make: `fixedBook` means
+     the book is already decided, so it is submitted from the default value and
+     no control appears. */
+  const choosable = fixedBook ? [] : books;
+
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<WaitlistValues>({
     resolver: zodResolver(waitlistSchema),
-    defaultValues: waitlistDefaults,
+    defaultValues: { ...waitlistDefaults, bookId: fixedBook?.id ?? "" },
     mode: "onBlur",
   });
 
@@ -119,9 +135,13 @@ export function NotifyWaitlistForm({
       // this renders the same confirmation rather than an error.
       if (err instanceof ApiError && err.code === "ALREADY_EXISTS") {
         /* No response body to read the title from, so this is the one place
-           the local list is the source — it is also the list they just picked
-           from, so it cannot disagree with what they saw. */
-        setListedFor(books.find((book) => book.id === bookId)?.title ?? null);
+           the local list is the source — it is also what they were just shown,
+           so it cannot disagree with what they saw. */
+        setListedFor(
+          fixedBook?.id === bookId
+            ? fixedBook.title
+            : (choosable.find((book) => book.id === bookId)?.title ?? null),
+        );
         setAlreadyListed(true);
         setSubmitted(true);
         return;
@@ -161,10 +181,11 @@ export function NotifyWaitlistForm({
     <Card as="form" padding="roomy" className={className} onSubmit={handleSubmit(submit)}>
       {/* First field, and full width: which book is the question the customer
           came with, and asking it after their phone number reads as an
-          afterthought. Absent entirely when nothing is out of stock — a
-          picker with one option that means "no book" is a control that only
-          asks people to wonder what it is for. */}
-      {books.length > 0 ? (
+          afterthought. Absent entirely when there is nothing to choose between
+          — nothing out of stock, or a `fixedBook` that has already decided.
+          A picker whose options do not represent a real choice is a control
+          that only asks people to wonder what it is for. */}
+      {choosable.length > 0 ? (
         <div className="mb-5">
           <Select
             label={t("notify.form.book")}
@@ -175,7 +196,7 @@ export function NotifyWaitlistForm({
                 Its value is "" so an untouched form submits exactly what the
                 schema treats as "no book". */}
             <option value="">{t("notify.form.bookAny")}</option>
-            {books.map((book) => (
+            {choosable.map((book) => (
               <option key={book.id} value={book.id}>
                 {book.title}
               </option>
