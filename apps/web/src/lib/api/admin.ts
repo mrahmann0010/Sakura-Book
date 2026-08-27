@@ -16,6 +16,11 @@ import {
   adminSessionSchema,
   adminShippingTermsSchema,
   adminUploadResultSchema,
+  adminWaitlistEntrySchema,
+  adminWaitlistListSchema,
+  adminWaitlistNotifyRequestSchema,
+  adminWaitlistNotifyResultSchema,
+  adminWaitlistUpdateRequestSchema,
   dashboardSchema,
   monthlyReportSchema,
   type AdminBookCreateInput,
@@ -39,6 +44,12 @@ import {
   type AdminSession,
   type AdminShippingTerms,
   type AdminUploadResult,
+  type AdminWaitlistEntry,
+  type AdminWaitlistList,
+  type AdminWaitlistNotifyRequest,
+  type AdminWaitlistNotifyResult,
+  type AdminWaitlistQuery,
+  type AdminWaitlistUpdateRequest,
   type Dashboard,
   type MonthlyReport,
   type PaymentNumbersUpdate,
@@ -558,6 +569,109 @@ export function uploadAdminCover(file: File): Promise<AdminUploadResult> {
 
 export function uploadAdminPdf(file: File): Promise<AdminUploadResult> {
   return adminUpload("/admin/uploads/pdf", adminUploadResultSchema, file);
+}
+
+/* --------------------------------------------------------------------------
+   Waitlist. See admin-waitlist.controller.ts.
+   -------------------------------------------------------------------------- */
+
+/** The filters, as a query string. Shared by the list and the CSV export so
+ *  the file always contains exactly what the screen was showing. */
+function waitlistSearch(query: Partial<AdminWaitlistQuery>): string {
+  const search = new URLSearchParams();
+  for (const status of query.status ?? []) search.append("status", status);
+  if (query.q) search.set("q", query.q);
+  if (query.source) search.set("source", query.source);
+  if (query.locale) search.set("locale", query.locale);
+  if (query.signedFrom) search.set("signedFrom", query.signedFrom);
+  if (query.signedTo) search.set("signedTo", query.signedTo);
+  if (query.sort) search.set("sort", query.sort);
+  if (query.page) search.set("page", String(query.page));
+  if (query.pageSize) search.set("pageSize", String(query.pageSize));
+
+  const qs = search.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export function listAdminWaitlist(
+  query: Partial<AdminWaitlistQuery> = {},
+): Promise<AdminWaitlistList> {
+  return adminFetch(`/admin/waitlist${waitlistSearch(query)}`, adminWaitlistListSchema);
+}
+
+export function notifyAdminWaitlist(
+  request: AdminWaitlistNotifyRequest,
+): Promise<AdminWaitlistNotifyResult> {
+  const validated = validate(adminWaitlistNotifyRequestSchema, request);
+  return adminFetch("/admin/waitlist/notify", adminWaitlistNotifyResultSchema, {
+    method: "POST",
+    body: validated,
+  });
+}
+
+export function updateAdminWaitlistEntry(
+  id: string,
+  request: AdminWaitlistUpdateRequest,
+): Promise<AdminWaitlistEntry> {
+  const validated = validate(adminWaitlistUpdateRequestSchema, request);
+  return adminFetch(`/admin/waitlist/${encodeURIComponent(id)}`, adminWaitlistEntrySchema, {
+    method: "PATCH",
+    body: validated,
+  });
+}
+
+/**
+ * Download the filtered waitlist as a CSV.
+ *
+ * Not `adminFetch`: that parses every response against a Zod schema, and this
+ * one is a file. It repeats the credential and error handling rather than
+ * generalising the wrapper, because the two differ in what a *successful*
+ * response even is — one returns parsed data, this one has to reach the disk.
+ *
+ * The blob is fetched rather than the URL being opened in a tab, because the
+ * session lives in httpOnly cookies that a plain navigation would carry but a
+ * 401 from would render as a JSON error page instead of a download. This way
+ * a failure is an AdminApiError the page can show inline, and the file only
+ * appears when there is really a file.
+ */
+export async function downloadAdminWaitlistCsv(
+  query: Partial<AdminWaitlistQuery> = {},
+): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `${apiOrigin()}${API_PREFIX}/admin/waitlist/export.csv${waitlistSearch(query)}`,
+      { credentials: "include", cache: "no-store", headers: { accept: "text/csv" } },
+    );
+  } catch {
+    throw new AdminApiError(0, "Could not reach the API. Check that it is running.", [], "NETWORK_ERROR");
+  }
+
+  if (!response.ok) {
+    /* A 403 here is the expected one: the export is ADMIN-only while the rest
+       of the screen is open to STAFF, so this is the first thing a staff
+       member hits. Named rather than generic, so the page can say why. */
+    if (response.status === 403) {
+      throw new AdminApiError(403, "Only an ADMIN account can export the waitlist.", [], "FORBIDDEN");
+    }
+
+    throw new AdminApiError(response.status, "Could not export the waitlist.", [], "EXPORT_FAILED");
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `waitlist-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+
+  /* Revoked on the next tick rather than immediately: Safari has not started
+     reading the blob when `click()` returns, and revoking synchronously gives
+     a silently empty file. */
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 export type { AdminBookQuery };

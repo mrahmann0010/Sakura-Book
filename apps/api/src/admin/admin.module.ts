@@ -17,6 +17,7 @@ import { AdminBooksController, AdminBooksService, AdminUploadsController } from 
 import { AdminDashboardController, AdminDashboardService } from "./dashboard";
 import { AdminOrdersController, AdminOrdersService } from "./orders";
 import { AdminSettingsController, AdminSettingsService } from "./settings";
+import { AdminWaitlistController, AdminWaitlistService } from "./waitlist";
 
 /**
  * Everything behind a credential.
@@ -98,6 +99,7 @@ import { AdminSettingsController, AdminSettingsService } from "./settings";
     AdminDashboardController,
     AdminBooksController,
     AdminUploadsController,
+    AdminWaitlistController,
   ],
   providers: [
     AdminAuthService,
@@ -105,6 +107,7 @@ import { AdminSettingsController, AdminSettingsService } from "./settings";
     AdminSettingsService,
     AdminDashboardService,
     AdminBooksService,
+    AdminWaitlistService,
     { provide: APP_GUARD, useClass: AdminJwtGuard },
     { provide: APP_GUARD, useClass: AdminRolesGuard },
   ],
