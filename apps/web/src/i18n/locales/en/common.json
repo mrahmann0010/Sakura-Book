@@ -486,7 +486,7 @@
       "fullName": "Full name",
       "fullNameError": "Enter your name.",
       "phone": "Phone number",
-      "phoneHint": "We'll reach you here first — WhatsApp or SMS.",
+      "phoneHint": "We'll contact you by SMS or email.",
       "phoneError": "Enter a valid Bangladeshi phone number.",
       "email": "Email",
       "emailError": "Enter a valid email address.",

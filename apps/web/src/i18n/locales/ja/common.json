@@ -484,7 +484,7 @@
       "fullName": "お名前",
       "fullNameError": "お名前を入力してください。",
       "phone": "電話番号",
-      "phoneHint": "まずこちらの番号にご連絡します（WhatsAppまたはSMS）。",
+      "phoneHint": "SMSまたはメールでご連絡します。",
       "phoneError": "有効なバングラデシュの電話番号を入力してください。",
       "email": "メールアドレス",
       "emailError": "有効なメールアドレスを入力してください。",
