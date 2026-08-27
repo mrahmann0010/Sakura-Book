@@ -15,6 +15,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/db/seed/seed.ts",
     "db:receipt-duplicates": "tsx src/db/scripts/receipt-duplicates.ts",
+    "db:waitlist-purge": "tsx src/db/scripts/waitlist-purge.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

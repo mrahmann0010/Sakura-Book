@@ -24,6 +24,7 @@ export function routes(locale: Locale | string) {
     privacyPolicy: `${base}/privacy-policy`,
     terms: `${base}/terms`,
     contact: `${base}/contact`,
+    notify: `${base}/notify`,
   } as const;
 }
 

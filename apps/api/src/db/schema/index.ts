@@ -21,6 +21,7 @@ export * from "./admin/audit-log";
 export * from "./settings/shop-settings";
 
 export * from "./marketing/coupon";
+export * from "./marketing/waitlist-entry";
 
 export * from "./shipping/delivery-region";
 
