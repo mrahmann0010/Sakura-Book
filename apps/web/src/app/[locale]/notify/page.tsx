@@ -6,13 +6,52 @@ import { Badge } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
 import { listBooks } from "@/lib/api/catalog";
+import { getRestockSchedule } from "@/lib/api/waitlist";
 import { footerColumns } from "@/lib/books";
 import { localizeLinks, routes } from "@/lib/routes";
 import { localeAlternates } from "@/lib/site";
 
-/* The date pre-orders reopen. One place to move when the estimate changes —
-   the page reads it, so does the badge copy in i18n via interpolation. */
-const REOPEN_DATE = "September 15, 2026";
+/**
+ * The date pre-orders reopen, formatted for the page's own language.
+ *
+ * The date arrives as `YYYY-MM-DD` and is formatted here rather than sent
+ * ready-made, so the month reads as "September", "সেপ্টেম্বর" or "9月"
+ * depending on who is looking — the old hardcoded constant was an English
+ * string rendered inside a Bangla sentence.
+ *
+ * Parsed as UTC noon rather than `new Date("2026-09-15")` at midnight: a bare
+ * ISO date is midnight UTC, which `Intl` then renders as the *previous* day
+ * for any negative-offset locale. Noon has no such neighbour.
+ */
+function formatReopenDate(isoDate: string, locale: Locale): string | null {
+  const parsed = new Date(`${isoDate}T12:00:00Z`);
+
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(parsed);
+}
+
+/**
+ * When ordering reopens, or null if no date is announced.
+ *
+ * Same swallowed-failure policy as waitedOnBook(): the reopening line is one
+ * sentence of reassurance, and losing it is not worth an error page on the
+ * screen whose whole job is catching disappointed customers.
+ */
+async function reopenDate(): Promise<string | null> {
+  try {
+    const schedule = await getRestockSchedule();
+
+    return schedule.reopenDate;
+  } catch {
+    return null;
+  }
+}
 
 export async function generateMetadata({
   params,
@@ -71,7 +110,8 @@ export default async function NotifyPage({ params }: PageProps<"/[locale]/notify
   const { locale } = (await params) as { locale: Locale };
   const { t } = await getTranslation(locale);
   const path = routes(locale);
-  const book = await waitedOnBook();
+  const [book, reopensOn] = await Promise.all([waitedOnBook(), reopenDate()]);
+  const reopensLabel = reopensOn ? formatReopenDate(reopensOn, locale) : null;
 
   return (
     <PageShell
@@ -97,9 +137,15 @@ export default async function NotifyPage({ params }: PageProps<"/[locale]/notify
             {t("notify.title")}
           </h1>
 
-          <p className="text-body text-secondary eyebrow mt-3 tracking-normal normal-case">
-            {t("notify.reopenDate", { date: REOPEN_DATE })}
-          </p>
+          {/* Omitted entirely when no date is announced — a reopening line with
+              a blank where the date goes reads as a bug, and a shop that has
+              not committed to a date is better saying nothing than saying it
+              badly. */}
+          {reopensLabel ? (
+            <p className="text-body text-secondary eyebrow mt-3 tracking-normal normal-case">
+              {t("notify.reopenDate", { date: reopensLabel })}
+            </p>
+          ) : null}
 
           <p className="text-body mt-5">{t("notify.intro")}</p>
         </div>

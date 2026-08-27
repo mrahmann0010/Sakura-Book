@@ -11,6 +11,7 @@ import {
   adminOrderTransitionRequestSchema,
   adminOrderVerifyPaymentResultSchema,
   adminPaymentNumbersSchema,
+  adminRestockScheduleSchema,
   adminRecordRefundRequestSchema,
   adminRegionSchema,
   adminSessionSchema,
@@ -52,7 +53,9 @@ import {
   type AdminWaitlistUpdateRequest,
   type Dashboard,
   type MonthlyReport,
+  type AdminRestockSchedule,
   type PaymentNumbersUpdate,
+  type RestockScheduleUpdate,
   type ShippingTermsUpdate,
 } from "@sakura/contracts";
 import { z } from "zod";
@@ -469,6 +472,25 @@ export function updateAdminPaymentNumbers(
   changes: PaymentNumbersUpdate,
 ): Promise<AdminPaymentNumbers> {
   return adminFetch("/admin/settings/payments", adminPaymentNumbersSchema, {
+    method: "PATCH",
+    body: changes,
+  });
+}
+
+/* --------------------------------------------------------------------------
+   The reopening date announced on /notify. Shop-wide — see the column comment
+   on shopSettings.reopenDate for why it is not per book.
+   -------------------------------------------------------------------------- */
+
+export function getAdminRestockSchedule(): Promise<AdminRestockSchedule> {
+  return adminFetch("/admin/settings/restock", adminRestockScheduleSchema);
+}
+
+/** `reopenDate: null` clears the announcement rather than leaving it alone. */
+export function updateAdminRestockSchedule(
+  changes: RestockScheduleUpdate,
+): Promise<AdminRestockSchedule> {
+  return adminFetch("/admin/settings/restock", adminRestockScheduleSchema, {
     method: "PATCH",
     body: changes,
   });

@@ -4,8 +4,10 @@ import type {
   AdminRegion,
   AdminRegionCreate,
   AdminRegionUpdate,
+  AdminRestockSchedule,
   AdminShippingTerms,
   PaymentNumbersUpdate,
+  RestockScheduleUpdate,
   ShippingTermsUpdate,
   UnitsSoldReport,
 } from "@sakura/contracts";
@@ -13,6 +15,7 @@ import { DbService } from "../../db/db.service";
 import { UnitsSoldReconciler } from "../../inventory";
 import { PaymentNumbersService } from "../../payments";
 import { RegionsService, ShippingTermsService } from "../../shipping";
+import { RestockScheduleService } from "../../waitlist";
 import { AuditService } from "../../audit";
 import type { AdminContext } from "../orders";
 
@@ -38,9 +41,51 @@ export class AdminSettingsService {
     private readonly shippingTermsService: ShippingTermsService,
     private readonly regionsService: RegionsService,
     private readonly paymentNumbersService: PaymentNumbersService,
+    private readonly restockScheduleService: RestockScheduleService,
     private readonly reconciler: UnitsSoldReconciler,
     private readonly auditService: AuditService,
   ) {}
+
+  async restockSchedule(): Promise<AdminRestockSchedule> {
+    return this.restockScheduleService.describe();
+  }
+
+  /**
+   * Set or clear the date the /notify page announces.
+   *
+   * Audited like every other write here, and worth auditing despite being one
+   * nullable field: this is a public promise about when the shop reopens, and
+   * "who moved the date, and from what" is exactly the question asked after a
+   * customer quotes a date nobody remembers setting.
+   */
+  async updateRestockSchedule(
+    changes: RestockScheduleUpdate,
+    context: AdminContext,
+  ): Promise<AdminRestockSchedule> {
+    const before = await this.restockScheduleService.describe();
+
+    await this.dbService.db.transaction(async (tx) => {
+      await this.restockScheduleService.update(
+        changes.reopenDate,
+        { id: context.actor.sub, email: context.actor.email },
+        tx,
+      );
+
+      await this.auditService.record(
+        {
+          ...auditActor(context),
+          action: "UPDATE",
+          entityType: "shop_settings",
+          entityId: "restock_schedule",
+          before: { reopenDate: before.reopenDate },
+          after: { reopenDate: changes.reopenDate },
+        },
+        tx,
+      );
+    });
+
+    return this.restockScheduleService.describe();
+  }
 
   async shippingTerms(): Promise<AdminShippingTerms> {
     return this.shippingTermsService.describe();

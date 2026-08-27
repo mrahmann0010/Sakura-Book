@@ -76,3 +76,32 @@ export const waitlistEntrySchema = z.object({
 });
 
 export type WaitlistEntry = z.infer<typeof waitlistEntrySchema>;
+
+/* --------------------------------------------------------------------------
+   When ordering reopens.
+
+   Lives here rather than in admin-settings.ts because the customer-facing
+   half is the /notify page's own data — the same page this file's subscribe
+   request comes from — and the storefront should not import an admin contract
+   to render a line of its own copy. The admin's editing view of it sits
+   alongside in admin-settings.ts.
+   -------------------------------------------------------------------------- */
+
+/**
+ * An ISO-8601 calendar date, `YYYY-MM-DD`.
+ *
+ * A date and not a datetime, matching `shopSettings.reopenDate`: the shop
+ * reopens on a day, not at an instant, and a timestamp would render as the
+ * day before for anyone west of the zone it was written in. Formatting it for
+ * display — and translating the month name — is the client's job, which is
+ * the other reason not to send a pre-formatted string.
+ */
+export const reopenDateSchema = z.iso.date();
+
+export const restockScheduleSchema = z.object({
+  /** Null when no date has been announced. The page then omits the line
+   *  entirely rather than rendering an empty one — see the column's comment. */
+  reopenDate: reopenDateSchema.nullable(),
+});
+
+export type RestockSchedule = z.infer<typeof restockScheduleSchema>;

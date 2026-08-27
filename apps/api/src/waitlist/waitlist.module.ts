@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { RestockScheduleService } from "./restock-schedule.service";
 import { WaitlistController } from "./waitlist.controller";
 import { WaitlistService } from "./waitlist.service";
 
@@ -12,7 +13,11 @@ import { WaitlistService } from "./waitlist.service";
  */
 @Module({
   controllers: [WaitlistController],
-  providers: [WaitlistService],
-  exports: [WaitlistService],
+  providers: [WaitlistService, RestockScheduleService],
+  // RestockScheduleService is exported for AdminSettingsModule, which owns the
+  // editing half of the same setting — the storefront read and the admin write
+  // must go through one service, or the two grow separate ideas of what null
+  // means.
+  exports: [WaitlistService, RestockScheduleService],
 })
 export class WaitlistModule {}

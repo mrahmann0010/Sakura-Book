@@ -8,6 +8,7 @@ import { InventoryModule } from "../inventory";
 import { OrdersModule } from "../orders";
 import { PaymentNumbersModule, PaymentsModule } from "../payments";
 import { ShippingModule } from "../shipping";
+import { WaitlistModule } from "../waitlist";
 import { StorageModule } from "../storage";
 import { AdminAuthController } from "./auth/admin-auth.controller";
 import { AdminAuthService } from "./auth/admin-auth.service";
@@ -55,6 +56,9 @@ import { AdminWaitlistController, AdminWaitlistService } from "./waitlist";
     ShippingModule,
     InventoryModule,
     StorageModule,
+    // For RestockScheduleService — the storefront read and the admin write of
+    // the reopening date go through one service. See waitlist.module.ts.
+    WaitlistModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env, true>) => ({

@@ -4,9 +4,11 @@ import {
   adminRegionCreateSchema,
   adminRegionUpdateSchema,
   paymentNumbersUpdateSchema,
+  restockScheduleUpdateSchema,
   shippingTermsUpdateSchema,
   type AdminPaymentNumbers,
   type AdminRegion,
+  type AdminRestockSchedule,
   type AdminShippingTerms,
   type UnitsSoldReport,
 } from "@sakura/contracts";
@@ -21,6 +23,7 @@ class ShippingTermsUpdateDto extends createZodDto(shippingTermsUpdateSchema) {}
 class AdminRegionCreateDto extends createZodDto(adminRegionCreateSchema) {}
 class AdminRegionUpdateDto extends createZodDto(adminRegionUpdateSchema) {}
 class PaymentNumbersUpdateDto extends createZodDto(paymentNumbersUpdateSchema) {}
+class RestockScheduleUpdateDto extends createZodDto(restockScheduleUpdateSchema) {}
 
 /**
  * Shop policy and maintenance.
@@ -85,6 +88,33 @@ export class AdminSettingsController {
     @Req() request: Request,
   ): Promise<AdminPaymentNumbers> {
     return this.settingsService.updatePaymentNumbers(body, contextOf(admin, request));
+  }
+
+  @Get("restock")
+  @ApiOperation({ summary: "The shop-wide date ordering reopens, with who last set it." })
+  async restockSchedule(): Promise<AdminRestockSchedule> {
+    return this.settingsService.restockSchedule();
+  }
+
+  /**
+   * Set or clear the reopening date shown on /notify.
+   *
+   * ADMIN-only like every other write in this controller. Arguably it need not
+   * be — a date is a line of copy, not a price — but this is a public promise
+   * about when the shop reopens, and the invariant that every write *here* is
+   * ADMIN is worth more than one route's convenience. Staff who should be able
+   * to move the date belong in the waitlist controller, where the routes are
+   * deliberately open to them.
+   */
+  @Patch("restock")
+  @Roles("ADMIN")
+  @ApiOperation({ summary: "Set the reopening date, or send null to announce none." })
+  async updateRestockSchedule(
+    @Body() body: RestockScheduleUpdateDto,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminRestockSchedule> {
+    return this.settingsService.updateRestockSchedule(body, contextOf(admin, request));
   }
 
   @Get("regions")

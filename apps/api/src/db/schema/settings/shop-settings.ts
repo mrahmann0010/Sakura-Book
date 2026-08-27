@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, date, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { adminUsers } from "../admin/admin-user";
 
 /**
@@ -60,6 +60,27 @@ export const shopSettings = pgTable(
     rocketNumber: text("rocket_number"),
     /** Receiving number shown at checkout. Null → NAGAD_NUMBER from the environment. */
     nagadNumber: text("nagad_number"),
+
+    /**
+     * When ordering reopens — the date the /notify page announces, shop-wide.
+     *
+     * `date` rather than `timestamptz`, and this is the one column here where
+     * that distinction is the whole point: this is a day on a calendar, not an
+     * instant. "September 15" must read as September 15 to a customer in Dhaka
+     * and to staff wherever they are, and a timestamp would shift it across the
+     * boundary for one of them depending on the zone it was rendered in.
+     *
+     * Null means "no date announced" and the line is omitted rather than
+     * rendered empty — a promise the shop has not made is better said by
+     * silence than by a blank. It replaces a hardcoded constant in the notify
+     * page, which is why the migration backfills the date that constant held:
+     * deploying this must not silently retract a date customers have seen.
+     *
+     * Shop-wide, not per book. Every waitlist signup today is for the same
+     * reopening, and a per-title date is a different feature — it would belong
+     * on `books`, not here.
+     */
+    reopenDate: date("reopen_date"),
 
     /**
      * Who last saved, and when.

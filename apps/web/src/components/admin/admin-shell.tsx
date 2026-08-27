@@ -20,6 +20,11 @@ const NAV = [
   { href: "/orders", label: "Orders" },
   { href: "/books", label: "Books" },
   { href: "/waitlist", label: "Waitlist" },
+  // Directly under Waitlist rather than with the other settings: the reopening
+  // date is the answer to the question every name on that list is waiting for,
+  // and staff reach for it while working the list, not while editing payment
+  // details.
+  { href: "/settings/restock", label: "Reopening Date" },
   { href: "/settings/payments", label: "Payment Settings" },
   { href: "/settings/shipping", label: "Shipping Settings" },
 ] as const;

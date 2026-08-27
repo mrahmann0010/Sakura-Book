@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { monthlyTrendPointSchema } from "./admin-dashboard";
 import { orderStatuses } from "./order";
+import { reopenDateSchema, restockScheduleSchema } from "./waitlist";
 
 /* --------------------------------------------------------------------------
    Shop settings, the dashboard, and the maintenance jobs.
@@ -245,3 +246,36 @@ export const unitsSoldReportSchema = z.object({
 });
 
 export type UnitsSoldReport = z.infer<typeof unitsSoldReportSchema>;
+
+/* --------------------------------------------------------------------------
+   The reopening date, as staff edit it
+   -------------------------------------------------------------------------- */
+
+/**
+ * The reopening date with its provenance, same shape and same reasoning as
+ * `adminShippingTermsSchema` — except `source` has only two states worth
+ * distinguishing here, because there is no environment fallback for this one:
+ * either a date has been saved or none has.
+ */
+export const adminRestockScheduleSchema = restockScheduleSchema.extend({
+  updatedAt: z.string().datetime().nullable(),
+  updatedByEmail: z.string().nullable(),
+});
+
+export type AdminRestockSchedule = z.infer<typeof adminRestockScheduleSchema>;
+
+/**
+ * Set or clear the reopening date.
+ *
+ * Explicitly nullable rather than optional-and-absent: unlike the shipping and
+ * payment updates, where a missing key means "leave it alone", the only two
+ * things anyone wants to do to this single field are set it and clear it.
+ * Null is "announce no date", and it has to be sendable — a shop that has
+ * slipped its reopening needs to take the promise down, and a schema where
+ * absence meant "leave alone" would give it no way to say so.
+ */
+export const restockScheduleUpdateSchema = z.object({
+  reopenDate: reopenDateSchema.nullable(),
+});
+
+export type RestockScheduleUpdate = z.infer<typeof restockScheduleUpdateSchema>;
