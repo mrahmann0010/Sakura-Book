@@ -38,6 +38,9 @@ export type { EmptyStateProps } from "./empty-state";
 export { HowItWorks } from "./how-it-works";
 export type { HowItWorksProps, HowItWorksStage } from "./how-it-works";
 
+export { NotifyWaitlistForm } from "./notify-waitlist-form";
+export type { NotifyWaitlistFormProps, WaitlistValues } from "./notify-waitlist-form";
+
 export { MobileMoneyPayment } from "./mobile-money-payment";
 export type { MobileMoneyProviderId } from "./mobile-money-payment";
 

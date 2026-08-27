@@ -477,6 +477,36 @@
       "action": "Message us on Facebook"
     }
   },
+  "notify": {
+    "badge": "Pre-orders paused",
+    "title": "We're not taking orders right now",
+    "reopenDate": "Reopening {{date}}",
+    "intro": "Dear reader, we're overwhelmed by your incredible response! To ensure quality service and timely delivery, we've paused new pre-orders for now while we process existing orders. Fill in the form below to be first in line for your copy the moment it's back in stock. No advance payment or obligation — we'll let you know by SMS or email!",
+    "form": {
+      "fullName": "Full name",
+      "fullNameError": "Enter your name.",
+      "phone": "Phone number",
+      "phoneHint": "We'll reach you here first — WhatsApp or SMS.",
+      "phoneError": "Enter a valid Bangladeshi phone number.",
+      "email": "Email",
+      "emailError": "Enter a valid email address.",
+      "quantity": "Quantity",
+      "quantityError": "Enter a quantity between 1 and 20.",
+      "reassurance": "This only reserves your spot on the list — you will not be charged now.",
+      "errorSummary": "Check the highlighted fields above.",
+      "submit": "Notify me when it's back",
+      "submitting": "Saving your spot",
+      "successBadge": "You're on the list",
+      "successTitle": "We'll message you the moment it's back.",
+      "successBody": "Thanks — we've saved your details and will reach out on the number you gave us as soon as stock arrives.",
+      "submitError": "Something went wrong on our end. Please try again in a moment.",
+      "alreadyListedBody": "Good news — you're already on the list. We'll message you the moment it's back.",
+      "book": "Which book?",
+      "bookHint": "Pick the title you're waiting for, or leave it as any.",
+      "bookAny": "Any title — tell me when anything is back",
+      "listedFor": "Waiting for: {{book}}"
+    }
+  },
   "errors": {
     "page": {
       "eyebrow": "Something went wrong",

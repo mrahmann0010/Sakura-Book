@@ -22,6 +22,7 @@ import { OrdersHttpModule } from "./orders/orders-http.module";
 import { PaymentNumbersModule, PaymentsModule } from "./payments";
 import { PricingModule } from "./pricing";
 import { ShippingModule } from "./shipping";
+import { WaitlistModule } from "./waitlist";
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { ShippingModule } from "./shipping";
     InventoryModule,
     ShippingModule,
     PricingModule,
+    WaitlistModule,
     OrdersModule,
     PaymentsModule,
     PaymentNumbersModule,

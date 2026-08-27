@@ -95,6 +95,18 @@ export const adminRoleEnum = pgEnum("admin_role", ["STAFF", "ADMIN"]);
  * before/after diff, so this column exists to make "show me every deletion" a
  * cheap indexed query rather than to re-describe the change.
  */
+/**
+ * A waitlist entry's lifecycle. SCREAMING_SNAKE like the other internal
+ * enums — this is our own state machine, not a contract shared with a form
+ * control.
+ */
+export const waitlistStatusEnum = pgEnum("waitlist_status", [
+  "PENDING",
+  "NOTIFIED",
+  "CONVERTED",
+  "CANCELLED",
+]);
+
 export const auditActionEnum = pgEnum("audit_action", [
   "CREATE",
   "UPDATE",
