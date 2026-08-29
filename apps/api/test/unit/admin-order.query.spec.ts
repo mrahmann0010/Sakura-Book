@@ -101,6 +101,32 @@ describe("adminOrderFilters", () => {
       "2026-08-20T00:00:00.000Z",
     );
   });
+
+  it("expands a division into the districts orders are actually stored with", () => {
+    // The order records `shippingAddress.city` — a district — and never the
+    // division, so a filter that compared against "sylhet" would match nothing
+    // at all while looking like a working filter.
+    const { sql, params } = render(adminOrderFilters(query({ division: "sylhet" })));
+
+    expect(sql).toContain("->> 'city'");
+    expect(params).toEqual(
+      expect.arrayContaining(["habiganj", "moulvibazar", "sunamganj", "sylhet"]),
+    );
+  });
+
+  it("compares districts case-insensitively", () => {
+    // Historic addresses were typed by hand. A manifest that omits an order
+    // because its district was stored uncapitalised is a parcel that doesn't
+    // ship.
+    const { sql, params } = render(adminOrderFilters(query({ division: "mymensingh" })));
+
+    expect(sql).toContain("lower(");
+    for (const district of params) expect(district).toBe(String(district).toLowerCase());
+  });
+
+  it("rejects a division that is not one of the eight", () => {
+    expect(() => adminOrderQuerySchema.parse({ division: "kolkata" })).toThrow();
+  });
 });
 
 describe("adminOrderOrder", () => {

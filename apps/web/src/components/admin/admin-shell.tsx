@@ -18,6 +18,11 @@ const SESSION_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 const NAV = [
   { href: "", label: "Dashboard" },
   { href: "/orders", label: "Orders" },
+  // Its own entry directly under Orders, not a tab inside it: the triage queue
+  // and the dispatch list are worked by different people at different points in
+  // the week, and the one that filters by destination division only makes sense
+  // after the accept decision.
+  { href: "/accepted-orders", label: "Accepted Orders" },
   { href: "/books", label: "Books" },
   { href: "/waitlist", label: "Waitlist" },
   // Directly under Waitlist rather than with the other settings: the reopening

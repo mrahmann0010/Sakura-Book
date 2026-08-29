@@ -92,6 +92,7 @@ export function toAdminOrderSummary(
     customerEmail: row.customerEmail,
     customerPhone: row.customerPhone,
     region: (row.shippingAddress as ShippingAddress).region,
+    city: (row.shippingAddress as ShippingAddress).city,
     paymentMethod: row.paymentMethod as PaymentMethod,
     paymentProvider: row.provider as PaymentProvider | null,
     currency: CURRENCY_OF_RECORD,

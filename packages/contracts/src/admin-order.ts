@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { divisionSlugs } from "./bd-geo";
 import { paymentMethods } from "./checkout";
 import { orderSchema, orderStatuses } from "./order";
 import { paginated, pageQuerySchema } from "./pagination";
@@ -53,6 +54,18 @@ export const adminOrderQuerySchema = pageQuerySchema({ defaultPageSize: 25 }).ex
     .optional(),
 
   paymentMethod: z.enum(paymentMethods).optional(),
+
+  /**
+   * Destination division, as a slug from `bdDivisions`.
+   *
+   * Matched against the districts that division contains, because an order
+   * records the district it is going to and never the division itself — see
+   * bd-geo.ts. Orders whose stored district is not in the list (an address
+   * typed before the cascading picker existed) match no division and are
+   * reachable only with the filter off, which is the honest answer: nothing
+   * on the order says where it belongs.
+   */
+  division: z.enum(divisionSlugs).optional(),
 
   /**
    * Free text over order number, customer name, email and phone.
@@ -136,6 +149,14 @@ export const adminOrderSummarySchema = z.object({
   customerEmail: z.string(),
   customerPhone: z.string(),
   region: z.string(),
+  /**
+   * The destination district, straight off the frozen shipping address.
+   *
+   * On the summary because a list filtered by division has to show which part
+   * of it each row is in — "Sylhet division" is eight orders across four
+   * districts, and a parcel is addressed to a district, not to a division.
+   */
+  city: z.string(),
   paymentMethod: z.enum(paymentMethods),
   paymentProvider: z.enum(paymentProviders).nullable(),
   currency: z.string().length(3),

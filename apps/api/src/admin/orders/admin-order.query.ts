@@ -1,5 +1,5 @@
-import { and, asc, desc, eq, gte, ilike, inArray, lte, or, type SQL } from "drizzle-orm";
-import type { AdminOrderQuery } from "@sakura/contracts";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from "drizzle-orm";
+import { districtsFor, type AdminOrderQuery } from "@sakura/contracts";
 import { orders } from "../../db/schema";
 
 /**
@@ -39,12 +39,39 @@ function textMatch(term: string): SQL {
   )!;
 }
 
+/**
+ * Orders bound for one division.
+ *
+ * The order stores the district (`shippingAddress.city`), never the division —
+ * checkout's cascading picker uses the division only to pick a district and a
+ * delivery zone, and neither of those is the division back again ("outside
+ * dhaka" is seven of them). So the filter expands to the districts that
+ * division contains, from the same list in @sakura/contracts that the picker
+ * and the admin dropdown are built from.
+ *
+ * Compared lower-cased on both sides: the districts arrive from a `<select>`
+ * today, but historic orders were typed by hand, and a manifest that silently
+ * omits "sylhet" because it was stored uncapitalised is a parcel that doesn't
+ * ship.
+ */
+function divisionMatch(division: string): SQL {
+  const districts = districtsFor(division).map((name) => name.toLowerCase());
+
+  // An unknown slug would otherwise build `in ()`, which is a syntax error.
+  // The schema's enum makes this unreachable; a false literal keeps it a
+  // filter that matches nothing rather than a 500.
+  if (districts.length === 0) return sql`false`;
+
+  return inArray(sql`lower(${orders.shippingAddress} ->> 'city')`, districts);
+}
+
 export function adminOrderFilters(query: AdminOrderQuery): SQL | undefined {
   const conditions: SQL[] = [];
 
   if (query.status?.length) conditions.push(inArray(orders.status, query.status));
   if (query.paymentMethod) conditions.push(eq(orders.paymentMethod, query.paymentMethod));
   if (query.q) conditions.push(textMatch(query.q));
+  if (query.division) conditions.push(divisionMatch(query.division));
 
   if (query.placedFrom) {
     conditions.push(gte(orders.createdAt, new Date(`${query.placedFrom}T00:00:00.000Z`)));
