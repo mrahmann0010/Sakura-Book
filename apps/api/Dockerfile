@@ -76,7 +76,7 @@ COPY --from=build --chown=nestjs:nodejs /app/apps/api/dist ./apps/api/dist
 
 USER nestjs
 
-# Railway injects PORT; main.ts reads it through ConfigService, so it is
+# Coolify injects PORT; main.ts reads it through ConfigService, so it is
 # deliberately not pinned here. 4000 is only the documented local default.
 EXPOSE 4000
 
