@@ -362,6 +362,7 @@ export function listAdminOrders(query: Partial<AdminOrderQuery> = {}): Promise<A
   const search = new URLSearchParams();
   for (const status of query.status ?? []) search.append("status", status);
   if (query.paymentMethod) search.set("paymentMethod", query.paymentMethod);
+  if (query.division) search.set("division", query.division);
   if (query.q) search.set("q", query.q);
   if (query.placedFrom) search.set("placedFrom", query.placedFrom);
   if (query.placedTo) search.set("placedTo", query.placedTo);
