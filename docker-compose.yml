@@ -1,8 +1,5 @@
-# `docker compose up` runs the frontend alone; the API sits in the
-# `backend` profile and stays stopped until asked for by name:
-#
-#   docker compose up                      web only  (npm run docker:up)
-#   docker compose --profile backend up    web + api
+# `docker compose up` runs both services — the web app depends on the API,
+# so there is no useful "web only" mode.
 #
 # There is no postgres service. The database is Supabase in every environment,
 # including local development — so a container here would be a second database
@@ -47,6 +44,9 @@ services:
       # Server-side fetches run inside this container, where the API's
       # localhost:4000 is not reachable — see apiOrigin() in the web app.
       API_INTERNAL_URL: http://api:4000
+    depends_on:
+      api:
+        condition: service_started
     volumes:
       - ./apps/web:/app/apps/web
       # Mounted so edits to the shared contracts land in the container; the dev
@@ -68,15 +68,8 @@ services:
       - web_app_modules:/app/apps/web/node_modules
       - web_contracts_modules:/app/packages/contracts/node_modules
       - web_next_cache:/app/apps/web/.next
-    # Optional: only enforced when the api service is actually running, i.e.
-    # under --profile backend. Plain `docker compose up` still starts web alone.
-    depends_on:
-      api:
-        condition: service_started
-        required: false
 
   api:
-    profiles: ["backend"]
     build:
       context: .
       dockerfile: apps/api/Dockerfile.dev
