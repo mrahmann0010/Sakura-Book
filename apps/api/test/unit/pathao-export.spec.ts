@@ -204,6 +204,88 @@ describe("recipientAddress", () => {
   });
 });
 
+/**
+ * The structured address.
+ *
+ * Checkout joins the address form with newlines — detail, then
+ * "<area>, <upazila>", then "<district>, <division>", then the postcode — and
+ * those three levels are exactly Pathao's City/Zone/Area. So for any order
+ * placed through that form the answer is recorded, not guessed, and these are
+ * the tests that keep the flattening from creeping back in.
+ */
+describe("recipientPlace, on a structured address", () => {
+  it("reads the upazila as the zone and the area as the area", () => {
+    // The real Munshiganj order, as checkout actually stores it. Flattened,
+    // the same string had to be guessed at and gave no area at all.
+    expect(
+      recipientPlace({
+        address: "Dhamaran (hospital math)\nDhamaran, Tangibari\nMunshiganj, Dhaka\n1520",
+        city: "Munshiganj",
+        region: "outside-dhaka",
+      }),
+    ).toEqual({ zone: "Tangibari", area: "Dhamaran" });
+  });
+
+  it("finds the structure with no postcode line", () => {
+    // The join drops empty parts, so the district line is not at a fixed
+    // index — it has to be matched, not counted to.
+    expect(
+      recipientPlace({
+        address: "zam zam tower\nUttara sector 13, Uttara west\nDhaka, Dhaka",
+        city: "Dhaka",
+        region: "inside-dhaka",
+      }),
+    ).toEqual({ zone: "Uttara west", area: "Uttara sector 13" });
+  });
+
+  it("reads a single part above the district line as the zone", () => {
+    // Either field alone produces one part, and the upazila is the half
+    // Pathao requires.
+    expect(
+      recipientPlace({
+        address: "House 4\nMirpur 1\nDhaka, Dhaka\n1216",
+        city: "Dhaka",
+        region: "inside-dhaka",
+      }),
+    ).toEqual({ zone: "Mirpur 1", area: "" });
+  });
+
+  it("romanises what it finds", () => {
+    expect(
+      recipientPlace({
+        address: "kandirpar\nকান্দিরপাড়, কোতোয়ালি\nCumilla, Chattogram\n৩৫০০",
+        city: "Cumilla",
+        region: "outside-dhaka",
+      }),
+    ).toEqual({ zone: "kotoyali", area: "kandirapar" });
+  });
+
+  it("ignores a district line the customer typed in the detail box", () => {
+    // `detail` is a textarea and carries its own newlines. The structured tail
+    // is always last, so the match runs from the bottom up.
+    expect(
+      recipientPlace({
+        address:
+          "Munshiganj, Dhaka\nis where I used to live\nDhamaran, Tangibari\nMunshiganj, Dhaka\n1520",
+        city: "Munshiganj",
+        region: "outside-dhaka",
+      }),
+    ).toEqual({ zone: "Tangibari", area: "Dhamaran" });
+  });
+
+  it("falls back to the guess when the address is one line of free text", () => {
+    // Orders placed before the address form existed. The heuristic below is
+    // for these and only these.
+    expect(
+      recipientPlace({
+        address: "H-1,R-1,S-6, Uttara",
+        city: "Dhaka",
+        region: "inside-dhaka",
+      }),
+    ).toEqual({ zone: "Uttara", area: "Sector 6" });
+  });
+});
+
 describe("recipientPlace", () => {
   it("reads the locality off the tail of the address", () => {
     expect(recipientPlace(shipping({ address: "H-1,R-1,S-6, Uttara" })).zone).toBe("Uttara");

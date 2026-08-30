@@ -229,25 +229,73 @@ function withoutPostcode(part: string): string {
 }
 
 /**
+ * The zone and area read straight off the address's own structure, or null
+ * when the address does not have it.
+ *
+ * Checkout does not store one blob of free text. `ShippingFields` builds the
+ * address by joining the parts of the form with newlines:
+ *
+ *     <detail>
+ *     <area>, <upazila>
+ *     <district>, <division>
+ *     <postCode>
+ *
+ * which lines up exactly with what Pathao wants — their City is the district,
+ * their Zone is the upazila, their Area is the area. So on any order placed
+ * through that form the answer is recorded rather than inferable, and the
+ * guesswork below is for orders that predate it.
+ *
+ * Found by matching the `<district>, <division>` line rather than by counting
+ * from the top, because the join drops empty parts — an address with no
+ * postcode is three lines, not four — and because `detail` is a textarea and
+ * may carry newlines of its own. Searched from the bottom for the same reason:
+ * the structured tail is at the end, whatever the customer typed above it.
+ */
+function structuredPlace(address: string, city: string): { zone: string; area: string } | null {
+  if (!city) return null;
+
+  const lines = address.split(/\r?\n/).map(tidy).filter(Boolean);
+
+  for (let index = lines.length - 1; index >= 1; index -= 1) {
+    const parts = lines[index].split(",").map(tidy).filter(Boolean);
+
+    if (parts[0]?.toLowerCase() !== city.toLowerCase()) continue;
+    // The division half confirms this is the structured line and not a
+    // customer who happened to type their district on a line of its own.
+    if (parts.length > 1 && !DIVISION_NAMES.has(parts[1].toLowerCase())) continue;
+
+    const above = lines[index - 1].split(",").map(tidy).filter(Boolean);
+    if (above.length === 0) return null;
+
+    /* `[area, upazila].filter(Boolean).join(", ")` — so the upazila is last
+       and the area is whatever precedes it. One part is ambiguous, since
+       either field alone produces it; it is read as the upazila, because that
+       is the half Pathao requires and the half more people fill in. */
+    return {
+      zone: above[above.length - 1],
+      area: above.slice(0, -1).join(", "),
+    };
+  }
+
+  return null;
+}
+
+/**
  * Where the parcel is going, at the two levels below the district.
  *
- * Pathao nests City → Zone → Area — "Dhaka → Uttara → Sector 6" — and an order
- * carries neither of the lower two: checkout collects a district and one line
- * of free text (see bd-geo.ts on why upazila stayed free text). So both are
- * read out of the address, and both are guesses.
+ * Pathao nests City → Zone → Area — "Dhaka → Uttara → Sector 6". Orders placed
+ * through the current checkout carry both, and `structuredPlace` above reads
+ * them off directly. Everything below is the fallback for the ones that do
+ * not: an address stored as a single line of free text, from before that form
+ * existed.
  *
- * Derived together, in one pass, rather than by two functions that each split
- * the address for themselves. The area is only meaningful relative to the zone
- * it sits in, and two independent walks could return a sector belonging to a
- * locality the zone column does not name.
- *
- * How it reads an address. People write "H-1, R-1, S-6, Uttara" — the locality
- * comes last, after the house and road that only mean something once you are
- * there. So the zone is the last part that is none of: the district repeated,
- * a division name, or a house/road token. The area is then whichever *other*
- * part is a sector or block, searched from the end and in either order,
- * because "Uttara, Sector 10" and "Sector 10, Uttara" are both things people
- * type.
+ * The fallback is a guess, and reads an address the way people write one.
+ * "H-1, R-1, S-6, Uttara" puts the locality last, after the house and road
+ * that only mean something once you are there. So the zone is the last part
+ * that is none of: the district repeated, a division name, or a house/road
+ * token. The area is then whichever *other* part is a sector or block,
+ * searched from the end and in either order, because "Uttara, Sector 10" and
+ * "Sector 10, Uttara" are both things people type.
  *
  * Postcodes come off every part before any of that, and the district comes off
  * the end of whichever part wins. Both are what a real exported row needed:
@@ -260,8 +308,17 @@ function withoutPostcode(part: string): string {
  * cell is the one an operator can see and fill.
  */
 export function recipientPlace(shipping: ShippingAddress): { zone: string; area: string } {
-  const city = tidy(shipping.city);
-  const parts = shipping.address.split(",").map(withoutPostcode).filter(Boolean);
+  /* Romanised before anything is matched, not only on the way out. The
+     division names this compares against are held in English, so an address
+     ending "ঢাকা" slips past the check unless it has already become "dhaka" —
+     and the zone then comes out as the division. */
+  const city = tidy(toLatin(shipping.city));
+  const address = toLatin(shipping.address);
+
+  const structured = structuredPlace(address, city);
+  if (structured) return structured;
+
+  const parts = address.split(",").map(withoutPostcode).filter(Boolean);
 
   let zoneIndex = -1;
   for (let index = parts.length - 1; index >= 0; index -= 1) {
