@@ -49,7 +49,9 @@ describe("toPathaoCsv", () => {
   it("writes Pathao's header row verbatim", () => {
     // Matched by name on import. Tidying `RecipientName(*)` into something
     // that reads better is a file their importer refuses with no useful error.
-    const [header] = toPathaoCsv([], STORE).split("\r\n");
+    const [header] = toPathaoCsv([], STORE)
+      .replace(/^\uFEFF/, "")
+      .split("\r\n");
 
     expect(header).toBe(
       "ItemType,StoreName,MerchantOrderId,RecipientName(*),RecipientPhone(*)," +
@@ -82,10 +84,25 @@ describe("toPathaoCsv", () => {
     expect(first).toContain(",Dhaka,Uttara,Sector 6,");
   });
 
-  it("has no byte-order mark, so the first header cell is matchable", () => {
-    // The waitlist export deliberately writes one, for Excel's sake. Here it
-    // would make the first column `﻿ItemType`, which Pathao does not know.
-    expect(toPathaoCsv([row()], STORE).startsWith("ItemType")).toBe(true);
+  it("leads with a byte-order mark, so Bangla survives the upload", () => {
+    // Shipped without one, on the argument that a parser which does not strip
+    // it sees a BOM-prefixed first column. Pathao then rendered every Bangla address as
+    // Latin-1 mojibake, which is the worse failure: a .csv carries no encoding
+    // inside it and this is the only signal left to send.
+    expect(toPathaoCsv([row()], STORE).startsWith("\uFEFFItemType")).toBe(true);
+  });
+
+  it("writes the bytes that make Bangla readable, not the ones that mangled it", () => {
+    // The exact failure reported from Pathao's panel: হাসপাতাল came back as
+    // `à¦¹à¦¾...`, which is these bytes read one at a time as Latin-1.
+    const csv = toPathaoCsv(
+      [row({ shippingAddress: shipping({ address: "Dhamaran (হাসপাতাল মাঠ)" }) })],
+      STORE,
+    );
+    const bytes = Buffer.from(csv, "utf8");
+
+    expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    expect(bytes.toString("utf8")).toContain("হাসপাতাল মাঠ");
   });
 
   it("escapes a note containing a quote rather than breaking the row", () => {
@@ -253,6 +270,45 @@ describe("recipientPlace", () => {
 
   it("does not read a road that merely mentions a sector as one", () => {
     expect(recipientPlace(shipping({ address: "Sector 6 main road, Uttara" })).area).toBe("");
+  });
+
+  it("reads the upazila, not the postcode line, off a real exported address", () => {
+    // The row that prompted this: read literally, the zone came out
+    // "Dhaka 1520" — a division and a postcode, and a parcel Pathao refuses.
+    expect(
+      recipientPlace({
+        address: "Dhamaran (হাসপাতাল মাঠ) Dhamaran, Tangibari Munshiganj, Dhaka 1520",
+        city: "Munshiganj",
+        region: "outside-dhaka",
+      }),
+    ).toEqual({ zone: "Tangibari", area: "" });
+  });
+
+  it("drops a trailing postcode without touching a place name that ends in a digit", () => {
+    // Postcodes are four digits. "Mirpur 1" is a zone.
+    expect(recipientPlace(shipping({ address: "House 4, Uttara 1230" })).zone).toBe("Uttara");
+    expect(recipientPlace(shipping({ address: "House 4, Mirpur 1" })).zone).toBe("Mirpur 1");
+  });
+
+  it("skips a division name written after the district", () => {
+    // Munshiganj is in Dhaka division, so a trailing "Dhaka" names the region
+    // of the country rather than the locality.
+    expect(
+      recipientPlace({ address: "Sirajdikhan, Dhaka", city: "Munshiganj", region: "outside-dhaka" })
+        .zone,
+    ).toBe("Sirajdikhan");
+  });
+
+  it("keeps a zone that only opens with the district", () => {
+    // The district is trimmed off the end, not wherever it appears — otherwise
+    // "Munshiganj Sadar" would lose the half that names the zone.
+    expect(
+      recipientPlace({
+        address: "House 4, Munshiganj Sadar",
+        city: "Munshiganj",
+        region: "outside-dhaka",
+      }).zone,
+    ).toBe("Munshiganj Sadar");
   });
 });
 
