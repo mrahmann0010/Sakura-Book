@@ -49,9 +49,7 @@ describe("toPathaoCsv", () => {
   it("writes Pathao's header row verbatim", () => {
     // Matched by name on import. Tidying `RecipientName(*)` into something
     // that reads better is a file their importer refuses with no useful error.
-    const [header] = toPathaoCsv([], STORE)
-      .replace(/^\uFEFF/, "")
-      .split("\r\n");
+    const [header] = toPathaoCsv([], STORE).split("\r\n");
 
     expect(header).toBe(
       "ItemType,StoreName,MerchantOrderId,RecipientName(*),RecipientPhone(*)," +
@@ -84,25 +82,40 @@ describe("toPathaoCsv", () => {
     expect(first).toContain(",Dhaka,Uttara,Sector 6,");
   });
 
-  it("leads with a byte-order mark, so Bangla survives the upload", () => {
-    // Shipped without one, on the argument that a parser which does not strip
-    // it sees a BOM-prefixed first column. Pathao then rendered every Bangla address as
-    // Latin-1 mojibake, which is the worse failure: a .csv carries no encoding
-    // inside it and this is the only signal left to send.
-    expect(toPathaoCsv([row()], STORE).startsWith("\uFEFFItemType")).toBe(true);
+  it("is pure ASCII, so no reader can mis-decode it", () => {
+    // The whole encoding problem, closed. A BOM was tried first and Pathao's
+    // importer ignored it — it reads Latin-1 whatever we send. Romanised cells
+    // sidestep the question instead of answering it: every byte below 0x80
+    // means the same thing in Latin-1 and UTF-8, so nothing is left to get
+    // wrong. That is also why there is no BOM here to assert.
+    const csv = toPathaoCsv(
+      [
+        row({
+          customerName: "রুমানা আক্তার",
+          shippingAddress: shipping({ address: "Dhamaran (হাসপাতাল মাঠ)" }),
+          customerNote: "গেটের সামনে",
+        }),
+      ],
+      STORE,
+    );
+
+    expect(csv).toMatch(/^[\x20-\x7e\r\n]*$/);
+    expect(csv.startsWith("ItemType")).toBe(true);
   });
 
-  it("writes the bytes that make Bangla readable, not the ones that mangled it", () => {
-    // The exact failure reported from Pathao's panel: হাসপাতাল came back as
-    // `à¦¹à¦¾...`, which is these bytes read one at a time as Latin-1.
+  it("romanises the Bangla that came back mangled from Pathao", () => {
+    // The exact string reported from their panel, where it read `à¦¹à¦¾à¦¸...`.
     const csv = toPathaoCsv(
       [row({ shippingAddress: shipping({ address: "Dhamaran (হাসপাতাল মাঠ)" }) })],
       STORE,
     );
-    const bytes = Buffer.from(csv, "utf8");
 
-    expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
-    expect(bytes.toString("utf8")).toContain("হাসপাতাল মাঠ");
+    expect(csv).toContain("Dhamaran (hasapatal math)");
+  });
+
+  it("romanises the recipient name, not only the address", () => {
+    // A name arriving as mojibake is a parcel the rider cannot ask for.
+    expect(toPathaoCsv([row({ customerName: "রুমানা আক্তার" })], STORE)).toContain("rumana aktar");
   });
 
   it("escapes a note containing a quote rather than breaking the row", () => {
