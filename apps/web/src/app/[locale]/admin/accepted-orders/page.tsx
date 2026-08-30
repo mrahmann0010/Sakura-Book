@@ -6,9 +6,9 @@ import { useEffect, useState } from "react";
 import type { AdminOrderSummary, OrderStatus } from "@sakura/contracts";
 
 import { AdminShell } from "@/components/admin/admin-shell";
-import { Button } from "@/components/ui";
+import { Button, IconButton } from "@/components/ui";
 import { bdDivisions } from "@/lib/bd-geo";
-import { AdminApiError, listAdminOrders } from "@/lib/api/admin";
+import { AdminApiError, downloadPathaoOrdersCsv, listAdminOrders } from "@/lib/api/admin";
 import { formatMoney } from "@/lib/money";
 import { useAdminGate } from "@/lib/use-admin-gate";
 
@@ -51,6 +51,8 @@ export default function AdminAcceptedOrdersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [q, setQ] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exported, setExported] = useState(false);
 
   // Reloads on a division change as well as on the gate clearing: choosing a
   // division is the whole point of the screen, and asking someone to press
@@ -63,6 +65,7 @@ export default function AdminAcceptedOrdersPage() {
 
   async function load(activeDivision: string, query: string, pageNumber: number) {
     setError(null);
+    setExported(false);
     try {
       const list = await listAdminOrders({
         status: [...ACCEPTED_STATUSES],
@@ -76,6 +79,29 @@ export default function AdminAcceptedOrdersPage() {
       setPage(list.page);
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Could not load accepted orders.");
+    }
+  }
+
+  /**
+   * The whole filtered set as Pathao's bulk-order CSV — every accepted order
+   * bound for the chosen division, not the twenty-five on screen. The filters
+   * go to the server unchanged, so what downloads is what the heading counts.
+   */
+  async function exportPathao() {
+    setExporting(true);
+    setError(null);
+    setExported(false);
+    try {
+      await downloadPathaoOrdersCsv({
+        status: [...ACCEPTED_STATUSES],
+        division: division || undefined,
+        q: q || undefined,
+      });
+      setExported(true);
+    } catch (err) {
+      setError(err instanceof AdminApiError ? err.message : "Could not export these orders.");
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -126,9 +152,39 @@ export default function AdminAcceptedOrdersPage() {
               Search
             </Button>
           </form>
+
+          {/* Sits after the search box rather than up beside the heading: it
+              acts on the filters to its left, and the manifest you want is
+              almost always the one you have just narrowed down to. */}
+          <IconButton
+            label={exporting ? "Preparing the Pathao CSV…" : "Pathao Export"}
+            disabled={exporting || items.length === 0}
+            onClick={() => void exportPathao()}
+          >
+            <svg
+              viewBox="0 0 20 20"
+              className="size-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="M10 3v9m0 0 3-3m-3 3-3-3M3.5 14v1.5A1.5 1.5 0 0 0 5 17h10a1.5 1.5 0 0 0 1.5-1.5V14" />
+            </svg>
+          </IconButton>
         </div>
 
         {error ? <p className="text-13.5 text-clay-deep">{error}</p> : null}
+
+        {/* The zone is guessed from the tail of each address — nothing in an
+            order carries a Pathao zone name (see pathao-export.ts). Saying so
+            here is what keeps the guess from being mistaken for a lookup. */}
+        {exported ? (
+          <p className="text-13.5 text-secondary">
+            Downloaded {total} {total === 1 ? "order" : "orders"}. Check the{" "}
+            <span className="font-mono">RecipientZone</span> column before uploading — it is read
+            from each address, not stored with the order.
+          </p>
+        ) : null}
 
         <div className="rounded-container border-rule bg-surface overflow-x-auto border">
           <table className="text-13.5 w-full min-w-[880px] text-left">

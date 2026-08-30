@@ -1,4 +1,16 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  Res,
+} from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   adminConfirmPaymentRequestSchema,
@@ -10,7 +22,7 @@ import {
   type AdminOrderList,
   type AdminOrderVerifyPaymentResult,
 } from "@sakura/contracts";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 import { createZodDto } from "nestjs-zod";
 import { CurrentAdmin, Roles } from "../auth/admin-auth.decorators";
 import type { AccessClaims } from "../auth/tokens";
@@ -55,6 +67,38 @@ export class AdminOrdersController {
   @ApiOperation({ summary: "Browse orders: filter by status, method, date, free text." })
   async list(@Query() query: AdminOrderQueryDto): Promise<AdminOrderList> {
     return this.adminOrdersService.list(query);
+  }
+
+  /**
+   * The filtered list as a Pathao bulk-order CSV, unpaginated.
+   *
+   * Declared above `:orderNumber` and not below it. Express matches routes in
+   * registration order, so a literal path that shares a segment with a
+   * parameter has to come first — the other way round, this would be a lookup
+   * for the order numbered "export.csv", and the bug would be a 404 that looks
+   * like a missing feature rather than a routing mistake.
+   *
+   * Not `@Roles("ADMIN")`, unlike the waitlist's export, and the difference is
+   * deliberate. That file is the shop's entire marketing contact list and has
+   * no reason to leave the building; this one is a courier manifest whose
+   * whole purpose is to be handed to Pathao, by whoever is packing parcels
+   * that morning. Gating it on ADMIN would mean nothing ships unless the owner
+   * is at a keyboard, which is the same reasoning that leaves the transitions
+   * open to STAFF.
+   */
+  @Get("export.csv")
+  @ApiOperation({ summary: "Export the filtered orders as a Pathao bulk-order CSV." })
+  async exportPathaoCsv(
+    @Query() query: AdminOrderQueryDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<string> {
+    const csv = await this.adminOrdersService.exportPathaoCsv(query);
+    const stamp = new Date().toISOString().slice(0, 10);
+
+    response.setHeader("content-type", "text/csv; charset=utf-8");
+    response.setHeader("content-disposition", `attachment; filename="pathao-${stamp}.csv"`);
+
+    return csv;
   }
 
   @Get(":orderNumber")

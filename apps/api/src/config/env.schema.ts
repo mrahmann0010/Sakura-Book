@@ -326,6 +326,18 @@ export const envSchema = z.object({
 
   /** Display name on the `from` header. */
   EMAIL_FROM_NAME: z.string().trim().min(1).default("Nihonova Books"),
+
+  /**
+   * The store name written into every row of the Pathao bulk-order CSV.
+   *
+   * Configurable rather than a constant in the exporter because it is a fact
+   * about someone else's system: it must match the store registered on the
+   * shop's Pathao merchant account exactly, and their importer rejects the
+   * whole file when it does not. A default that needs no `.env` to work, and
+   * an override for the day the account is renamed or a second store is added
+   * — neither of which should need a deploy.
+   */
+  PATHAO_STORE_NAME: z.string().trim().min(1).default("Nihonova Academy"),
 });
 
 /**

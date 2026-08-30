@@ -76,6 +76,9 @@ function serviceWithDuplicate(overrides: { auditThrows?: boolean } = {}) {
       historyFor: vi.fn(async () => []),
       findDuplicatedReceipts: vi.fn(async () => new Set<string>()),
     } as never,
+    // Config, read only by the Pathao export — nothing on the duplicate-receipt
+    // paths touches it.
+    { get: vi.fn(() => "Nihonova Academy") } as never,
   );
 
   // The two reads the guard depends on, stubbed at the service boundary.
