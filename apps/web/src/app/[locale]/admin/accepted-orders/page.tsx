@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import type { AdminOrderSummary, OrderStatus } from "@sakura/contracts";
 
 import { AdminShell } from "@/components/admin/admin-shell";
-import { Button, IconButton } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { bdDivisions } from "@/lib/bd-geo";
 import { AdminApiError, downloadPathaoOrdersCsv, listAdminOrders } from "@/lib/api/admin";
 import { formatMoney } from "@/lib/money";
@@ -155,34 +155,46 @@ export default function AdminAcceptedOrdersPage() {
 
           {/* Sits after the search box rather than up beside the heading: it
               acts on the filters to its left, and the manifest you want is
-              almost always the one you have just narrowed down to. */}
-          <IconButton
-            label={exporting ? "Preparing the Pathao CSV…" : "Pathao Export"}
-            disabled={exporting || items.length === 0}
+              almost always the one you have just narrowed down to.
+
+              Named rather than an icon on its own. "Export" alone would not
+              say which courier's format this is, and the file is only useful
+              to the person who already knows the answer to that. */}
+          <Button
+            type="button"
+            variant="secondary"
+            loading={exporting}
+            loadingLabel="Preparing…"
+            disabled={items.length === 0}
             onClick={() => void exportPathao()}
+            leading={
+              <svg
+                viewBox="0 0 20 20"
+                className="size-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <path d="M10 3v9m0 0 3-3m-3 3-3-3M3.5 14v1.5A1.5 1.5 0 0 0 5 17h10a1.5 1.5 0 0 0 1.5-1.5V14" />
+              </svg>
+            }
           >
-            <svg
-              viewBox="0 0 20 20"
-              className="size-5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <path d="M10 3v9m0 0 3-3m-3 3-3-3M3.5 14v1.5A1.5 1.5 0 0 0 5 17h10a1.5 1.5 0 0 0 1.5-1.5V14" />
-            </svg>
-          </IconButton>
+            Pathao Export
+          </Button>
         </div>
 
         {error ? <p className="text-13.5 text-clay-deep">{error}</p> : null}
 
-        {/* The zone is guessed from the tail of each address — nothing in an
-            order carries a Pathao zone name (see pathao-export.ts). Saying so
-            here is what keeps the guess from being mistaken for a lookup. */}
+        {/* Zone and area are both guessed from each address — an order carries
+            a district and one line of free text, and neither of Pathao's two
+            finer levels of geography is among them (see pathao-export.ts).
+            Saying so here is what keeps a guess from passing as a lookup. */}
         {exported ? (
           <p className="text-13.5 text-secondary">
             Downloaded {total} {total === 1 ? "order" : "orders"}. Check the{" "}
-            <span className="font-mono">RecipientZone</span> column before uploading — it is read
-            from each address, not stored with the order.
+            <span className="font-mono">RecipientZone</span> and{" "}
+            <span className="font-mono">RecipientArea</span> columns before uploading — both are
+            read from each address, not stored with the order.
           </p>
         ) : null}
 

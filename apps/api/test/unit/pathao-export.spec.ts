@@ -4,7 +4,7 @@ import {
   amountToCollect,
   recipientAddress,
   recipientPhone,
-  recipientZone,
+  recipientPlace,
   toPathaoCsv,
   type PathaoExportRow,
 } from "../../src/admin/orders/pathao-export";
@@ -66,7 +66,7 @@ describe("toPathaoCsv", () => {
     // without a district because the form asked for it separately. The
     // customer's own spacing is otherwise left alone.
     expect(first).toBe(
-      'parcel,Nihonova Academy,NB-40718,Mr Xyz,01710000000,"H-1,R-1,S-6, Uttara, Dhaka",Dhaka,Uttara,,1000,1,0.25,,',
+      'parcel,Nihonova Academy,NB-40718,Mr Xyz,01710000000,"H-1,R-1,S-6, Uttara, Dhaka",Dhaka,Uttara,Sector 6,1000,1,0.25,,',
     );
   });
 
@@ -78,7 +78,8 @@ describe("toPathaoCsv", () => {
 
     expect(first.startsWith("parcel,")).toBe(true);
     expect(first).toContain('"H-1,R-1,S-6, Uttara, Dhaka"');
-    expect(first).toContain(",Dhaka,Uttara,,");
+    // City, zone and area unquoted — "Sector 6" holds a space, not a comma.
+    expect(first).toContain(",Dhaka,Uttara,Sector 6,");
   });
 
   it("has no byte-order mark, so the first header cell is matchable", () => {
@@ -173,13 +174,13 @@ describe("recipientAddress", () => {
   });
 });
 
-describe("recipientZone", () => {
+describe("recipientPlace", () => {
   it("reads the locality off the tail of the address", () => {
-    expect(recipientZone(shipping({ address: "H-1,R-1,S-6, Uttara" }))).toBe("Uttara");
+    expect(recipientPlace(shipping({ address: "H-1,R-1,S-6, Uttara" })).zone).toBe("Uttara");
   });
 
   it("skips the district when the customer repeated it", () => {
-    expect(recipientZone(shipping({ address: "H-1, R-1, Banani, Dhaka" }))).toBe("Banani");
+    expect(recipientPlace(shipping({ address: "H-1, R-1, Banani, Dhaka" })).zone).toBe("Banani");
   });
 
   it.each(["House 4, Road 12, Mirpur 1", "Flat 3B, Block C, Mirpur 1"])(
@@ -187,23 +188,71 @@ describe("recipientZone", () => {
     (address) => {
       // Pathao has zones like "Mirpur 1". A blanket "skip anything with a
       // digit" rule would throw them away along with the house numbers.
-      expect(recipientZone(shipping({ address }))).toBe("Mirpur 1");
+      expect(recipientPlace(shipping({ address })).zone).toBe("Mirpur 1");
     },
   );
 
   it.each(["H-1, R-1, S-6", "House 4, Road 12", "Plot 7, Block C"])(
-    "returns nothing when %s is only house and road",
+    "finds no zone when %s is only house and road",
     (address) => {
       // Empty is the honest answer, and it is the cell an operator can spot.
-      expect(recipientZone(shipping({ address }))).toBe("");
+      expect(recipientPlace(shipping({ address })).zone).toBe("");
     },
   );
 
-  it("returns nothing for an address typed as one unpunctuated line", () => {
+  it("finds no zone in an address typed as one unpunctuated line", () => {
     // No commas means one part, and that part opens with a house number — so
     // there is nothing here that reads as a locality. Guessing "dhaka" off the
     // end of it would be inventing a zone from a sentence.
-    expect(recipientZone(shipping({ address: "house 4 road 12 uttara dhaka" }))).toBe("");
+    expect(recipientPlace(shipping({ address: "house 4 road 12 uttara dhaka" })).zone).toBe("");
+  });
+
+  it.each([
+    ["H-1,R-1,S-6, Uttara", "Sector 6"],
+    ["House 4, Sec 10, Uttara", "Sector 10"],
+    ["House 4, Sector 10, Uttara", "Sector 10"],
+  ])("expands the sector in %s to Pathao's spelling", (address, area) => {
+    // "S-6" is how a customer writes it; "Sector 6" is how Pathao stores it,
+    // and the two do not match as strings.
+    expect(recipientPlace(shipping({ address })).area).toBe(area);
+  });
+
+  it("reads a block as the area, upper-cased", () => {
+    expect(recipientPlace(shipping({ address: "House 4, block c, Bashundhara R/A" }))).toEqual({
+      zone: "Bashundhara R/A",
+      area: "Block C",
+    });
+  });
+
+  it("finds the area whichever side of the zone it was typed", () => {
+    // "Uttara, Sector 10" and "Sector 10, Uttara" are both things people type,
+    // so the area is searched across every part except the one the zone came
+    // from rather than only the parts before it.
+    expect(recipientPlace(shipping({ address: "House 4, Uttara, Sector 10" }))).toEqual({
+      zone: "Uttara",
+      area: "Sector 10",
+    });
+  });
+
+  it("never returns the zone as its own area", () => {
+    // "Mirpur 1" is a zone, and `B|BLK|BLOCK` must not re-read it as one.
+    expect(recipientPlace(shipping({ address: "House 4, Road 12, Mirpur 1" }))).toEqual({
+      zone: "Mirpur 1",
+      area: "",
+    });
+  });
+
+  it("leaves the area empty where the address names no sector or block", () => {
+    // Most of the country is not organised into sectors. A blank optional cell
+    // is right; inventing one from a road name is not.
+    expect(recipientPlace(shipping({ address: "House 12, Road 5, Zindabazar" }))).toEqual({
+      zone: "Zindabazar",
+      area: "",
+    });
+  });
+
+  it("does not read a road that merely mentions a sector as one", () => {
+    expect(recipientPlace(shipping({ address: "Sector 6 main road, Uttara" })).area).toBe("");
   });
 });
 

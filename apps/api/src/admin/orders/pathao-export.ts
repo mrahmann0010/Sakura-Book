@@ -180,31 +180,74 @@ const ADDRESS_PART =
   /^(h|ho|hs|house|r|rd|road|s|sec|sector|b|blk|block|fl|flat|flr|floor|apt|apartment|lane|ln|plot|holding)\b[\s.#/-]*(?:\d|[a-z]\b)/i;
 
 /**
- * The zone, guessed from the tail of the address.
+ * A sector or a block, in the spelling Pathao's own list uses.
  *
- * People write "H-1, R-1, S-6, Uttara" — the locality comes last, after the
- * house and road that only mean something once you are there. So this walks
- * backwards through the comma-separated parts and returns the first that is
- * neither the district repeated nor a house/road token.
- *
- * Empty when nothing qualifies, which is honest: an address typed as one
- * unpunctuated line genuinely does not say which zone it is in, and a blank
- * cell tells the operator that this is the row to look at.
+ * Anchored at both ends so only a part that is *entirely* a sector or block
+ * qualifies: "S-6" is one, "Sector 6 main road" is a road that mentions one.
+ * The abbreviation is expanded because "S-6" is how a customer writes it and
+ * "Sector 6" is how Pathao stores it, and the two do not match as strings.
  */
-export function recipientZone(shipping: ShippingAddress): string {
+const SECTOR = /^(?:s|sec|sector)\b[\s.#/-]*(\d{1,2})$/i;
+const BLOCK = /^(?:b|blk|block)\b[\s.#/-]*([a-z0-9]{1,2})$/i;
+
+/**
+ * Where the parcel is going, at the two levels below the district.
+ *
+ * Pathao nests City → Zone → Area — "Dhaka → Uttara → Sector 6" — and an order
+ * carries neither of the lower two: checkout collects a district and one line
+ * of free text (see bd-geo.ts on why upazila stayed free text). So both are
+ * read out of the address, and both are guesses.
+ *
+ * Derived together, in one pass, rather than by two functions that each split
+ * the address for themselves. The area is only meaningful relative to the zone
+ * it sits in, and two independent walks could return a sector belonging to a
+ * locality the zone column does not name.
+ *
+ * How it reads an address. People write "H-1, R-1, S-6, Uttara" — the locality
+ * comes last, after the house and road that only mean something once you are
+ * there. So the zone is the last part that is neither the district repeated
+ * nor a house/road token. The area is then whichever *other* part is a sector
+ * or block, searched from the end and in either order, because "Uttara, Sector
+ * 10" and "Sector 10, Uttara" are both things people type.
+ *
+ * Either may come back empty, which is honest rather than unhelpful: an
+ * address typed as one unpunctuated line genuinely does not say which zone it
+ * is in, and most of the country is not organised into sectors at all. A blank
+ * cell is the one an operator can see and fill.
+ */
+export function recipientPlace(shipping: ShippingAddress): { zone: string; area: string } {
   const city = tidy(shipping.city).toLowerCase();
   const parts = shipping.address.split(",").map(tidy).filter(Boolean);
 
+  let zoneIndex = -1;
   for (let index = parts.length - 1; index >= 0; index -= 1) {
     const part = parts[index];
 
     if (part.toLowerCase() === city) continue;
     if (ADDRESS_PART.test(part)) continue;
 
-    return part;
+    zoneIndex = index;
+    break;
   }
 
-  return "";
+  let area = "";
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    if (index === zoneIndex) continue;
+
+    const sector = SECTOR.exec(parts[index]);
+    if (sector) {
+      area = `Sector ${sector[1]}`;
+      break;
+    }
+
+    const block = BLOCK.exec(parts[index]);
+    if (block) {
+      area = `Block ${block[1].toUpperCase()}`;
+      break;
+    }
+  }
+
+  return { zone: zoneIndex === -1 ? "" : parts[zoneIndex], area };
 }
 
 /**
@@ -244,6 +287,7 @@ export function toPathaoCsv(rows: PathaoExportRow[], storeName: string): string 
 
   for (const row of rows) {
     const shipping = row.shippingAddress;
+    const place = recipientPlace(shipping);
 
     lines.push(
       [
@@ -254,12 +298,14 @@ export function toPathaoCsv(rows: PathaoExportRow[], storeName: string): string 
         cell(recipientPhone(row.customerPhone)),
         cell(recipientAddress(shipping)),
         cell(tidy(shipping.city)),
-        cell(recipientZone(shipping)),
-        /* RecipientArea is Pathao's third and finest level of geography, below
-           the zone. Nothing in an order distinguishes it from the zone guess
-           above, and filling both with the same string would turn one guess
-           into two. Left for the operator, and optional in their template. */
-        cell(""),
+        cell(place.zone),
+        /* Optional in Pathao's template — it is the only geography column they
+           do not mark required — and filled anyway wherever the address says
+           enough to fill it. A sector or block that is right saves the
+           operator a lookup; one that is wrong is a row their importer refuses
+           and a cell to correct in the sheet, which is the same handling a
+           wrong zone already gets. */
+        cell(place.area),
         cell(amountToCollect(row)),
         cell(row.itemCount),
         cell(ITEM_WEIGHT_KG),
