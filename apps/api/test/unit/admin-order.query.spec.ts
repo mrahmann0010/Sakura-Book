@@ -85,6 +85,29 @@ describe("adminOrderFilters", () => {
     expect(render(adminOrderFilters(query({ q: "NB_40718" }))).params).toContain("NB\\_40718%");
   });
 
+  it("finds an order from its digits alone, without the NB- prefix", () => {
+    // Staff type the part that varies, dozens of times a day. Digits alone
+    // match nothing against a start-anchored `NB-…`, so without this the
+    // search comes back empty and reads as "that order isn't here".
+    expect(render(adminOrderFilters(query({ q: "40718" }))).params).toContain("NB-40718%");
+  });
+
+  it("accepts the prefix typed with or without its separator", () => {
+    for (const typed of ["NB-40718", "nb40718", "nb 40718"]) {
+      expect(render(adminOrderFilters(query({ q: typed }))).params).toContain("NB-40718%");
+    }
+  });
+
+  it("keeps matching phone numbers on a digits-only term", () => {
+    // "40718" is a plausible tail of a phone number too; fixing the order
+    // number search must not break the phone one.
+    expect(render(adminOrderFilters(query({ q: "40718" }))).params).toContain("%40718%");
+  });
+
+  it("does not build an order-number pattern from a name", () => {
+    expect(render(adminOrderFilters(query({ q: "Nabila" }))).params).not.toContain("NB-Nabila%");
+  });
+
   it("includes the whole of the last day in a date range", () => {
     // `placedTo=2026-08-20` means "up to and including the 20th". Comparing
     // against that day's midnight would silently drop every order placed on

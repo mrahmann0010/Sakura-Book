@@ -272,7 +272,7 @@ export default function AdminAcceptedOrdersPage() {
             <input
               value={q}
               onChange={(event) => setQ(event.target.value)}
-              placeholder="Search by order number, name, email, phone…"
+              placeholder="Order number (40718), name, email, phone…"
               className="rounded-control border-rule bg-surface text-13.5 text-ink w-full min-w-[16rem] border px-3 py-2"
             />
             <Button type="submit" variant="secondary">
