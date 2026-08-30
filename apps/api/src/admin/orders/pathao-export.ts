@@ -1,3 +1,4 @@
+import { bdDivisions } from "@sakura/contracts";
 import type { ShippingAddress } from "../../db/schema";
 
 /* --------------------------------------------------------------------------
@@ -191,6 +192,31 @@ const SECTOR = /^(?:s|sec|sector)\b[\s.#/-]*(\d{1,2})$/i;
 const BLOCK = /^(?:b|blk|block)\b[\s.#/-]*([a-z0-9]{1,2})$/i;
 
 /**
+ * The eight division names, lower-cased.
+ *
+ * A division is never a Pathao zone, and people finish an address with one:
+ * "…, Tangibari Munshiganj, Dhaka 1520" is a Munshiganj parcel whose last line
+ * says which end of the country it is in. Read naively that made `Dhaka 1520`
+ * the zone — a real row this shop exported, and one Pathao would refuse.
+ *
+ * Only wrong when a division name is also the locality, and that case is
+ * already handled: the address's own district is skipped a line above, and
+ * for "Dhaka, Dhaka" the two are the same word.
+ */
+const DIVISION_NAMES = new Set(bdDivisions.map((division) => division.label.toLowerCase()));
+
+/**
+ * Drop a trailing four-digit postcode.
+ *
+ * Bangladeshi postcodes are four digits and get written on the end of the last
+ * line. Four specifically, not any number: "Mirpur 1" and "Sector 10" are
+ * place names ending in a digit and must survive this untouched.
+ */
+function withoutPostcode(part: string): string {
+  return tidy(part.replace(/\b\d{4}\b\s*$/, ""));
+}
+
+/**
  * Where the parcel is going, at the two levels below the district.
  *
  * Pathao nests City → Zone → Area — "Dhaka → Uttara → Sector 6" — and an order
@@ -205,10 +231,16 @@ const BLOCK = /^(?:b|blk|block)\b[\s.#/-]*([a-z0-9]{1,2})$/i;
  *
  * How it reads an address. People write "H-1, R-1, S-6, Uttara" — the locality
  * comes last, after the house and road that only mean something once you are
- * there. So the zone is the last part that is neither the district repeated
- * nor a house/road token. The area is then whichever *other* part is a sector
- * or block, searched from the end and in either order, because "Uttara, Sector
- * 10" and "Sector 10, Uttara" are both things people type.
+ * there. So the zone is the last part that is none of: the district repeated,
+ * a division name, or a house/road token. The area is then whichever *other*
+ * part is a sector or block, searched from the end and in either order,
+ * because "Uttara, Sector 10" and "Sector 10, Uttara" are both things people
+ * type.
+ *
+ * Postcodes come off every part before any of that, and the district comes off
+ * the end of whichever part wins. Both are what a real exported row needed:
+ * "…, Tangibari Munshiganj, Dhaka 1520" has to reach Pathao as `Tangibari`,
+ * and read literally it arrived as `Dhaka 1520`.
  *
  * Either may come back empty, which is honest rather than unhelpful: an
  * address typed as one unpunctuated line genuinely does not say which zone it
@@ -216,14 +248,15 @@ const BLOCK = /^(?:b|blk|block)\b[\s.#/-]*([a-z0-9]{1,2})$/i;
  * cell is the one an operator can see and fill.
  */
 export function recipientPlace(shipping: ShippingAddress): { zone: string; area: string } {
-  const city = tidy(shipping.city).toLowerCase();
-  const parts = shipping.address.split(",").map(tidy).filter(Boolean);
+  const city = tidy(shipping.city);
+  const parts = shipping.address.split(",").map(withoutPostcode).filter(Boolean);
 
   let zoneIndex = -1;
   for (let index = parts.length - 1; index >= 0; index -= 1) {
-    const part = parts[index];
+    const part = parts[index].toLowerCase();
 
-    if (part.toLowerCase() === city) continue;
+    if (part === city.toLowerCase()) continue;
+    if (DIVISION_NAMES.has(part)) continue;
     if (ADDRESS_PART.test(part)) continue;
 
     zoneIndex = index;
@@ -247,7 +280,18 @@ export function recipientPlace(shipping: ShippingAddress): { zone: string; area:
     }
   }
 
-  return { zone: zoneIndex === -1 ? "" : parts[zoneIndex], area };
+  if (zoneIndex === -1) return { zone: "", area };
+
+  /* "Tangibari Munshiganj" is an upazila with its district written after it,
+     and Pathao's zone is the upazila alone. Trimmed only from the end, so a
+     zone that merely opens with the district ("Munshiganj Sadar") keeps its
+     name — and only when something is left, since a part that *is* the
+     district was skipped above rather than trimmed to nothing. */
+  const zone = tidy(
+    parts[zoneIndex].replace(new RegExp(`[\\s,-]*\\b${escapeRegExp(city)}\\b\\s*$`, "i"), ""),
+  );
+
+  return { zone: zone || parts[zoneIndex], area };
 }
 
 /**
@@ -276,11 +320,22 @@ export function amountToCollect(row: PathaoExportRow): number {
  * and that is an operational fact about an external account — see
  * PATHAO_STORE_NAME in env.schema.ts.
  *
- * CRLF, and no BOM. The waitlist export writes a BOM so Excel does not mangle
- * Bangla names; this one must not, because the first thing Pathao's importer
- * does is match the header row by name, and a leading U+FEFF makes the first
- * column something other than `ItemType` to every parser that does not strip
- * it — which is a rejected upload with nothing visibly wrong in the file.
+ * CRLF, and a UTF-8 BOM — the same three bytes the waitlist export writes, for
+ * the same reason.
+ *
+ * This file shipped without one, on the argument that a leading U+FEFF makes
+ * the first column something other than `ItemType` to a parser that does not
+ * strip it, and a header Pathao cannot match is a rejected upload. The
+ * argument was sound and the guess was wrong: uploaded, Pathao's panel showed
+ * `হাসপাতাল মাঠ` as `à¦¹à¦¾à¦¸...`, which is UTF-8 being read a byte at a
+ * time as Latin-1. A `.csv` carries no encoding inside it, the `charset=utf-8`
+ * on the response dies the moment the file is saved, and the BOM is the only
+ * signal left to send.
+ *
+ * So it is sent, and the header risk is real but strictly smaller: a BOM a
+ * parser ignores costs one mismatched header on an upload that can be retried,
+ * where the alternative silently delivered parcels to addresses nobody could
+ * read.
  */
 export function toPathaoCsv(rows: PathaoExportRow[], storeName: string): string {
   const lines = [CSV_COLUMNS.map((column) => cell(column)).join(",")];
@@ -319,5 +374,5 @@ export function toPathaoCsv(rows: PathaoExportRow[], storeName: string): string 
     );
   }
 
-  return `${lines.join("\r\n")}\r\n`;
+  return `\uFEFF${lines.join("\r\n")}\r\n`;
 }
