@@ -229,29 +229,22 @@ function withoutPostcode(part: string): string {
 }
 
 /**
- * The zone and area read straight off the address's own structure, or null
- * when the address does not have it.
+ * The area/upazila line of a joined address, for orders placed before those
+ * fields were stored. Null when the address does not have one.
  *
- * Checkout does not store one blob of free text. `ShippingFields` builds the
- * address by joining the parts of the form with newlines:
+ * The form joins detail, "area, upazila", "district, division" and postcode
+ * with newlines, so the line above the district line is the area/upazila —
+ * *unless* both were blank, in which case the join dropped it and the detail
+ * sits there instead. That is the whole trap, so the district line is required
+ * to be at index two or beyond: at index one the line above it is the first
+ * line, which is always detail, and there is no locality recorded at all.
  *
- *     <detail>
- *     <area>, <upazila>
- *     <district>, <division>
- *     <postCode>
- *
- * which lines up exactly with what Pathao wants — their City is the district,
- * their Zone is the upazila, their Area is the area. So on any order placed
- * through that form the answer is recorded rather than inferable, and the
- * guesswork below is for orders that predate it.
- *
- * Found by matching the `<district>, <division>` line rather than by counting
- * from the top, because the join drops empty parts — an address with no
- * postcode is three lines, not four — and because `detail` is a textarea and
- * may carry newlines of its own. Searched from the bottom for the same reason:
- * the structured tail is at the end, whatever the customer typed above it.
+ * Not a complete guard — `detail` is a textarea and a customer who used two
+ * lines of it pushes the district line to index two on their own. It is the
+ * honest limit of reading a joined string, and the reason the fields are
+ * stored separately now. This runs only for the orders that predate that.
  */
-function structuredPlace(address: string, city: string): { zone: string; area: string } | null {
+function joinedPlace(address: string, city: string): { zone: string; area: string } | null {
   if (!city) return null;
 
   const lines = address.split(/\r?\n/).map(tidy).filter(Boolean);
@@ -261,20 +254,20 @@ function structuredPlace(address: string, city: string): { zone: string; area: s
 
     if (parts[0]?.toLowerCase() !== city.toLowerCase()) continue;
     // The division half confirms this is the structured line and not a
-    // customer who happened to type their district on a line of its own.
+    // customer who typed their district on a line of its own.
     if (parts.length > 1 && !DIVISION_NAMES.has(parts[1].toLowerCase())) continue;
 
-    const above = lines[index - 1].split(",").map(tidy).filter(Boolean);
-    if (above.length === 0) return null;
+    // The line above is the detail. Nothing here names a locality.
+    if (index < 2) return { zone: "", area: "" };
 
-    /* `[area, upazila].filter(Boolean).join(", ")` — so the upazila is last
-       and the area is whatever precedes it. One part is ambiguous, since
-       either field alone produces it; it is read as the upazila, because that
-       is the half Pathao requires and the half more people fill in. */
-    return {
-      zone: above[above.length - 1],
-      area: above.slice(0, -1).join(", "),
-    };
+    const above = lines[index - 1].split(",").map(tidy).filter(Boolean);
+    if (above.length === 0) return { zone: "", area: "" };
+
+    /* `[area, upazila].filter(Boolean).join(", ")` — the upazila is last and
+       the area is whatever precedes it. One part is ambiguous, since either
+       field alone produces it; it is read as the upazila, the half Pathao
+       requires and the half more people fill in. */
+    return { zone: above[above.length - 1], area: above.slice(0, -1).join(", ") };
   }
 
   return null;
@@ -283,11 +276,24 @@ function structuredPlace(address: string, city: string): { zone: string; area: s
 /**
  * Where the parcel is going, at the two levels below the district.
  *
- * Pathao nests City → Zone → Area — "Dhaka → Uttara → Sector 6". Orders placed
- * through the current checkout carry both, and `structuredPlace` above reads
- * them off directly. Everything below is the fallback for the ones that do
- * not: an address stored as a single line of free text, from before that form
- * existed.
+ * Pathao nests City → Zone → Area — "Dhaka → Uttara → Sector 6" — which is
+ * district → upazila → area exactly. Orders placed through the current
+ * checkout store the upazila and area as their own fields, so for those there
+ * is nothing to work out: they are read off and returned.
+ *
+ * Everything below is the fallback for orders placed before those fields
+ * existed, which have only the joined `address` line.
+ *
+ * There was an attempt to recover the two from that joined line by splitting
+ * it on newlines — the form joins detail, "area, upazila", "district,
+ * division" and postcode with them — and it is worth recording why that was
+ * abandoned rather than repaired. The join drops empty parts. So an order with
+ * no area and no upazila has the *detail* sitting immediately above the
+ * district line, in the position the area would occupy, and nothing in the
+ * string distinguishes the two cases: one real order came out with a zone of
+ * "matuyail medikel", which is a hospital. Splitting a string to recover a
+ * structure we had in our hands was the mistake; the fix was to stop throwing
+ * it away.
  *
  * The fallback is a guess, and reads an address the way people write one.
  * "H-1, R-1, S-6, Uttara" puts the locality last, after the house and road
@@ -315,8 +321,14 @@ export function recipientPlace(shipping: ShippingAddress): { zone: string; area:
   const city = tidy(toLatin(shipping.city));
   const address = toLatin(shipping.address);
 
-  const structured = structuredPlace(address, city);
-  if (structured) return structured;
+  /* Recorded, not guessed. The upazila alone is enough to take this path: an
+     order can name its upazila and leave the area blank, and a blank area is
+     a true answer where a guessed one is not. */
+  const upazila = tidy(toLatin(shipping.upazila ?? ""));
+  if (upazila) return { zone: upazila, area: tidy(toLatin(shipping.area ?? "")) };
+
+  const joined = joinedPlace(address, city);
+  if (joined) return joined;
 
   const parts = address.split(",").map(withoutPostcode).filter(Boolean);
 

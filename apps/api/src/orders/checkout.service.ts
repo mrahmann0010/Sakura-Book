@@ -381,6 +381,11 @@ export function orderValuesFrom(
       address: customer.address,
       city: customer.city,
       region: customer.region,
+      /* The form's own fields, kept unjoined for the courier manifest. Only
+         written when the form sent them — see ShippingAddress. */
+      ...(customer.upazila ? { upazila: customer.upazila } : {}),
+      ...(customer.area ? { area: customer.area } : {}),
+      ...(customer.postCode ? { postCode: customer.postCode } : {}),
     },
 
     subtotalCents: priced.subtotalCents,

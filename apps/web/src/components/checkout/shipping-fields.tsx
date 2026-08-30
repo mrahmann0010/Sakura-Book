@@ -94,6 +94,17 @@ export function ShippingFields({
     const zoneDivision = next.division ?? division;
 
     setValue("city", merged.district, { shouldValidate: true, shouldDirty: true });
+
+    /* The parts, kept beside the line they are joined into below.
+       `address` stays what a customer and a courier read; these are the same
+       facts unjoined, for the Pathao manifest, which needs district, upazila
+       and area as three columns. Sent rather than recovered by splitting
+       `address` back up — that cannot be made to work, because the join below
+       drops empty parts and the line above the district is the area on one
+       order and a house number on the next. */
+    setValue("upazila", merged.upazila, { shouldDirty: true });
+    setValue("area", merged.area, { shouldDirty: true });
+    setValue("postCode", merged.postCode, { shouldDirty: true });
     setValue("region", deliveryZoneFor(zoneDivision, originDivision), {
       shouldValidate: true,
       shouldDirty: true,

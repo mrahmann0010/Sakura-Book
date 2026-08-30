@@ -26,6 +26,24 @@ export type ShippingAddress = {
   city: string;
   /** Region slug, as sent — validated against the regions table at checkout. */
   region: string;
+
+  /**
+   * The address form's own fields, stored beside the line they compose.
+   *
+   * `address` is the join of these plus the free-text detail, and stays the
+   * address a customer and a courier read. These are kept because a courier
+   * manifest needs the levels apart — Pathao addresses a parcel as
+   * district → upazila → area — and because recovering them by splitting the
+   * joined string back up does not work: the join drops empty parts, so the
+   * line above the district is the area on one order and a house number on
+   * the next. See shippingAddressSchema in @sakura/contracts.
+   *
+   * Optional, and absent on every order placed before they were added. Nothing
+   * may assume they are present.
+   */
+  upazila?: string;
+  area?: string;
+  postCode?: string;
 };
 
 export const orders = pgTable(

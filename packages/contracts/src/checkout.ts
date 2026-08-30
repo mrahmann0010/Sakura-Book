@@ -39,6 +39,34 @@ export const shippingAddressSchema = z.object({
    * adding a sixth must not require releasing this package.
    */
   region: required("Choose the delivery region."),
+
+  /* ------------------------------------------------------------------------
+     The address form's own fields, kept alongside the line it composes.
+
+     `address` above is what the form joins these into, and it stays the
+     customer-facing address — one string, rendered on the receipt and read by
+     a courier. These are the same facts unjoined, and they exist because a
+     courier manifest needs them apart: Pathao addresses a parcel as
+     City → Zone → Area, which is district → upazila → area exactly.
+
+     They were being recovered by splitting `address` back up, which does not
+     work and cannot be made to. The join drops empty parts, so an order with
+     no area and no upazila is indistinguishable from one where the line above
+     the district is a house number — and that misread the detail line as the
+     zone. Splitting a string to recover a structure we had in our hands is the
+     bug; this is not having thrown it away.
+
+     Optional, because every order placed before this shipped has none, and
+     because the form does not require them. Absent means the exporter falls
+     back to reading `address`, which is what it does for those orders anyway.
+     ------------------------------------------------------------------------ */
+
+  /** Upazila / thana. Free text — see bd-geo.ts on why there is no list. */
+  upazila: z.string().trim().max(120).optional(),
+  /** Neighbourhood or village, below the upazila. */
+  area: z.string().trim().max(120).optional(),
+  /** Four digits, though not validated as such: people leave it off. */
+  postCode: z.string().trim().max(16).optional(),
 });
 
 export const checkoutSchema = shippingAddressSchema
