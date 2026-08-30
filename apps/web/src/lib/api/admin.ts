@@ -358,7 +358,9 @@ export function adminRefreshSession(): Promise<boolean> {
    same `status[]` filter, not separate endpoints; see admin/orders/page.tsx.
    -------------------------------------------------------------------------- */
 
-export function listAdminOrders(query: Partial<AdminOrderQuery> = {}): Promise<AdminOrderList> {
+/** The filters, as a query string. Shared by the queue and the Pathao export
+ *  so the manifest always covers exactly what the screen was showing. */
+function orderSearch(query: Partial<AdminOrderQuery>): string {
   const search = new URLSearchParams();
   for (const status of query.status ?? []) search.append("status", status);
   if (query.paymentMethod) search.set("paymentMethod", query.paymentMethod);
@@ -371,7 +373,66 @@ export function listAdminOrders(query: Partial<AdminOrderQuery> = {}): Promise<A
   if (query.pageSize) search.set("pageSize", String(query.pageSize));
 
   const qs = search.toString();
-  return adminFetch(`/admin/orders${qs ? `?${qs}` : ""}`, adminOrderListSchema);
+  return qs ? `?${qs}` : "";
+}
+
+export function listAdminOrders(query: Partial<AdminOrderQuery> = {}): Promise<AdminOrderList> {
+  return adminFetch(`/admin/orders${orderSearch(query)}`, adminOrderListSchema);
+}
+
+/**
+ * Download the filtered orders as Pathao's bulk-order CSV.
+ *
+ * `page` and `pageSize` are not in the parameter type at all, rather than
+ * being accepted and dropped: the export covers every matching order, and a
+ * caller that could hand over the page it was browsing would eventually hand
+ * it over — producing a manifest of twenty-five parcels for a hundred-parcel
+ * pickup, which is a file that looks right and is short.
+ *
+ * Fetched as a blob rather than opened as a link, for the reason
+ * `downloadAdminWaitlistCsv` gives below: the session is httpOnly cookies, and
+ * a plain navigation renders a 401 as an error page in a new tab instead of an
+ * error the screen can show.
+ */
+export async function downloadPathaoOrdersCsv(
+  filters: Omit<Partial<AdminOrderQuery>, "page" | "pageSize"> = {},
+): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `${apiOrigin()}${API_PREFIX}/admin/orders/export.csv${orderSearch(filters)}`,
+      {
+        credentials: "include",
+        cache: "no-store",
+        headers: { accept: "text/csv" },
+      },
+    );
+  } catch {
+    throw new AdminApiError(
+      0,
+      "Could not reach the API. Check that it is running.",
+      [],
+      "NETWORK_ERROR",
+    );
+  }
+
+  if (!response.ok) {
+    throw new AdminApiError(response.status, "Could not export these orders.", [], "EXPORT_FAILED");
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `pathao-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+
+  // See downloadAdminWaitlistCsv: revoking synchronously gives Safari an
+  // empty file.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 export function getAdminOrder(orderNumber: string): Promise<AdminOrderDetail> {
@@ -524,10 +585,7 @@ export function createAdminRegion(input: AdminRegionCreate): Promise<AdminRegion
   return adminFetch("/admin/settings/regions", adminRegionSchema, { method: "POST", body: input });
 }
 
-export function updateAdminRegion(
-  slug: string,
-  changes: AdminRegionUpdate,
-): Promise<AdminRegion> {
+export function updateAdminRegion(slug: string, changes: AdminRegionUpdate): Promise<AdminRegion> {
   return adminFetch(`/admin/settings/regions/${encodeURIComponent(slug)}`, adminRegionSchema, {
     method: "PATCH",
     body: changes,
@@ -667,7 +725,12 @@ export async function downloadAdminWaitlistCsv(
       { credentials: "include", cache: "no-store", headers: { accept: "text/csv" } },
     );
   } catch {
-    throw new AdminApiError(0, "Could not reach the API. Check that it is running.", [], "NETWORK_ERROR");
+    throw new AdminApiError(
+      0,
+      "Could not reach the API. Check that it is running.",
+      [],
+      "NETWORK_ERROR",
+    );
   }
 
   if (!response.ok) {
@@ -675,7 +738,12 @@ export async function downloadAdminWaitlistCsv(
        of the screen is open to STAFF, so this is the first thing a staff
        member hits. Named rather than generic, so the page can say why. */
     if (response.status === 403) {
-      throw new AdminApiError(403, "Only an ADMIN account can export the waitlist.", [], "FORBIDDEN");
+      throw new AdminApiError(
+        403,
+        "Only an ADMIN account can export the waitlist.",
+        [],
+        "FORBIDDEN",
+      );
     }
 
     throw new AdminApiError(response.status, "Could not export the waitlist.", [], "EXPORT_FAILED");

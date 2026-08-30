@@ -1,4 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import type {
   AdminConfirmPaymentRequest,
   AdminInternalNoteRequest,
@@ -11,6 +12,7 @@ import type {
 } from "@sakura/contracts";
 import { eq, inArray, sql } from "drizzle-orm";
 import { InvalidInputError, ResourceNotFoundError } from "../../common/errors";
+import type { Env } from "../../config/env.schema";
 import { DbService } from "../../db/db.service";
 import { orderItems, orders } from "../../db/schema";
 import { findOrder, findTransactionIdClaim, type OrderRow } from "../../orders";
@@ -21,6 +23,7 @@ import { PaymentVerificationService, type PaymentVerification } from "../../paym
 import type { AccessClaims } from "../auth/tokens";
 import { adminOrderFilters, adminOrderOrder } from "./admin-order.query";
 import { receiptUniquenessOf, toAdminOrderDetail, toAdminOrderSummary } from "./admin-order.mapper";
+import { toPathaoCsv } from "./pathao-export";
 
 /** Who did it and from where, threaded through to every audit entry. */
 export type AdminContext = {
@@ -62,6 +65,7 @@ export class AdminOrdersService {
     private readonly auditService: AuditService,
     private readonly paymentVerificationService: PaymentVerificationService,
     private readonly verificationLog: PaymentVerificationLogService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   /**
@@ -130,6 +134,65 @@ export class AdminOrdersService {
       // Zero, not one, when nothing matched — see the same note in the catalog.
       totalPages: Math.ceil(total / query.pageSize),
     };
+  }
+
+  /**
+   * Every order matching the filters as a Pathao bulk-order CSV — no
+   * pagination.
+   *
+   * The same filters the queue was drawn with, deliberately: the panel passes
+   * whatever the screen was showing, so the file is the manifest for the list
+   * in front of the operator rather than for some other set of orders. That
+   * includes the status filter, which is what keeps a pending order from
+   * reaching a courier — the accepted-orders screen only ever sends the four
+   * accepted statuses, and this endpoint has no opinion beyond honouring what
+   * it is given.
+   *
+   * Capped at EXPORT_LIMIT rows so one request cannot render the whole orders
+   * table into memory as a string. The cap is far above any batch a courier
+   * would collect in a day, and the date filters are the answer if it is ever
+   * not.
+   *
+   * Two statements, not one: the addresses come off `orders`, and the copies
+   * per order are a grouped count over `order_items` that would multiply the
+   * rows if it were joined in — the same shape, and the same reason, as
+   * `list()` above.
+   */
+  async exportPathaoCsv(query: AdminOrderQuery): Promise<string> {
+    const rows = await this.dbService.db
+      .select({
+        id: orders.id,
+        orderNumber: orders.orderNumber,
+        customerName: orders.customerName,
+        customerPhone: orders.customerPhone,
+        shippingAddress: orders.shippingAddress,
+        paymentMethod: orders.paymentMethod,
+        totalCents: orders.totalCents,
+        customerNote: orders.customerNote,
+      })
+      .from(orders)
+      .where(adminOrderFilters(query))
+      .orderBy(...adminOrderOrder(query.sort))
+      .limit(EXPORT_LIMIT);
+
+    const counts = await this.itemCounts(rows.map((row) => row.id));
+
+    return toPathaoCsv(
+      rows.map((row) => ({
+        orderNumber: row.orderNumber,
+        customerName: row.customerName,
+        customerPhone: row.customerPhone,
+        shippingAddress: row.shippingAddress,
+        paymentMethod: row.paymentMethod,
+        totalCents: row.totalCents,
+        customerNote: row.customerNote,
+        // Zero copies is impossible — checkout rejects an empty cart — but a
+        // manifest is the wrong place to discover otherwise, so it renders as
+        // zero rather than throwing and costing the operator the whole file.
+        itemCount: counts.get(row.id)?.itemCount ?? 0,
+      })),
+      this.config.get("PATHAO_STORE_NAME", { infer: true }),
+    );
   }
 
   /**
@@ -321,7 +384,11 @@ export class AdminOrdersService {
       `This order's transaction ID is already recorded against order ${claim.orderNumber} ` +
         `(${claim.status}). Confirm the payment there, or — if this order is the real claim — ` +
         `re-send with a reason to override.`,
-      { orderNumber: order.orderNumber, claimedBy: claim.orderNumber, claimedByStatus: claim.status },
+      {
+        orderNumber: order.orderNumber,
+        claimedBy: claim.orderNumber,
+        claimedByStatus: claim.status,
+      },
     );
   }
 
@@ -611,7 +678,8 @@ export class AdminOrdersService {
 
 /** A one-line, human-readable summary of a verification outcome. */
 function summarizeVerification(verification: PaymentVerification, expectedCents: number): string {
-  const amount = (cents: number) => (cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 });
+  const amount = (cents: number) =>
+    (cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
   switch (verification.outcome) {
     case "MATCHED":
@@ -633,3 +701,7 @@ function auditContext(context: AdminContext) {
     userAgent: context.userAgent,
   };
 }
+
+/** See `exportPathaoCsv`. Far above any single courier pickup; the status,
+ *  division and date filters are the answer if it is ever not. */
+const EXPORT_LIMIT = 5_000;
