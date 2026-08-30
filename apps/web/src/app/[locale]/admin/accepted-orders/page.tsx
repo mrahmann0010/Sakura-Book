@@ -194,7 +194,8 @@ export default function AdminAcceptedOrdersPage() {
             Downloaded {total} {total === 1 ? "order" : "orders"}. Check the{" "}
             <span className="font-mono">RecipientZone</span> and{" "}
             <span className="font-mono">RecipientArea</span> columns before uploading — both are
-            read from each address, not stored with the order.
+            read from each address, not stored with the order. Bangla is written in Latin letters,
+            because Pathao&rsquo;s importer cannot read it otherwise.
           </p>
         ) : null}
 

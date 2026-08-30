@@ -1,5 +1,6 @@
 import { bdDivisions } from "@sakura/contracts";
 import type { ShippingAddress } from "../../db/schema";
+import { toLatin, withLatinDigits } from "./bangla-latin";
 
 /* --------------------------------------------------------------------------
    The Pathao bulk-order CSV.
@@ -100,7 +101,14 @@ const ITEM_WEIGHT_KG = "0.25";
  * since the guard is only meaningful if the cell survives the round trip.
  */
 function cell(value: string | number | null | undefined): string {
-  const text = value === null || value === undefined ? "" : String(value);
+  /* Romanised here, at the one place every value in the file passes through,
+     rather than at each of the six call sites that can carry Bangla. A field
+     added later is covered by construction instead of by remembering — and the
+     failure this guards is invisible from our side, since the mojibake only
+     appears once the file is inside Pathao's system. Latin text, digits and
+     punctuation come back unchanged, so the header and the numeric columns are
+     untouched by it. */
+  const text = value === null || value === undefined ? "" : toLatin(String(value));
   const dangerous = /^[=+\-@\t\r]/.test(text);
   const guarded = dangerous ? `'${text}` : text;
 
@@ -119,6 +127,10 @@ function tidy(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+/* Bengali digits are converted before the address is read, not only on the way
+   out: a postcode written `৩৫০০` has to be recognised as a postcode by
+   `withoutPostcode`, and `\d` does not match it. See bangla-latin.ts. */
+
 /**
  * The recipient's number in the local 11-digit form Pathao requires.
  *
@@ -132,7 +144,7 @@ function tidy(value: string): string {
  * wrong-looking number in the sheet, and cannot fix one that vanished.
  */
 export function recipientPhone(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
+  const digits = withLatinDigits(raw).replace(/\D/g, "");
   // Bangladeshi mobiles are 01[3-9]XXXXXXXX, so a leading 880 is always the
   // country code and never the start of a local number.
   const local = digits.replace(/^(?:00)?880/, "");
@@ -157,7 +169,7 @@ export function recipientPhone(raw: string): string {
  * parcel would be noise at best.
  */
 export function recipientAddress(shipping: ShippingAddress): string {
-  const address = tidy(shipping.address);
+  const address = tidy(withLatinDigits(shipping.address));
   const city = tidy(shipping.city);
 
   if (!city) return address;
@@ -213,7 +225,7 @@ const DIVISION_NAMES = new Set(bdDivisions.map((division) => division.label.toLo
  * place names ending in a digit and must survive this untouched.
  */
 function withoutPostcode(part: string): string {
-  return tidy(part.replace(/\b\d{4}\b\s*$/, ""));
+  return tidy(withLatinDigits(part).replace(/\b\d{4}\b\s*$/, ""));
 }
 
 /**
@@ -320,22 +332,22 @@ export function amountToCollect(row: PathaoExportRow): number {
  * and that is an operational fact about an external account — see
  * PATHAO_STORE_NAME in env.schema.ts.
  *
- * CRLF, and a UTF-8 BOM — the same three bytes the waitlist export writes, for
- * the same reason.
+ * CRLF, and no BOM — and this is the third position this file has taken on
+ * that, so the history is worth keeping.
  *
- * This file shipped without one, on the argument that a leading U+FEFF makes
- * the first column something other than `ItemType` to a parser that does not
- * strip it, and a header Pathao cannot match is a rejected upload. The
- * argument was sound and the guess was wrong: uploaded, Pathao's panel showed
- * `হাসপাতাল মাঠ` as `à¦¹à¦¾à¦¸...`, which is UTF-8 being read a byte at a
- * time as Latin-1. A `.csv` carries no encoding inside it, the `charset=utf-8`
- * on the response dies the moment the file is saved, and the BOM is the only
- * signal left to send.
+ * It shipped without one, because a leading U+FEFF makes the first column
+ * something other than `ItemType` to a parser that does not strip it, and a
+ * header Pathao cannot match rejects the whole upload. Bangla then arrived in
+ * their panel as `à¦¹à¦¾à¦¸...` — UTF-8 read a byte at a time as Latin-1 — so
+ * the mark went in, on the reasoning that a retryable header failure beats
+ * unreadable addresses. It made no difference: their importer reads Latin-1
+ * whatever we send.
  *
- * So it is sent, and the header risk is real but strictly smaller: a BOM a
- * parser ignores costs one mismatched header on an upload that can be retried,
- * where the alternative silently delivered parcels to addresses nobody could
- * read.
+ * That settled it in the other direction. Every cell is romanised on the way
+ * out now (see `cell`), which makes the whole file ASCII — the one encoding
+ * every reader agrees on, byte for byte. There is nothing left for a BOM to
+ * declare, so it comes back out rather than sitting there costing header risk
+ * for a problem that no longer exists.
  */
 export function toPathaoCsv(rows: PathaoExportRow[], storeName: string): string {
   const lines = [CSV_COLUMNS.map((column) => cell(column)).join(",")];
@@ -374,5 +386,5 @@ export function toPathaoCsv(rows: PathaoExportRow[], storeName: string): string 
     );
   }
 
-  return `\uFEFF${lines.join("\r\n")}\r\n`;
+  return `${lines.join("\r\n")}\r\n`;
 }
