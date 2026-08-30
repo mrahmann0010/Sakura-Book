@@ -32,6 +32,7 @@ export {
   ORDER_STATUS_TRANSITIONS,
   STOCK_HELD_STATUSES,
   canTransition,
+  forwardPathTo,
   isTerminal,
   releasesStock,
   type OrderStatus,

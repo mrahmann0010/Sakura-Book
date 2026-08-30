@@ -304,6 +304,33 @@ export const adminOrderTransitionRequestSchema = z.object({
   note: z.string().trim().max(280).optional(),
 
   duplicateReceiptOverride: duplicateReceiptOverrideSchema,
+
+  /**
+   * Walk every status in between rather than requiring `status` to be one
+   * legal step away.
+   *
+   * Absent means off, so the plain request keeps meaning exactly what it
+   * meant: one move, refused by the machine if it is not allowed. On, it means
+   * "get the order to this status" — the intermediate moves are computed from
+   * the transition table and each is applied for real, with its own history
+   * row.
+   *
+   * It exists because one action at the desk is sometimes several in the
+   * lifecycle. Handing a parcel to the courier is a single tick on the
+   * dispatch list and two transitions (PROCESSING, then SHIPPED), and the
+   * alternative — the panel firing the steps itself — puts the order of the
+   * lifecycle in the browser, where a dropped second request strands an order
+   * one step short of the truth with the parcel already gone.
+   *
+   * A flag rather than a separate endpoint because the destination is still
+   * named explicitly, so this stays idempotent in the same way: two ticks both
+   * ask for SHIPPED, and the second finds no route left to walk.
+   */
+  /* `.optional()` and not `.default(false)`: a default would make the field
+     required on the inferred type, so every existing caller that sends a
+     plain single-step transition would have to start naming a flag it does
+     not use. Absent and false mean the same thing to the reader below. */
+  advance: z.boolean().optional(),
 });
 
 export type AdminOrderTransitionRequest = z.infer<typeof adminOrderTransitionRequestSchema>;
@@ -377,7 +404,10 @@ export type AdminInternalNoteRequest = z.infer<typeof adminInternalNoteRequestSc
  * stays the admin's explicit `transition`/`confirmPayment` call.
  */
 export const adminOrderVerifyPaymentResultSchema = z.object({
-  record: z.union([paymentVerificationRecordSchema, z.object({ outcome: z.literal("NO_RECEIPT") })]),
+  record: z.union([
+    paymentVerificationRecordSchema,
+    z.object({ outcome: z.literal("NO_RECEIPT") }),
+  ]),
   summary: z.string(),
 });
 

@@ -88,3 +88,63 @@ export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
 export function isTerminal(status: OrderStatus): boolean {
   return ORDER_STATUS_TRANSITIONS[status].length === 0;
 }
+
+/**
+ * The statuses an order must enter, in order, to get from `from` to `to`.
+ *
+ * The shortest route through the table above — `[PROCESSING, SHIPPED]` for an
+ * order sitting at PAYMENT_CONFIRMED that is being marked shipped. Empty when
+ * the order is already there, and null when no route exists at all (a
+ * cancelled order asked to ship, a delivered one asked to go back).
+ *
+ * This exists because the lifecycle and the desk disagree about granularity,
+ * and only one of them is wrong to. Staff hand a stack of parcels to the
+ * courier in one action; the machine insists an order is picked before it is
+ * dispatched. Making the panel fire two requests would put the ordering of
+ * those steps in the browser, where a dropped second request leaves an order
+ * stranded in PROCESSING with a parcel already gone. Computing the route here
+ * and walking it inside one transaction keeps the intermediate statuses real —
+ * each gets its own history row, so the customer's timeline shows the order
+ * was picked and then dispatched — without asking the caller to know that
+ * PROCESSING is in the way.
+ *
+ * **No route ever passes through a terminal status.** That is not a filter
+ * applied here, it is a property of the table: CANCELLED and REFUNDED have no
+ * outgoing transitions, so breadth-first search cannot leave them. Which means
+ * this can never quietly cancel an order on the way to shipping it — the one
+ * failure that would make walking a path worse than refusing to.
+ *
+ * Breadth-first rather than a hardcoded happy path, so a status inserted into
+ * the lifecycle is routed through automatically instead of being skipped by a
+ * list nobody remembered to update.
+ */
+export function forwardPathTo(from: OrderStatus, to: OrderStatus): OrderStatus[] | null {
+  if (from === to) return [];
+
+  const previous = new Map<OrderStatus, OrderStatus>();
+  const seen = new Set<OrderStatus>([from]);
+  const queue: OrderStatus[] = [from];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+
+    for (const next of ORDER_STATUS_TRANSITIONS[current]) {
+      if (seen.has(next)) continue;
+
+      seen.add(next);
+      previous.set(next, current);
+
+      if (next === to) {
+        const path: OrderStatus[] = [];
+        for (let step: OrderStatus = to; step !== from; step = previous.get(step)!) {
+          path.unshift(step);
+        }
+        return path;
+      }
+
+      queue.push(next);
+    }
+  }
+
+  return null;
+}

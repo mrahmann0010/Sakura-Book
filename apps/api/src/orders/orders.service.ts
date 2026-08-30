@@ -12,6 +12,7 @@ import { findOrder, findOrders } from "./order.query";
 import {
   STOCK_HELD_STATUSES,
   canTransition,
+  forwardPathTo,
   releasesStock,
   type OrderStatus,
 } from "./order-status.machine";
@@ -301,6 +302,72 @@ export class OrdersService {
     this.emitStatusChange({ orderId, orderNumber, from, to: next });
 
     return next;
+  }
+
+  /**
+   * Move an order to a status that is more than one step away, through every
+   * status in between, in one transaction — then announce each step.
+   *
+   * The counterpart to `transitionAndCommit` for a caller whose action is
+   * coarser than the lifecycle. Handing a parcel to the courier is one act at
+   * the desk and two moves in the machine (PROCESSING, then SHIPPED), and the
+   * route between them is computed by `forwardPathTo` rather than named by the
+   * caller, so the panel never has to carry a second copy of the lifecycle.
+   *
+   * Every intermediate status is entered properly — `transition` runs for each
+   * one, so each writes its own history row and each is checked against the
+   * table. Nothing is skipped and nothing is faked: a customer's timeline
+   * afterwards shows the order was picked and then dispatched, seconds apart,
+   * which is what happened.
+   *
+   * One transaction for the whole walk, because a half-applied route is worse
+   * than a refused one — an order stranded in PROCESSING with its parcel
+   * already collected is invisible on every screen that would catch it.
+   *
+   * Events fire after commit, one per step and in order, for the reason
+   * `transitionAndCommit` gives at length. Per step rather than one for the
+   * whole jump because listeners key on *entering* a status — the sales rollup
+   * counts on PAYMENT_CONFIRMED, the confirmation email sends on it — and a
+   * single PAYMENT_CONFIRMED → SHIPPED event would silently skip both.
+   */
+  async advanceAndCommit(
+    orderId: string,
+    target: OrderStatus,
+    note?: string,
+  ): Promise<OrderStatus> {
+    const { orderNumber, path, from } = await this.dbService.db.transaction(async (tx) => {
+      const before = await tx.query.orders.findFirst({
+        where: (row, { eq: equals }) => equals(row.id, orderId),
+        columns: { status: true, orderNumber: true },
+      });
+
+      if (!before) throw new ResourceNotFoundError("Order", orderId);
+
+      const route = forwardPathTo(before.status, target);
+
+      // No route at all — a cancelled order asked to ship, or a delivered one
+      // asked to go backwards. Reported as the illegal move the caller asked
+      // for rather than as an empty walk that silently does nothing.
+      if (!route) throw new InvalidStatusTransitionError(orderId, before.status, target);
+
+      // The note goes on the step the caller actually asked for and on no
+      // other. It is customer-visible on the tracking page, and "Marked
+      // shipped" written against the picking step reads as a mistake — the
+      // intermediate rows are there to carry a timestamp, not a claim.
+      for (const next of route) {
+        await this.transition(orderId, next, tx, next === target ? note : undefined);
+      }
+
+      return { orderNumber: before.orderNumber, path: route, from: before.status };
+    });
+
+    let previous = from;
+    for (const status of path) {
+      this.emitStatusChange({ orderId, orderNumber, from: previous, to: status });
+      previous = status;
+    }
+
+    return target;
   }
 
   /**

@@ -3,6 +3,7 @@ import {
   ORDER_STATUS_TRANSITIONS,
   STOCK_HELD_STATUSES,
   canTransition,
+  forwardPathTo,
   isTerminal,
   releasesStock,
 } from "../../src/orders/order-status.machine";
@@ -141,6 +142,98 @@ describe("releasesStock", () => {
     // true while these two agree, so it is asserted rather than assumed.
     for (const from of orderStatuses) {
       expect(releasesStock(from, "REFUNDED")).toBe(releasesStock(from, "CANCELLED"));
+    }
+  });
+});
+
+/**
+ * Routing between statuses that are more than one step apart.
+ *
+ * This is what lets one tick on the dispatch list mean "this parcel is with
+ * the courier" while the lifecycle keeps insisting an order is picked before
+ * it is shipped. The properties below are the reason walking a route is safe
+ * to do at all — most of all that no route can pass through a cancellation.
+ */
+describe("forwardPathTo", () => {
+  it("routes an accepted order through picking on its way to shipped", () => {
+    // The case the whole feature exists for: the dispatch list ticks SHIPPED,
+    // and PROCESSING is in the way.
+    expect(forwardPathTo("PAYMENT_CONFIRMED", "SHIPPED")).toEqual(["PROCESSING", "SHIPPED"]);
+  });
+
+  it("returns the single step when there is only one", () => {
+    expect(forwardPathTo("PROCESSING", "SHIPPED")).toEqual(["SHIPPED"]);
+  });
+
+  it("returns an empty route for an order already there", () => {
+    // Not null, and the difference matters: null is refused as an illegal
+    // move, while empty means the caller's intent is already satisfied.
+    expect(forwardPathTo("SHIPPED", "SHIPPED")).toEqual([]);
+  });
+
+  it("refuses to route backwards, or out of a terminal status", () => {
+    expect(forwardPathTo("DELIVERED", "PROCESSING")).toBeNull();
+    expect(forwardPathTo("CANCELLED", "SHIPPED")).toBeNull();
+    expect(forwardPathTo("REFUNDED", "DELIVERED")).toBeNull();
+  });
+
+  it("never routes through a terminal status", () => {
+    // The property that makes walking a route safe: an order being advanced
+    // to SHIPPED must never be cancelled and restocked somewhere in the
+    // middle. It holds because terminal statuses have no way out, so this
+    // asserts it for every pair rather than for the pairs we thought of.
+    for (const from of orderStatuses) {
+      for (const to of orderStatuses) {
+        const path = forwardPathTo(from, to);
+        if (!path) continue;
+
+        for (const step of path.slice(0, -1)) {
+          expect(isTerminal(step)).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("produces a route every step of which the machine allows", () => {
+    // A route the machine would refuse halfway is worse than no route: the
+    // first steps commit, and the order is left somewhere nobody asked for.
+    for (const from of orderStatuses) {
+      for (const to of orderStatuses) {
+        const path = forwardPathTo(from, to);
+        if (!path) continue;
+
+        let current = from;
+        for (const step of path) {
+          expect(canTransition(current, step)).toBe(true);
+          current = step;
+        }
+
+        expect(current).toBe(path.length === 0 ? from : to);
+      }
+    }
+  });
+
+  it("never revisits a status within one route", () => {
+    // A repeated status would re-enter it, and entering PAYMENT_CONFIRMED is
+    // what the sales rollup counts on — the same reason the transition table
+    // forbids a self-transition.
+    for (const from of orderStatuses) {
+      for (const to of orderStatuses) {
+        const path = forwardPathTo(from, to) ?? [];
+
+        expect(new Set(path).size).toBe(path.length);
+        expect(path).not.toContain(from);
+      }
+    }
+  });
+
+  it("agrees with canTransition wherever a single step exists", () => {
+    // The two must not drift: anything the machine allows directly should be
+    // routed directly, not around the houses.
+    for (const from of orderStatuses) {
+      for (const to of ORDER_STATUS_TRANSITIONS[from]) {
+        expect(forwardPathTo(from, to)).toEqual([to]);
+      }
     }
   });
 });

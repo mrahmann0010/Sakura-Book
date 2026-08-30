@@ -15,7 +15,7 @@ import { InvalidInputError, ResourceNotFoundError } from "../../common/errors";
 import type { Env } from "../../config/env.schema";
 import { DbService } from "../../db/db.service";
 import { orderItems, orders } from "../../db/schema";
-import { findOrder, findTransactionIdClaim, type OrderRow } from "../../orders";
+import { findOrder, findTransactionIdClaim, forwardPathTo, type OrderRow } from "../../orders";
 import { OrdersService, PaymentVerificationLogService } from "../../orders";
 import { PaymentsService } from "../../payments";
 import { AuditService } from "../../audit";
@@ -421,6 +421,22 @@ export class AdminOrdersService {
     const order = await this.requireOrder(orderNumber);
     const from = order.status;
 
+    /* Which statuses this request will actually put the order into.
+
+       For the ordinary single-step request that is just the target. For an
+       `advance` request it is the whole route, and it has to be computed here
+       rather than left to the domain, because the guard below asks a question
+       about the statuses being entered — and an order that reaches
+       PAYMENT_CONFIRMED as the first step of a walk has reached it exactly as
+       completely as one that was asked for it directly.
+
+       A null route is left to `advanceAndCommit` to refuse. Re-deriving the
+       refusal here would put a second copy of "is this move legal" outside the
+       machine, which is the thing the machine exists to prevent. */
+    const entering = request.advance
+      ? (forwardPathTo(from, request.status) ?? [request.status])
+      : [request.status];
+
     /* The other door into the same room.
 
        `confirmPayment` has refused duplicate receipts since the check existed,
@@ -429,16 +445,22 @@ export class AdminOrdersService {
        route for a pending order, so the gap was invisible from the UI; the
        endpoint was open to any admin token, any script, and any future change
        to which buttons get rendered. A guard on one of two paths to the same
-       outcome is not a guard. */
-    if (request.status === "PAYMENT_CONFIRMED") {
+       outcome is not a guard.
+
+       Asked of the route rather than of `request.status` for that same reason:
+       `advance` to SHIPPED from PENDING passes through PAYMENT_CONFIRMED, and
+       a guard that only reads the destination is a third door left open. */
+    if (entering.includes("PAYMENT_CONFIRMED")) {
       await this.guardDuplicateReceipt(order, request.duplicateReceiptOverride, context);
     }
 
-    await this.ordersService.transitionAndCommit(
-      order.id,
-      request.status,
-      request.note ?? `Set to ${request.status} by ${context.actor.email}`,
-    );
+    const note = request.note ?? `Set to ${request.status} by ${context.actor.email}`;
+
+    if (request.advance) {
+      await this.ordersService.advanceAndCommit(order.id, request.status, note);
+    } else {
+      await this.ordersService.transitionAndCommit(order.id, request.status, note);
+    }
 
     await this.auditService.recordDetached({
       ...auditContext(context),
@@ -446,7 +468,15 @@ export class AdminOrdersService {
       entityType: "orders",
       entityId: orderNumber,
       before: { status: from },
-      after: { status: request.status },
+      // The route, not just the destination, when more than one status was
+      // entered. "PAYMENT_CONFIRMED became SHIPPED" is a true but incomplete
+      // record of an order that was also marked picked on the way, and the
+      // audit log is the only place that intermediate move is recoverable
+      // once the history rows are a year deep.
+      after:
+        entering.length > 1
+          ? { status: request.status, through: entering }
+          : { status: request.status },
       note: request.note,
     });
 
