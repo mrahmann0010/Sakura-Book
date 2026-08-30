@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import { districtsFor, type AdminOrderQuery } from "@sakura/contracts";
 import { orders } from "../../db/schema";
+import { ORDER_NUMBER_PREFIX } from "../../orders/order-number";
 
 /**
  * `where` and `order by` for the order queue, built from validated params.
@@ -16,6 +17,29 @@ import { orders } from "../../db/schema";
  */
 
 /**
+ * The order-number pattern a typed term should match, if it looks like one.
+ *
+ * Staff read the number off a phone screen or a printed slip and type the part
+ * that varies — "40718". Requiring the `NB-` back is asking a person to retype
+ * a constant several dozen times a day, and the digits alone match nothing
+ * against a start-anchored `NB-…`, so the search silently comes back empty and
+ * reads as "that order isn't here".
+ *
+ * So the separator and prefix are optional on input: "40718", "nb40718",
+ * "NB-40718" and "nb 40718" all normalise to the same `NB-40718%`. Only the
+ * digits are interpolated, and only after the term matched this shape, so
+ * nothing typed here can reach the pattern as a wildcard.
+ *
+ * Returns undefined for anything else — a name, an email, a phone number —
+ * which then matches on the substring branches alone.
+ */
+function orderNumberMatch(term: string): SQL | undefined {
+  const digits = /^(?:nb[\s-]*)?(\d{1,5})$/i.exec(term.trim())?.[1];
+
+  return digits ? ilike(orders.orderNumber, `${ORDER_NUMBER_PREFIX}-${digits}%`) : undefined;
+}
+
+/**
  * Free text across the four identifiers a customer might quote.
  *
  * The order number is matched case-insensitively and anchored to the *start*,
@@ -23,6 +47,10 @@ import { orders } from "../../db/schema";
  * substring match on an eight-character space would turn a search for "40718"
  * into a scan. The other three are substring matches, since a caller might
  * offer half a name or the last digits of a phone number.
+ *
+ * A bare-digit term keeps the phone branch as well as gaining the order-number
+ * one: "40718" is a plausible tail of a phone number, and dropping that match
+ * would fix one search by breaking another.
  *
  * Escaped before interpolation. An unescaped `%` typed into a staff search box
  * would match every order in the shop, which looks like a broken filter rather
@@ -33,6 +61,7 @@ function textMatch(term: string): SQL {
 
   return or(
     ilike(orders.orderNumber, `${escaped}%`),
+    orderNumberMatch(term),
     ilike(orders.customerName, `%${escaped}%`),
     ilike(orders.customerEmail, `%${escaped}%`),
     ilike(orders.customerPhone, `%${escaped}%`),
