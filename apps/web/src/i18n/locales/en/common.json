@@ -438,7 +438,9 @@
       },
       "refunds": {
         "title": "4. Cancellations & Refunds",
-        "body": ["Cancellations, returns, and refunds are handled under our Refund Policy."]
+        "body": [
+          "Cancellations, returns, and refunds are handled under our Refund Policy."
+        ]
       },
       "conduct": {
         "title": "5. Fair Use",
@@ -505,6 +507,38 @@
       "bookHint": "Pick the title you're waiting for, or leave it as any.",
       "bookAny": "Any title — tell me when anything is back",
       "listedFor": "Waiting for: {{book}}"
+    }
+  },
+  "reviews": {
+    "title": "We’d Love to Hear From You",
+    "intro": "Thank you for your support and for choosing us for your next read. We’d love to hear how your experience was, from ordering and delivery to the moment your book arrived in your hands. Your feedback means a lot to us.",
+    "form": {
+      "body": "Your review",
+      "bodyPlaceholder": "Share what you loved, what could be better, or anything in between…",
+      "bodyHint": "At least {{min}} characters.",
+      "bodyError": "Write at least {{min}} characters, so your review is some help to the next reader.",
+      "bodyCount": "{{current}} / {{max}}",
+      "rating": "Rating (optional)",
+      "ratingStars": "{{stars}} out of 5",
+      "ratingClear": "clear",
+      "optionalHeading": "Optional",
+      "authorName": "Your name",
+      "authorNameHint": "Leave it blank to be shown as anonymous.",
+      "authorNameError": "Keep your name under 80 characters.",
+      "authorEmail": "Email",
+      "authorEmailHint": "Never published. Only so we can reply if something went wrong.",
+      "authorEmailError": "Enter a valid email address, or leave it blank.",
+      "submit": "Send review",
+      "submitting": "Sending your review",
+      "submitHint": "Enables at {{min}} characters.",
+      "submitError": "Something went wrong on our end. Please try again in a moment.",
+      "throttledError": "That's a few reviews in quick succession. Please wait a minute and try again.",
+      "moderationNote": "Thank you — your feedback is what helps us improve our service. We read every review before it goes up, so it will not appear straight away, and we may share your experience to inspire other readers. Your email address is never published.",
+      "successTitle": "Thank you — that means a lot.",
+      "successBody": "One of us will read it before it goes up on the site, so give it a little time. If you left an email address and something went wrong with your order, we'll get back to you.",
+      "successSentLabel": "What you sent",
+      "successBackToBooks": "Back to the books",
+      "successTrackOrder": "Track an order"
     }
   },
   "errors": {

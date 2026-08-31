@@ -41,6 +41,9 @@ export type { HowItWorksProps, HowItWorksStage } from "./how-it-works";
 export { NotifyWaitlistForm } from "./notify-waitlist-form";
 export type { NotifyWaitlistFormProps, WaitlistValues } from "./notify-waitlist-form";
 
+export { ReviewForm } from "./review-form";
+export type { ReviewFormProps, ReviewFormValues } from "./review-form";
+
 export { MobileMoneyPayment } from "./mobile-money-payment";
 export type { MobileMoneyProviderId } from "./mobile-money-payment";
 
