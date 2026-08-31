@@ -160,6 +160,21 @@ export const envSchema = z.object({
   PAYMENTS_WEBHOOK_SECRET: z.string().min(16).optional(),
 
   /**
+   * Salt for the SHA-256 that `initial_reviews.ip_hash` stores instead of an
+   * address.
+   *
+   * Optional, and its absence stores null rather than falling back to an
+   * unsalted hash. That distinction matters: the IPv4 space is small enough to
+   * enumerate in seconds, so an unsalted digest is the address with extra
+   * steps, and the column would then be PII while looking as though it were
+   * not. Losing the "same submitter" signal is the cheaper failure.
+   *
+   * Rotating it is safe and forgets the association — old hashes simply stop
+   * matching new ones, which is the correct behaviour for a spam signal.
+   */
+  REVIEW_IP_SALT: z.string().min(16).optional(),
+
+  /**
    * Connection string for the MongoDB the SMS payment gateway writes into —
    * the `bkash` / `nagad` / `rocket` collections a forwarded payment SMS is
    * parsed into. Read-only from this API's point of view; that service owns

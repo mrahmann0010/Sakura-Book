@@ -1,5 +1,5 @@
 import { pgEnum } from "drizzle-orm/pg-core";
-import { paymentProviders, paymentVerificationOutcomes } from "@sakura/contracts";
+import { paymentProviders, paymentVerificationOutcomes, reviewStatuses } from "@sakura/contracts";
 
 export const bookAuthorRoleEnum = pgEnum("book_author_role", [
   "AUTHOR",
@@ -106,6 +106,17 @@ export const waitlistStatusEnum = pgEnum("waitlist_status", [
   "CONVERTED",
   "CANCELLED",
 ]);
+
+/**
+ * A review's moderation state. Built from the contract's `reviewStatuses` for
+ * the same reason `payment_verification_outcome` is built from its union: the
+ * queue's tabs, the API's filter and this column must agree on what states
+ * exist, and three hand-written lists eventually will not.
+ *
+ * SCREAMING_SNAKE and our own words, unlike `payment_method` — nothing on a
+ * form control validates against these.
+ */
+export const reviewStatusEnum = pgEnum("review_status", reviewStatuses);
 
 export const auditActionEnum = pgEnum("audit_action", [
   "CREATE",
