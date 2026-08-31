@@ -25,6 +25,10 @@ export function routes(locale: Locale | string) {
     terms: `${base}/terms`,
     contact: `${base}/contact`,
     notify: `${base}/notify`,
+    /* Where a customer writes about the service. Deliberately not under
+       `/reviews` — that path is left free for the listing of approved
+       testimonials, so neither page has to move when the other arrives. */
+    writeReview: `${base}/yourexperience`,
   } as const;
 }
 

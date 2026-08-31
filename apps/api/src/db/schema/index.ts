@@ -22,6 +22,7 @@ export * from "./settings/shop-settings";
 
 export * from "./marketing/coupon";
 export * from "./marketing/waitlist-entry";
+export * from "./marketing/platform-review";
 
 export * from "./shipping/delivery-region";
 

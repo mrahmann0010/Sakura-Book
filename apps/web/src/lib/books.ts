@@ -176,6 +176,7 @@ export const footerColumns = [
     heading: "Orders",
     links: [
       { href: "/orders", label: "Track an order" },
+      { href: "/yourexperience", label: "Share your experience" },
       { href: "/refund-policy", label: "Refund policy" },
       { href: "/privacy-policy", label: "Privacy policy" },
       { href: "/terms", label: "Terms & conditions" },
