@@ -162,6 +162,13 @@
       "when": 1788178226078,
       "tag": "0022_careful_moondragon",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788247277949,
+      "tag": "0023_waitlist_enabled_books",
+      "breakpoints": true
     }
   ]
 }

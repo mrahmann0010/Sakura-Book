@@ -78,6 +78,29 @@ export const waitlistEntrySchema = z.object({
 export type WaitlistEntry = z.infer<typeof waitlistEntrySchema>;
 
 /* --------------------------------------------------------------------------
+   The titles on offer.
+
+   Which books /notify lets a customer wait on is an editorial choice staff
+   make in the panel, not the whole catalog and not "everything at zero stock".
+   A shop with five titles may want names collected for two of them.
+
+   This is the customer's view of that choice — id and title, which is exactly
+   what the picker draws and what `bookId` above is submitted from. Price,
+   cover and stock are all absent deliberately: this is a `<select>`, not a
+   shelf, and a list that carried them would invite one to grow on this page.
+   -------------------------------------------------------------------------- */
+
+export const waitlistBookSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+});
+
+export type WaitlistBook = z.infer<typeof waitlistBookSchema>;
+
+/** Empty is a real answer: no titles on offer means the general list only. */
+export const waitlistBooksSchema = z.array(waitlistBookSchema);
+
+/* --------------------------------------------------------------------------
    When ordering reopens.
 
    Lives here rather than in admin-settings.ts because the customer-facing

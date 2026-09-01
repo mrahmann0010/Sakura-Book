@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Req } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Req,
+} from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   adminRegionCreateSchema,
@@ -6,10 +18,12 @@ import {
   paymentNumbersUpdateSchema,
   restockScheduleUpdateSchema,
   shippingTermsUpdateSchema,
+  waitlistBooksUpdateSchema,
   type AdminPaymentNumbers,
   type AdminRegion,
   type AdminRestockSchedule,
   type AdminShippingTerms,
+  type AdminWaitlistBook,
   type UnitsSoldReport,
 } from "@sakura/contracts";
 import type { Request } from "express";
@@ -24,6 +38,7 @@ class AdminRegionCreateDto extends createZodDto(adminRegionCreateSchema) {}
 class AdminRegionUpdateDto extends createZodDto(adminRegionUpdateSchema) {}
 class PaymentNumbersUpdateDto extends createZodDto(paymentNumbersUpdateSchema) {}
 class RestockScheduleUpdateDto extends createZodDto(restockScheduleUpdateSchema) {}
+class WaitlistBooksUpdateDto extends createZodDto(waitlistBooksUpdateSchema) {}
 
 /**
  * Shop policy and maintenance.
@@ -68,7 +83,9 @@ export class AdminSettingsController {
   }
 
   @Get("payments")
-  @ApiOperation({ summary: "bKash/Rocket/Nagad numbers, and whether they come from the DB or the environment." })
+  @ApiOperation({
+    summary: "bKash/Rocket/Nagad numbers, and whether they come from the DB or the environment.",
+  })
   async paymentNumbers(): Promise<AdminPaymentNumbers> {
     return this.settingsService.paymentNumbers();
   }
@@ -115,6 +132,33 @@ export class AdminSettingsController {
     @Req() request: Request,
   ): Promise<AdminRestockSchedule> {
     return this.settingsService.updateRestockSchedule(body, contextOf(admin, request));
+  }
+
+  @Get("waitlist-books")
+  @ApiOperation({ summary: "Every book, with whether /notify offers it as something to wait on." })
+  async waitlistBooks(): Promise<AdminWaitlistBook[]> {
+    return this.settingsService.waitlistBooks();
+  }
+
+  /**
+   * Choose the titles /notify offers.
+   *
+   * PUT, not PATCH — the opposite call from the shipping and payment writes
+   * above, and deliberately so. There the partial semantics are load-bearing
+   * because the fields are independent; here the resource *is* the set, staff
+   * are editing a list of checkboxes as one thing, and "these are the titles"
+   * is only sayable by sending all of them. A PATCH would also have no way to
+   * express "offer nothing", which is a real state.
+   */
+  @Put("waitlist-books")
+  @Roles("ADMIN")
+  @ApiOperation({ summary: "Replace the set of titles offered on the notify page." })
+  async updateWaitlistBooks(
+    @Body() body: WaitlistBooksUpdateDto,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminWaitlistBook[]> {
+    return this.settingsService.updateWaitlistBooks(body, contextOf(admin, request));
   }
 
   @Get("regions")

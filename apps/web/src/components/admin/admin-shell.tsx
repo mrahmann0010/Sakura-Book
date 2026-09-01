@@ -30,6 +30,10 @@ const NAV = [
   // and staff reach for it while working the list, not while editing payment
   // details.
   { href: "/settings/restock", label: "Reopening Date" },
+  // Next to the reopening date for the same reason it sits here: both are
+  // edited while working the waitlist — one answers "when", the other "which
+  // books are we even collecting names for".
+  { href: "/settings/notify-books", label: "Notify Page Books" },
   { href: "/settings/payments", label: "Payment Settings" },
   { href: "/settings/shipping", label: "Shipping Settings" },
 ] as const;

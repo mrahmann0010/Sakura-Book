@@ -6,16 +6,18 @@ import type {
   AdminRegionUpdate,
   AdminRestockSchedule,
   AdminShippingTerms,
+  AdminWaitlistBook,
   PaymentNumbersUpdate,
   RestockScheduleUpdate,
   ShippingTermsUpdate,
   UnitsSoldReport,
+  WaitlistBooksUpdate,
 } from "@sakura/contracts";
 import { DbService } from "../../db/db.service";
 import { UnitsSoldReconciler } from "../../inventory";
 import { PaymentNumbersService } from "../../payments";
 import { RegionsService, ShippingTermsService } from "../../shipping";
-import { RestockScheduleService } from "../../waitlist";
+import { RestockScheduleService, WaitlistBooksService } from "../../waitlist";
 import { AuditService } from "../../audit";
 import type { AdminContext } from "../orders";
 
@@ -42,6 +44,7 @@ export class AdminSettingsService {
     private readonly regionsService: RegionsService,
     private readonly paymentNumbersService: PaymentNumbersService,
     private readonly restockScheduleService: RestockScheduleService,
+    private readonly waitlistBooksService: WaitlistBooksService,
     private readonly reconciler: UnitsSoldReconciler,
     private readonly auditService: AuditService,
   ) {}
@@ -85,6 +88,45 @@ export class AdminSettingsService {
     });
 
     return this.restockScheduleService.describe();
+  }
+
+  /** Every book, with whether /notify currently offers it. */
+  async waitlistBooks(): Promise<AdminWaitlistBook[]> {
+    return this.waitlistBooksService.describeAll();
+  }
+
+  /**
+   * Choose which titles /notify offers to wait on.
+   *
+   * Audited like the reopening date, and for the same reason: this is what
+   * customers are shown on the page that catches everyone the shop has already
+   * disappointed once. "Who took that book off the list" is a question with a
+   * date attached, so before/after record the selected ids rather than the
+   * whole catalog — a diff of every title's flag is not something anyone reads.
+   */
+  async updateWaitlistBooks(
+    changes: WaitlistBooksUpdate,
+    context: AdminContext,
+  ): Promise<AdminWaitlistBook[]> {
+    const before = await this.waitlistBooksService.describeAll();
+
+    await this.dbService.db.transaction(async (tx) => {
+      await this.waitlistBooksService.setSelection(changes.bookIds, tx);
+
+      await this.auditService.record(
+        {
+          ...auditActor(context),
+          action: "UPDATE",
+          entityType: "books",
+          entityId: "waitlist_books",
+          before: { bookIds: before.filter((book) => book.waitlistEnabled).map((book) => book.id) },
+          after: { bookIds: changes.bookIds },
+        },
+        tx,
+      );
+    });
+
+    return this.waitlistBooksService.describeAll();
   }
 
   async shippingTerms(): Promise<AdminShippingTerms> {
