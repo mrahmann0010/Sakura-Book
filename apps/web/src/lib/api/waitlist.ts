@@ -1,8 +1,10 @@
 import {
   restockScheduleSchema,
+  waitlistBooksSchema,
   waitlistEntrySchema,
   waitlistSubscribeRequestSchema,
   type RestockSchedule,
+  type WaitlistBook,
   type WaitlistEntry,
   type WaitlistSubscribeRequest,
 } from "@sakura/contracts";
@@ -29,4 +31,16 @@ export function subscribeToWaitlist(request: WaitlistSubscribeRequest): Promise<
  */
 export function getRestockSchedule(): Promise<RestockSchedule> {
   return apiFetch("/waitlist/schedule", restockScheduleSchema, { revalidate: 300 });
+}
+
+/**
+ * GET /waitlist/books — the titles staff have put on offer.
+ *
+ * Revalidated at 300s to match the endpoint's `max-age`, same as the schedule
+ * above: this list is edited from the panel a few times a year, and the page
+ * that reads it is the one most likely to be opened by a crowd at once. The
+ * tradeoff is that a change staff make takes up to five minutes to appear.
+ */
+export function getWaitlistBooks(): Promise<WaitlistBook[]> {
+  return apiFetch("/waitlist/books", waitlistBooksSchema, { revalidate: 300 });
 }

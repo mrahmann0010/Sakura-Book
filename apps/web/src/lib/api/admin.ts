@@ -17,6 +17,7 @@ import {
   adminSessionSchema,
   adminShippingTermsSchema,
   adminUploadResultSchema,
+  adminWaitlistBooksSchema,
   adminWaitlistEntrySchema,
   adminWaitlistListSchema,
   adminWaitlistNotifyRequestSchema,
@@ -38,6 +39,8 @@ import {
   type AdminOrderTransitionRequest,
   type AdminOrderVerifyPaymentResult,
   type AdminPaymentNumbers,
+  type AdminWaitlistBook,
+  type WaitlistBooksUpdate,
   type AdminRecordRefundRequest,
   type AdminRegion,
   type AdminRegionCreate,
@@ -554,6 +557,25 @@ export function updateAdminRestockSchedule(
 ): Promise<AdminRestockSchedule> {
   return adminFetch("/admin/settings/restock", adminRestockScheduleSchema, {
     method: "PATCH",
+    body: changes,
+  });
+}
+
+/* --------------------------------------------------------------------------
+   Which titles the notify page offers to wait on. Read is any signed-in
+   admin; the write is ADMIN-only, like every other write under /admin/settings.
+   -------------------------------------------------------------------------- */
+
+export function getAdminWaitlistBooks(): Promise<AdminWaitlistBook[]> {
+  return adminFetch("/admin/settings/waitlist-books", adminWaitlistBooksSchema);
+}
+
+/** Replaces the selection outright — send every chosen id, not a delta. */
+export function updateAdminWaitlistBooks(
+  changes: WaitlistBooksUpdate,
+): Promise<AdminWaitlistBook[]> {
+  return adminFetch("/admin/settings/waitlist-books", adminWaitlistBooksSchema, {
+    method: "PUT",
     body: changes,
   });
 }

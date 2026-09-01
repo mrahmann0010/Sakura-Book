@@ -279,3 +279,48 @@ export const restockScheduleUpdateSchema = z.object({
 });
 
 export type RestockScheduleUpdate = z.infer<typeof restockScheduleUpdateSchema>;
+
+/* --------------------------------------------------------------------------
+   Which titles /notify offers
+   -------------------------------------------------------------------------- */
+
+/**
+ * One title as the selection screen lists it — every book in the catalog,
+ * each with whether it is currently offered on /notify.
+ *
+ * Carries `stockQuantity` and `availability` as context rather than as a rule:
+ * staff choosing what to collect names for want to see what is actually sold
+ * out, but the panel does not stop them offering an in-stock title (a reprint
+ * announced early is a real case) or force a sold-out one onto the list.
+ */
+export const adminWaitlistBookSchema = z.object({
+  id: z.string().uuid(),
+  slug: z.string(),
+  title: z.string(),
+  stockQuantity: z.number().int(),
+  availability: z.enum(["in_stock", "coming_soon", "pre_order"]),
+  isActive: z.boolean(),
+  waitlistEnabled: z.boolean(),
+});
+
+export type AdminWaitlistBook = z.infer<typeof adminWaitlistBookSchema>;
+
+export const adminWaitlistBooksSchema = z.array(adminWaitlistBookSchema);
+
+/**
+ * Replace the selection outright.
+ *
+ * The whole set of chosen ids, not a per-book toggle: the panel screen is a
+ * list of checkboxes over the catalog, and "these are the titles on offer" is
+ * the sentence staff are actually writing. A PATCH of one flag at a time would
+ * make a two-book selection two requests that can half-fail, leaving the page
+ * offering a list nobody chose.
+ *
+ * An empty array is legal and means "offer no titles" — the form then collects
+ * general-list signups only, which is what the shop-wide pause always meant.
+ */
+export const waitlistBooksUpdateSchema = z.object({
+  bookIds: z.array(z.string().uuid("Choose books from the list.")),
+});
+
+export type WaitlistBooksUpdate = z.infer<typeof waitlistBooksUpdateSchema>;

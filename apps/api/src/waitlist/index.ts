@@ -6,3 +6,4 @@
 export { WaitlistModule } from "./waitlist.module";
 export { WaitlistService } from "./waitlist.service";
 export { RestockScheduleService } from "./restock-schedule.service";
+export { WaitlistBooksService } from "./waitlist-books.service";

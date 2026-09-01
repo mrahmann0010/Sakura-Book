@@ -84,6 +84,24 @@ export const books = pgTable(
     isActive: boolean("is_active").notNull().default(true),
     isFeatured: boolean("is_featured").notNull().default(false),
 
+    /**
+     * Whether /notify offers this title as something to wait on.
+     *
+     * Staff pick the list from the panel, which is the whole reason this is a
+     * column rather than a constant: the page used to name one book by slug in
+     * its own source, so changing which titles were on offer took a developer
+     * and a deploy — on exactly the days (a reprint announced, a title selling
+     * out) when the list most wants moving.
+     *
+     * Separate from `isFeatured` and from stock. A shop may well want to
+     * collect names for a title that is *not* on the homepage, and it may not
+     * want to collect them for every title that happens to be at zero — "which
+     * books are worth waiting on" is an editorial decision, not one derivable
+     * from the other flags. Defaults false: a newly added book is not silently
+     * added to the waitlist page.
+     */
+    waitlistEnabled: boolean("waitlist_enabled").notNull().default(false),
+
     metaTitle: text("meta_title"),
     metaDescription: text("meta_description"),
 
@@ -116,6 +134,14 @@ export const books = pgTable(
       .on(table.createdAt.desc())
       .where(sql`${table.isActive}`),
     index("books_publisher_idx").on(table.publisherId),
+    /**
+     * The /notify page's own read: the handful of titles staff have put on
+     * offer, out of the whole catalog. Partial, because the rows that are *not*
+     * on offer are the overwhelming majority and are never selected by it.
+     */
+    index("books_waitlist_enabled_idx")
+      .on(table.title)
+      .where(sql`${table.waitlistEnabled}`),
   ],
 );
 

@@ -5,8 +5,7 @@ import { NotifyWaitlistForm } from "@/components/domain";
 import { Badge } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
-import { listBooks } from "@/lib/api/catalog";
-import { getRestockSchedule } from "@/lib/api/waitlist";
+import { getRestockSchedule, getWaitlistBooks } from "@/lib/api/waitlist";
 import { footerColumns } from "@/lib/books";
 import { localizeLinks, routes } from "@/lib/routes";
 import { localeAlternates } from "@/lib/site";
@@ -65,44 +64,24 @@ export async function generateMetadata({
   };
 }
 
-/* The one title this page is currently collecting signups for. Every waitlist
-   entry today is for it, so the form asks nobody to choose — see waitedOnBook()
-   and the `fixedBook` prop.
-
-   Matched by slug rather than id or title: a UUID here would say nothing about
-   which book it is, and titles get re-edited (this one carries a typo the
-   catalog has already shipped). When several titles are worth waiting on again,
-   this constant and waitedOnBook() go away and the picker comes back — the form
-   still supports it. */
-const WAITED_ON_SLUG = "kanji-redical-guide-book";
-
 /**
- * The single title the form signs people up for, or null to fall back.
+ * The titles staff have chosen to offer, or an empty list.
  *
- * Read from the public catalog rather than hardcoded alongside the slug, so the
- * title shown and snapshotted is whatever the catalog currently says — and so a
- * book that has been restocked or removed stops being offered on its own.
+ * This used to be a single slug hardcoded in this file's source, which meant
+ * changing which books were on offer took a developer and a deploy. It is now
+ * a per-book flag staff tick in the panel (Admin → Notify Page Books), so a
+ * shop with five titles can collect names for two of them.
  *
- * Null is a real state, not an error: the form then writes a general-list
- * signup, which is what the shop-wide pause always meant.
+ * Same swallowed-failure policy as reopenDate(): an empty list is a real state
+ * — the form then writes general-list signups, which is what the shop-wide
+ * pause always meant, and is strictly better than an error page on the one
+ * screen whose entire job is catching people the shop has already disappointed.
  */
-async function waitedOnBook(): Promise<{ id: string; title: string } | null> {
+async function offeredBooks(): Promise<{ id: string; title: string }[]> {
   try {
-    const list = await listBooks({ q: "", genres: [], sort: "recent", page: 1 }, { pageSize: 100 });
-
-    const book = list.items.find(
-      (item) =>
-        item.slug === WAITED_ON_SLUG &&
-        (item.stockQuantity === 0 || item.availability !== "in_stock"),
-    );
-
-    return book ? { id: book.id, title: book.title } : null;
+    return await getWaitlistBooks();
   } catch {
-    /* The API being down must not take the page with it. Without a book the
-       form still writes a general-list signup, which is strictly better than
-       an error page on the one screen whose entire job is catching people the
-       shop has already disappointed once. */
-    return null;
+    return [];
   }
 }
 
@@ -110,7 +89,11 @@ export default async function NotifyPage({ params }: PageProps<"/[locale]/notify
   const { locale } = (await params) as { locale: Locale };
   const { t } = await getTranslation(locale);
   const path = routes(locale);
-  const [book, reopensOn] = await Promise.all([waitedOnBook(), reopenDate()]);
+  const [books, reopensOn] = await Promise.all([offeredBooks(), reopenDate()]);
+  /* One title on offer is not a question worth asking: the form is told the
+     book is decided and draws no picker, exactly as the hardcoded single-book
+     version did. Two or more brings the picker back. */
+  const fixedBook = books.length === 1 ? books[0] : null;
   const reopensLabel = reopensOn ? formatReopenDate(reopensOn, locale) : null;
 
   return (
@@ -128,7 +111,7 @@ export default async function NotifyPage({ params }: PageProps<"/[locale]/notify
       }
     >
       <Shell className="py-14 lg:py-20">
-        <div className="mx-auto max-w-measure-lede text-center">
+        <div className="max-w-measure-lede mx-auto text-center">
           <Badge tone="accent" className="mx-auto">
             {t("notify.badge")}
           </Badge>
@@ -150,8 +133,8 @@ export default async function NotifyPage({ params }: PageProps<"/[locale]/notify
           <p className="text-body mt-5">{t("notify.intro")}</p>
         </div>
 
-        <div className="mx-auto mt-10 max-w-measure-lede">
-          <NotifyWaitlistForm locale={locale} fixedBook={book} />
+        <div className="max-w-measure-lede mx-auto mt-10">
+          <NotifyWaitlistForm locale={locale} books={books} fixedBook={fixedBook} />
         </div>
       </Shell>
     </PageShell>

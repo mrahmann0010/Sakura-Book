@@ -3,12 +3,14 @@ import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   waitlistSubscribeRequestSchema,
   type RestockSchedule,
+  type WaitlistBook,
   type WaitlistEntry,
 } from "@sakura/contracts";
 import type { Response } from "express";
 import { createZodDto } from "nestjs-zod";
 import { StrictThrottle } from "../common/throttling/strict-throttle.decorator";
 import { RestockScheduleService } from "./restock-schedule.service";
+import { WaitlistBooksService } from "./waitlist-books.service";
 import { WaitlistService } from "./waitlist.service";
 
 class WaitlistSubscribeDto extends createZodDto(waitlistSubscribeRequestSchema) {}
@@ -19,7 +21,24 @@ export class WaitlistController {
   constructor(
     private readonly waitlistService: WaitlistService,
     private readonly restockScheduleService: RestockScheduleService,
+    private readonly waitlistBooksService: WaitlistBooksService,
   ) {}
+
+  /**
+   * The titles /notify offers to wait on — chosen by staff in the panel.
+   *
+   * Public and read-only alongside `schedule` for the same reason: this is the
+   * option list on a page anyone can load. Same short shared cache too, and it
+   * earns it more than the date does — the list changes a few times a year and
+   * this endpoint is hit by everyone who opens the page.
+   */
+  @Get("books")
+  @ApiOperation({ summary: "The titles customers may join a waitlist for." })
+  async books(@Res({ passthrough: true }) response: Response): Promise<WaitlistBook[]> {
+    response.setHeader("Cache-Control", "public, max-age=300, s-maxage=3600");
+
+    return this.waitlistBooksService.offered();
+  }
 
   /**
    * When ordering reopens — the date the /notify page announces.
