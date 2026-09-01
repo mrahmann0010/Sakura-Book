@@ -126,7 +126,7 @@ export default function AdminNotifyBooksPage() {
               onChange={(event) => setFilter(event.target.value)}
             />
 
-            <div className="border-hairline divide-hairline flex flex-col divide-y rounded-md border">
+            <div className="rounded-control border-rule divide-rule flex flex-col divide-y border">
               {visible.length === 0 ? (
                 <p className="text-13.5 text-secondary p-4">No titles match that search.</p>
               ) : (

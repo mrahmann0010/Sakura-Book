@@ -69,7 +69,8 @@ export type NotifyWaitlistFormProps = {
   books?: { id: string; title: string }[];
   /**
    * A single title every signup through this form is for, with no choice
-   * offered — the picker is not drawn and `bookId` is submitted as this book.
+   * offered — the picker is not drawn, the title is stated instead, and
+   * `bookId` is submitted as this book.
    *
    * Distinct from a one-element `books`, which would still be a control asking
    * a question with one answer. Null (the API being unreadable, or the book
@@ -160,7 +161,7 @@ export function NotifyWaitlistForm({
         <p className="text-22 text-ink mt-4 font-serif leading-tight">
           {t("notify.form.successTitle")}
         </p>
-        <p className="text-body text-secondary mx-auto mt-3 max-w-measure-lede">
+        <p className="text-body text-secondary max-w-measure-lede mx-auto mt-3">
           {alreadyListed ? t("notify.form.alreadyListedBody") : t("notify.form.successBody")}
         </p>
 
@@ -202,6 +203,19 @@ export function NotifyWaitlistForm({
               </option>
             ))}
           </Select>
+        </div>
+      ) : null}
+
+      {/* One title on offer is not a question, but it is still a fact the
+          customer has to be told: they are joining a list *for a book*, and a
+          form that submits a title it never names asks people to trust a
+          choice they cannot see. A stated line rather than a disabled
+          `<select>` — a control that cannot be operated is a worse way to say
+          "this is already decided" than a sentence is. */}
+      {fixedBook ? (
+        <div className="rounded-control border-rule mb-5 border px-4 py-3">
+          <p className="text-caption text-secondary">{t("notify.form.book")}</p>
+          <p className="text-13.5 text-ink mt-1 font-medium">{fixedBook.title}</p>
         </div>
       ) : null}
 
@@ -253,7 +267,13 @@ export function NotifyWaitlistForm({
         </Notice>
       ) : null}
 
-      <Button type="submit" block loading={isSubmitting} loadingLabel={t("notify.form.submitting")} className="mt-6">
+      <Button
+        type="submit"
+        block
+        loading={isSubmitting}
+        loadingLabel={t("notify.form.submitting")}
+        className="mt-6"
+      >
         {t("notify.form.submit")}
       </Button>
     </Card>
