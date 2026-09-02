@@ -75,7 +75,7 @@ export class AdminWaitlistService {
     const where = adminWaitlistFilters(query);
     const offset = (query.page - 1) * query.pageSize;
 
-    const [rows, [{ total }], counts, sources] = await Promise.all([
+    const [rows, [{ total, totalQuantity }], counts, sources] = await Promise.all([
       this.dbService.db
         .select(this.selection)
         .from(waitlistEntries)
@@ -86,7 +86,10 @@ export class AdminWaitlistService {
         .offset(offset),
 
       this.dbService.db
-        .select({ total: sql<number>`count(*)::int` })
+        .select({
+          total: sql<number>`count(*)::int`,
+          totalQuantity: sql<number>`coalesce(sum(${waitlistEntries.quantity}), 0)::int`,
+        })
         .from(waitlistEntries)
         .where(where),
 
@@ -100,6 +103,7 @@ export class AdminWaitlistService {
       page: query.page,
       totalPages: Math.ceil(total / query.pageSize),
       counts,
+      totalQuantity,
       sources,
     };
   }

@@ -116,6 +116,9 @@ export type AdminWaitlistCounts = z.infer<typeof adminWaitlistCountsSchema>;
 
 export const adminWaitlistListSchema = paginated(adminWaitlistEntrySchema).extend({
   counts: adminWaitlistCountsSchema,
+  /** Sum of `quantity` across every entry matching the current filters
+   *  (not just the current page) — how many books the waiting list wants. */
+  totalQuantity: z.number().int().nonnegative(),
   /** Every distinct `source` present in the table, for the filter dropdown.
    *  Read from the data rather than from a constant, because `source` is free
    *  text on purpose — a new entry point must not need a deploy to be

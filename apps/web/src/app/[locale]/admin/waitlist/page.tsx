@@ -51,6 +51,7 @@ export default function AdminWaitlistPage() {
   const [tab, setTab] = useState<WaitlistStatus>("PENDING");
   const [items, setItems] = useState<AdminWaitlistEntry[]>([]);
   const [counts, setCounts] = useState<AdminWaitlistCounts>(EMPTY_COUNTS);
+  const [totalQuantity, setTotalQuantity] = useState(0);
   const [sources, setSources] = useState<string[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -90,6 +91,7 @@ export default function AdminWaitlistPage() {
 
       setItems(list.items);
       setCounts(list.counts);
+      setTotalQuantity(list.totalQuantity);
       setSources(list.sources);
       setTotal(list.total);
       setTotalPages(list.totalPages);
@@ -197,6 +199,7 @@ export default function AdminWaitlistPage() {
             <p className="text-13.5 text-secondary mt-1">
               {counts.PENDING} pending · {counts.NOTIFIED} notified · {counts.CONVERTED} converted
               {counts.CANCELLED > 0 ? ` · ${counts.CANCELLED} cancelled` : null}
+              {` · ${totalQuantity} book${totalQuantity === 1 ? "" : "s"} wanted`}
             </p>
           </div>
 
