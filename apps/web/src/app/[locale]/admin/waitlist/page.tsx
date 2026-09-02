@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { BellRing, BookMarked, CircleX, Clock3, PackageCheck } from "lucide-react";
 import type { AdminWaitlistCounts, AdminWaitlistEntry, WaitlistStatus } from "@sakura/contracts";
 
 import { AdminShell } from "@/components/admin/admin-shell";
@@ -196,11 +197,30 @@ export default function AdminWaitlistPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-h2 text-ink font-serif">Waitlist</h1>
-            <p className="text-13.5 text-secondary mt-1">
-              {counts.PENDING} pending · {counts.NOTIFIED} notified · {counts.CONVERTED} converted
-              {counts.CANCELLED > 0 ? ` · ${counts.CANCELLED} cancelled` : null}
-              {` · ${totalQuantity} book${totalQuantity === 1 ? "" : "s"} wanted`}
-            </p>
+            <div className="text-13.5 text-secondary mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+              <span className="inline-flex items-center gap-1.5">
+                <Clock3 className="h-3.5 w-3.5" aria-hidden />
+                {counts.PENDING} pending
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <BellRing className="h-3.5 w-3.5" aria-hidden />
+                {counts.NOTIFIED} notified
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <PackageCheck className="h-3.5 w-3.5" aria-hidden />
+                {counts.CONVERTED} converted
+              </span>
+              {counts.CANCELLED > 0 ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <CircleX className="h-3.5 w-3.5" aria-hidden />
+                  {counts.CANCELLED} cancelled
+                </span>
+              ) : null}
+              <span className="text-clay inline-flex items-center gap-1.5 font-medium">
+                <BookMarked className="h-3.5 w-3.5" aria-hidden />
+                {totalQuantity} book{totalQuantity === 1 ? "" : "s"} wanted
+              </span>
+            </div>
           </div>
 
           <div className="flex gap-2">
