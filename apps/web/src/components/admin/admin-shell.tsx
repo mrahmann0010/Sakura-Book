@@ -23,6 +23,10 @@ const NAV = [
   // the week, and the one that filters by destination division only makes sense
   // after the accept decision.
   { href: "/accepted-orders", label: "Accepted Orders" },
+  // Under the two order screens rather than beside Payment Settings: this is
+  // what the accepted orders above it added up to, read by whoever is
+  // reconciling the week — not a form for editing wallet numbers.
+  { href: "/payments", label: "Payments" },
   { href: "/books", label: "Books" },
   { href: "/waitlist", label: "Waitlist" },
   // Directly under Waitlist rather than with the other settings: the reopening

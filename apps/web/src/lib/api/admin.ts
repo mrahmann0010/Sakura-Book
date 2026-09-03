@@ -25,6 +25,7 @@ import {
   adminWaitlistUpdateRequestSchema,
   dashboardSchema,
   monthlyReportSchema,
+  paymentBreakdownSchema,
   type AdminBookCreateInput,
   type AdminBookDetail,
   type AdminBookList,
@@ -56,6 +57,8 @@ import {
   type AdminWaitlistUpdateRequest,
   type Dashboard,
   type MonthlyReport,
+  type PaymentBreakdown,
+  type PaymentBreakdownQuery,
   type AdminRestockSchedule,
   type PaymentNumbersUpdate,
   type RestockScheduleUpdate,
@@ -523,6 +526,29 @@ export function getAdminMonthlyReport(month: string): Promise<MonthlyReport> {
     `/admin/dashboard/report?month=${encodeURIComponent(month)}`,
     monthlyReportSchema,
   );
+}
+
+/* --------------------------------------------------------------------------
+   Payment breakdown.
+   -------------------------------------------------------------------------- */
+
+/**
+ * Accepted-order revenue for one window, split by component and by platform.
+ *
+ * The preset windows are named rather than sent as dates the browser worked
+ * out: their edges are shop-timezone day boundaries, and a client computing
+ * "last 7 days" off its own clock would ask for a window the dashboard does
+ * not agree with. `from`/`to` travel only for `custom`, which is the one case
+ * where the dates genuinely come from the reader.
+ */
+export function getAdminPaymentBreakdown(query: PaymentBreakdownQuery): Promise<PaymentBreakdown> {
+  const params = new URLSearchParams({ range: query.range });
+  if (query.range === "custom" && query.from && query.to) {
+    params.set("from", query.from);
+    params.set("to", query.to);
+  }
+
+  return adminFetch(`/admin/payments?${params.toString()}`, paymentBreakdownSchema);
 }
 
 /* --------------------------------------------------------------------------

@@ -17,6 +17,7 @@ import { AdminRolesGuard } from "./auth/admin-roles.guard";
 import { AdminBooksController, AdminBooksService, AdminUploadsController } from "./catalog";
 import { AdminDashboardController, AdminDashboardService } from "./dashboard";
 import { AdminOrdersController, AdminOrdersService } from "./orders";
+import { AdminPaymentsController, AdminPaymentsService } from "./payments";
 import { AdminReviewsController, AdminReviewsService } from "./reviews";
 import { AdminSettingsController, AdminSettingsService } from "./settings";
 import { AdminWaitlistController, AdminWaitlistService } from "./waitlist";
@@ -102,6 +103,7 @@ import { AdminWaitlistController, AdminWaitlistService } from "./waitlist";
     AdminOrdersController,
     AdminSettingsController,
     AdminDashboardController,
+    AdminPaymentsController,
     AdminBooksController,
     AdminUploadsController,
     AdminWaitlistController,
@@ -112,6 +114,7 @@ import { AdminWaitlistController, AdminWaitlistService } from "./waitlist";
     AdminOrdersService,
     AdminSettingsService,
     AdminDashboardService,
+    AdminPaymentsService,
     AdminBooksService,
     AdminWaitlistService,
     AdminReviewsService,

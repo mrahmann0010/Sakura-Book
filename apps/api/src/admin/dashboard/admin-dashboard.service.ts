@@ -295,7 +295,7 @@ export class AdminDashboardService {
  * would be a coincidence to depend on. Revenue is about whether payment has
  * been confirmed and not since reversed.
  */
-const REVENUE_STATUSES: readonly OrderStatus[] = Object.freeze([
+export const REVENUE_STATUSES: readonly OrderStatus[] = Object.freeze([
   "PAYMENT_CONFIRMED",
   "PROCESSING",
   "SHIPPED",
