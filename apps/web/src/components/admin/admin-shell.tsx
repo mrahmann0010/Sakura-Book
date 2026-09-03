@@ -29,17 +29,12 @@ const NAV = [
   { href: "/payments", label: "Payments" },
   { href: "/books", label: "Books" },
   { href: "/waitlist", label: "Waitlist" },
-  // Directly under Waitlist rather than with the other settings: the reopening
-  // date is the answer to the question every name on that list is waiting for,
-  // and staff reach for it while working the list, not while editing payment
-  // details.
-  { href: "/settings/restock", label: "Reopening Date" },
-  // Next to the reopening date for the same reason it sits here: both are
-  // edited while working the waitlist — one answers "when", the other "which
-  // books are we even collecting names for".
-  { href: "/settings/notify-books", label: "Notify Page Books" },
-  { href: "/settings/payments", label: "Payment Settings" },
-  { href: "/settings/shipping", label: "Shipping Settings" },
+  // Last, and one entry rather than four: payments, shipping, the reopening
+  // date, and the notify page's book list are all configuration, edited a few
+  // times a month. As separate entries they made this list ten items long and
+  // gave forms the same weight as Orders, which is opened many times a day.
+  // They are tabs inside the page now — see `settings-shell.tsx`.
+  { href: "/settings", label: "Shop Settings" },
 ] as const;
 
 /**

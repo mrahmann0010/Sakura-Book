@@ -3,10 +3,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { AdminWaitlistBook } from "@sakura/contracts";
 
-import { AdminShell } from "@/components/admin/admin-shell";
+import { useSettingsChecking } from "@/components/admin/settings-shell";
 import { Button, Checkbox, Input, Notice, Toast } from "@/components/ui";
 import { AdminApiError, getAdminWaitlistBooks, updateAdminWaitlistBooks } from "@/lib/api/admin";
-import { useAdminGate } from "@/lib/use-admin-gate";
 
 /**
  * Which titles the notify page offers to wait on.
@@ -21,9 +20,12 @@ import { useAdminGate } from "@/lib/use-admin-gate";
  * box changes nothing until Save, which is what makes "these are the two"
  * something staff can review before it reaches customers — and it means a
  * half-applied selection is not a state the page can be left in.
+ *
+ * The Notify Page Books tab of Shop Settings — the sidebar entry, the gate,
+ * and the page heading all live in `AdminSettingsShell`.
  */
 export default function AdminNotifyBooksPage() {
-  const { checking } = useAdminGate();
+  const checking = useSettingsChecking();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -135,82 +137,79 @@ export default function AdminNotifyBooksPage() {
   }
 
   return (
-    <AdminShell checking={checking}>
-      <div className="flex max-w-2xl flex-col gap-6">
-        <div>
-          <h1 className="text-h2 text-ink font-serif">Notify Page Books</h1>
-          <p className="text-13.5 text-secondary mt-1">
-            The titles customers can choose from on the notify page, where they join the restock
-            waitlist. Tick only the books you want offered — the rest of the catalog stays off the
-            page. With nothing ticked, the form still collects names for the general list; with
-            exactly one ticked, it names that book and asks no question.
-          </p>
-        </div>
+    <div className="flex max-w-2xl flex-col gap-6">
+      <p className="text-13.5 text-secondary">
+        The titles customers can choose from on the notify page, where they join the restock
+        waitlist. Tick only the books you want offered — the rest of the catalog stays off the page.
+        With nothing ticked, the form still collects names for the general list; with exactly one
+        ticked, it names that book and asks no question.
+      </p>
 
-        {loading ? (
-          <p className="text-13.5 text-secondary">Loading…</p>
-        ) : (
-          <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
-            <Input
-              label="Find a title"
-              placeholder="Search by title or slug"
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
-            />
+      {loading ? (
+        <p className="text-13.5 text-secondary">Loading…</p>
+      ) : (
+        <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
+          <Input
+            label="Find a title"
+            placeholder="Search by title or slug"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+          />
 
-            <div className="rounded-control border-rule divide-rule flex flex-col divide-y border">
-              {visible.length === 0 ? (
-                <p className="text-13.5 text-secondary p-4">No titles match that search.</p>
-              ) : (
-                visible.map((book) => (
-                  <Checkbox
-                    key={book.id}
-                    className="p-3"
-                    checked={selected.has(book.id)}
-                    onChange={(event) => toggle(book.id, event.target.checked)}
-                    /* Stock and status are shown but never enforced: offering a
+          <div className="rounded-control border-rule divide-rule flex flex-col divide-y border">
+            {visible.length === 0 ? (
+              <p className="text-13.5 text-secondary p-4">No titles match that search.</p>
+            ) : (
+              visible.map((book) => (
+                <Checkbox
+                  key={book.id}
+                  className="p-3"
+                  checked={selected.has(book.id)}
+                  onChange={(event) => toggle(book.id, event.target.checked)}
+                  /* Stock and status are shown but never enforced: offering a
                        title that is still in stock is a real choice (a reprint
                        announced early), and so is leaving a sold-out one off. */
-                    description={`${book.slug} · ${book.stockQuantity} in stock · ${
-                      book.availability === "in_stock"
-                        ? "available"
-                        : book.availability.replace("_", " ")
-                    }${book.isActive ? "" : " · inactive, hidden from the page"}`}
-                  >
-                    {book.title}
-                  </Checkbox>
-                ))
-              )}
-            </div>
+                  description={`${book.slug} · ${book.stockQuantity} in stock · ${
+                    book.availability === "in_stock"
+                      ? "available"
+                      : book.availability.replace("_", " ")
+                  }${book.isActive ? "" : " · inactive, hidden from the page"}`}
+                >
+                  {book.title}
+                </Checkbox>
+              ))
+            )}
+          </div>
 
-            {/* The error stays on the page rather than joining the toast: a
+          {/* The error stays on the page rather than joining the toast: a
                 failed save is a state the screen is in — the ticks are still
                 unsaved and still need acting on — not a thing that happened. */}
-            {error ? <Notice tone="error">{error}</Notice> : null}
+          {error ? <Notice tone="error">{error}</Notice> : null}
 
-            <p className="text-caption text-secondary">
-              {selected.size === 0
-                ? "No titles ticked — the notify page collects general-list signups only."
-                : `${selected.size} ${selected.size === 1 ? "title" : "titles"} ticked.`}
-              {hiddenSelected > 0
-                ? ` ${hiddenSelected} of them ${hiddenSelected === 1 ? "is" : "are"} hidden by the search and will still be saved.`
-                : null}
-              {dirty
-                ? " Not saved yet — the page still shows the previous list."
-                : " Saved. Changes reach the page within five minutes."}
-            </p>
+          <p className="text-caption text-secondary">
+            {selected.size === 0
+              ? "No titles ticked — the notify page collects general-list signups only."
+              : `${selected.size} ${selected.size === 1 ? "title" : "titles"} ticked.`}
+            {hiddenSelected > 0
+              ? ` ${hiddenSelected} of them ${hiddenSelected === 1 ? "is" : "are"} hidden by the search and will still be saved.`
+              : null}
+            {dirty
+              ? " Not saved yet — the page still shows the previous list."
+              : " Saved. Changes reach the page within five minutes."}
+          </p>
 
-            {/* Disabled until the ticks differ from what is saved: a Save that
+          {/* Disabled until the ticks differ from what is saved: a Save that
                 can be pressed on an unchanged form invites a pointless write,
                 and — because the confirmation is a toast — one that says
                 "Saved" without anything having changed. */}
-            <Button type="submit" size="sm" disabled={saving || !dirty} className="self-start">
-              {saving ? "Saving…" : "Save"}
-            </Button>
-          </form>
-        )}
-      </div>
+          <Button type="submit" size="sm" disabled={saving || !dirty} className="self-start">
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </form>
+      )}
 
+      {/* Fixed to the viewport, so it is unaffected by sitting inside the
+          settings shell's column rather than being a sibling of it. */}
       {toast ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 pb-8">
           <div className="shell flex justify-center">
@@ -218,6 +217,6 @@ export default function AdminNotifyBooksPage() {
           </div>
         </div>
       ) : null}
-    </AdminShell>
+    </div>
   );
 }

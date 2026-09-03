@@ -3,10 +3,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { AdminRestockSchedule } from "@sakura/contracts";
 
-import { AdminShell } from "@/components/admin/admin-shell";
+import { useSettingsChecking } from "@/components/admin/settings-shell";
 import { Button, Input } from "@/components/ui";
-import { AdminApiError, getAdminRestockSchedule, updateAdminRestockSchedule } from "@/lib/api/admin";
-import { useAdminGate } from "@/lib/use-admin-gate";
+import {
+  AdminApiError,
+  getAdminRestockSchedule,
+  updateAdminRestockSchedule,
+} from "@/lib/api/admin";
 
 /**
  * The reopening date announced on /notify.
@@ -20,9 +23,12 @@ import { useAdminGate } from "@/lib/use-admin-gate";
  * The field is a native date input, so the value it produces is already the
  * `YYYY-MM-DD` the contract wants — no parsing, and no month/day ambiguity
  * between whoever types it and whoever reads it back.
+ *
+ * The Reopening Date tab of Shop Settings — the sidebar entry, the gate, and
+ * the page heading all live in `AdminSettingsShell`.
  */
 export default function AdminRestockSettingsPage() {
-  const { checking } = useAdminGate();
+  const checking = useSettingsChecking();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,48 +84,43 @@ export default function AdminRestockSettingsPage() {
   }
 
   return (
-    <AdminShell checking={checking}>
-      <div className="flex max-w-lg flex-col gap-6">
-        <div>
-          <h1 className="text-h2 text-ink font-serif">Reopening Date</h1>
-          <p className="text-13.5 text-secondary mt-1">
-            The date shown on the notify page, where customers join the restock waitlist. It
-            applies to every book. Clear the field to take the announcement down — the page then
-            omits the line rather than showing a blank date.
+    <div className="flex max-w-lg flex-col gap-6">
+      <p className="text-13.5 text-secondary">
+        The date shown on the notify page, where customers join the restock waitlist. It applies to
+        every book. Clear the field to take the announcement down — the page then omits the line
+        rather than showing a blank date.
+      </p>
+
+      {loading ? (
+        <p className="text-13.5 text-secondary">Loading…</p>
+      ) : (
+        <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
+          <Input
+            type="date"
+            label="Ordering reopens on"
+            hint="Shown to customers in their own language — Bangla readers see the Bangla month name."
+            value={reopenDate}
+            onChange={(event) => setReopenDate(event.target.value)}
+          />
+
+          {error ? <p className="text-13.5 text-clay">{error}</p> : null}
+
+          <p className="text-caption text-secondary">
+            {reopenDate
+              ? "The notify page announces this date."
+              : "No date announced — the notify page omits the reopening line."}
+            {meta?.updatedByEmail || meta?.updatedAt
+              ? ` Last changed${meta.updatedByEmail ? ` by ${meta.updatedByEmail}` : ""}${
+                  meta.updatedAt ? ` on ${new Date(meta.updatedAt).toLocaleString()}` : ""
+                }.`
+              : null}
           </p>
-        </div>
 
-        {loading ? (
-          <p className="text-13.5 text-secondary">Loading…</p>
-        ) : (
-          <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
-            <Input
-              type="date"
-              label="Ordering reopens on"
-              hint="Shown to customers in their own language — Bangla readers see the Bangla month name."
-              value={reopenDate}
-              onChange={(event) => setReopenDate(event.target.value)}
-            />
-
-            {error ? <p className="text-13.5 text-clay">{error}</p> : null}
-
-            <p className="text-caption text-secondary">
-              {reopenDate
-                ? "The notify page announces this date."
-                : "No date announced — the notify page omits the reopening line."}
-              {meta?.updatedByEmail || meta?.updatedAt
-                ? ` Last changed${meta.updatedByEmail ? ` by ${meta.updatedByEmail}` : ""}${
-                    meta.updatedAt ? ` on ${new Date(meta.updatedAt).toLocaleString()}` : ""
-                  }.`
-                : null}
-            </p>
-
-            <Button type="submit" size="sm" disabled={saving} className="self-start">
-              {saving ? "Saving…" : "Save"}
-            </Button>
-          </form>
-        )}
-      </div>
-    </AdminShell>
+          <Button type="submit" size="sm" disabled={saving} className="self-start">
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </form>
+      )}
+    </div>
   );
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { AdminRegion, AdminShippingTerms } from "@sakura/contracts";
 
-import { AdminShell } from "@/components/admin/admin-shell";
+import { useSettingsChecking } from "@/components/admin/settings-shell";
 import { Button, Input, Select } from "@/components/ui";
 import {
   AdminApiError,
@@ -13,7 +13,6 @@ import {
   updateAdminShippingTerms,
 } from "@/lib/api/admin";
 import { bdDivisions } from "@/lib/bd-geo";
-import { useAdminGate } from "@/lib/use-admin-gate";
 
 type TermsForm = {
   originDivision: string;
@@ -42,9 +41,12 @@ function taka(cents: number | null): string {
  * historical, not literal, because the shop's shipment point moves. Changing
  * it here is what moves the zone boundary; the two region rows below are what
  * set the price on each side of it.
+ *
+ * The Shipping tab of Shop Settings — the sidebar entry, the gate, and the
+ * page heading all live in `AdminSettingsShell`.
  */
 export default function AdminShippingSettingsPage() {
-  const { checking } = useAdminGate();
+  const checking = useSettingsChecking();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,12 +77,16 @@ export default function AdminShippingSettingsPage() {
         setMeta(terms);
         setRegions(regionList);
         setRegionRates(
-          Object.fromEntries(regionList.map((region) => [region.slug, taka(region.deliveryCentsOverride)])),
+          Object.fromEntries(
+            regionList.map((region) => [region.slug, taka(region.deliveryCentsOverride)]),
+          ),
         );
       })
       .catch((cause: unknown) => {
         if (cancelled) return;
-        setError(cause instanceof AdminApiError ? cause.message : "Could not load shipping settings.");
+        setError(
+          cause instanceof AdminApiError ? cause.message : "Could not load shipping settings.",
+        );
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -105,7 +111,9 @@ export default function AdminShippingSettingsPage() {
       setForm(fromTerms(updated));
       setMeta(updated);
     } catch (cause) {
-      setError(cause instanceof AdminApiError ? cause.message : "Could not save shipping settings.");
+      setError(
+        cause instanceof AdminApiError ? cause.message : "Could not save shipping settings.",
+      );
     } finally {
       setSaving(false);
     }
@@ -123,109 +131,113 @@ export default function AdminShippingSettingsPage() {
       setRegions((prev) => prev.map((region) => (region.slug === slug ? updated : region)));
       setRegionRates((prev) => ({ ...prev, [slug]: taka(updated.deliveryCentsOverride) }));
     } catch (cause) {
-      setRegionsError(cause instanceof AdminApiError ? cause.message : "Could not save that region's rate.");
+      setRegionsError(
+        cause instanceof AdminApiError ? cause.message : "Could not save that region's rate.",
+      );
     } finally {
       setSavingSlug(null);
     }
   }
 
   return (
-    <AdminShell checking={checking}>
-      <div className="flex max-w-lg flex-col gap-10">
-        <div>
-          <h1 className="text-h2 text-ink font-serif">Shipping Settings</h1>
-          <p className="text-13.5 text-secondary mt-1">
-            The division the shop currently ships from, the postage rates on each side of it, and
-            when delivery is waived.
-          </p>
-        </div>
+    <div className="flex max-w-lg flex-col gap-10">
+      <p className="text-13.5 text-secondary">
+        The division the shop currently ships from, the postage rates on each side of it, and when
+        delivery is waived.
+      </p>
 
-        {loading ? (
-          <p className="text-13.5 text-secondary">Loading…</p>
-        ) : (
-          <>
-            <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
-              <Select
-                label="Shipping from"
-                hint="Customers in this division are charged the “inside” rate below; every other division is charged the “outside” rate."
-                value={form.originDivision}
-                onChange={(event) => setForm((prev) => ({ ...prev, originDivision: event.target.value }))}
-                options={bdDivisions.map((division) => ({ value: division.value, label: division.label }))}
-              />
-              <Input
-                label="Flat rate (৳)"
-                hint="Fallback postage when a customer's zone can't be resolved."
-                inputMode="decimal"
-                value={form.flatRateTaka}
-                onChange={(event) => setForm((prev) => ({ ...prev, flatRateTaka: event.target.value }))}
-              />
-              <Input
-                label="Free delivery threshold (৳)"
-                hint="Postage is waived once the subtotal reaches this."
-                inputMode="decimal"
-                value={form.freeDeliveryThresholdTaka}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, freeDeliveryThresholdTaka: event.target.value }))
-                }
-              />
+      {loading ? (
+        <p className="text-13.5 text-secondary">Loading…</p>
+      ) : (
+        <>
+          <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
+            <Select
+              label="Shipping from"
+              hint="Customers in this division are charged the “inside” rate below; every other division is charged the “outside” rate."
+              value={form.originDivision}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, originDivision: event.target.value }))
+              }
+              options={bdDivisions.map((division) => ({
+                value: division.value,
+                label: division.label,
+              }))}
+            />
+            <Input
+              label="Flat rate (৳)"
+              hint="Fallback postage when a customer's zone can't be resolved."
+              inputMode="decimal"
+              value={form.flatRateTaka}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, flatRateTaka: event.target.value }))
+              }
+            />
+            <Input
+              label="Free delivery threshold (৳)"
+              hint="Postage is waived once the subtotal reaches this."
+              inputMode="decimal"
+              value={form.freeDeliveryThresholdTaka}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, freeDeliveryThresholdTaka: event.target.value }))
+              }
+            />
 
-              {error ? <p className="text-13.5 text-clay">{error}</p> : null}
+            {error ? <p className="text-13.5 text-clay">{error}</p> : null}
 
-              {meta ? (
-                <p className="text-caption text-secondary">
-                  {meta.source === "database"
-                    ? `Saved${meta.updatedByEmail ? ` by ${meta.updatedByEmail}` : ""}${
-                        meta.updatedAt ? ` on ${new Date(meta.updatedAt).toLocaleString()}` : ""
-                      }.`
-                    : "Still using the environment's defaults — save to override."}
-                </p>
-              ) : null}
+            {meta ? (
+              <p className="text-caption text-secondary">
+                {meta.source === "database"
+                  ? `Saved${meta.updatedByEmail ? ` by ${meta.updatedByEmail}` : ""}${
+                      meta.updatedAt ? ` on ${new Date(meta.updatedAt).toLocaleString()}` : ""
+                    }.`
+                  : "Still using the environment's defaults — save to override."}
+              </p>
+            ) : null}
 
-              <Button type="submit" size="sm" disabled={saving} className="self-start">
-                {saving ? "Saving…" : "Save"}
-              </Button>
-            </form>
+            <Button type="submit" size="sm" disabled={saving} className="self-start">
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </form>
 
-            <div className="flex flex-col gap-4">
-              <div>
-                <h2 className="text-h4 text-ink font-serif">Region rates</h2>
-                <p className="text-13.5 text-secondary mt-1">
-                  What each zone is actually charged. Leave a field blank to fall back to the flat
-                  rate above.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                {regions.map((region) => (
-                  <div key={region.slug} className="flex items-end gap-3">
-                    <Input
-                      label={region.name}
-                      inputMode="decimal"
-                      placeholder={form.flatRateTaka}
-                      value={regionRates[region.slug] ?? ""}
-                      onChange={(event) =>
-                        setRegionRates((prev) => ({ ...prev, [region.slug]: event.target.value }))
-                      }
-                      fieldClassName="flex-1"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={savingSlug === region.slug}
-                      onClick={() => void saveRegion(region.slug)}
-                    >
-                      {savingSlug === region.slug ? "Saving…" : "Save"}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-
-              {regionsError ? <p className="text-13.5 text-clay">{regionsError}</p> : null}
+          <div className="flex flex-col gap-4">
+            <div>
+              <h2 className="text-h4 text-ink font-serif">Region rates</h2>
+              <p className="text-13.5 text-secondary mt-1">
+                What each zone is actually charged. Leave a field blank to fall back to the flat
+                rate above.
+              </p>
             </div>
-          </>
-        )}
-      </div>
-    </AdminShell>
+
+            <div className="flex flex-col gap-3">
+              {regions.map((region) => (
+                <div key={region.slug} className="flex items-end gap-3">
+                  <Input
+                    label={region.name}
+                    inputMode="decimal"
+                    placeholder={form.flatRateTaka}
+                    value={regionRates[region.slug] ?? ""}
+                    onChange={(event) =>
+                      setRegionRates((prev) => ({ ...prev, [region.slug]: event.target.value }))
+                    }
+                    fieldClassName="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={savingSlug === region.slug}
+                    onClick={() => void saveRegion(region.slug)}
+                  >
+                    {savingSlug === region.slug ? "Saving…" : "Save"}
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            {regionsError ? <p className="text-13.5 text-clay">{regionsError}</p> : null}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
