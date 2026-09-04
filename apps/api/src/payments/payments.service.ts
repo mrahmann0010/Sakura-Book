@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { isPostgresError, ResourceNotFoundError } from "../common/errors";
 import { DbService } from "../db/db.service";
 import type { Transaction } from "../db/db.types";
@@ -197,6 +197,56 @@ export class PaymentsService {
       status: "REFUNDED",
       rawResponse: (input.raw ?? {}) as Record<string, unknown>,
     });
+  }
+
+  /**
+   * Withdraw the successful payments recorded against an order.
+   *
+   * The half of a reverted confirmation that is easy to forget and expensive
+   * to skip. `record` keys idempotency on `(provider, provider_reference_id)`,
+   * and for both manual methods the reference *is* the order number — so a
+   * revert that left the row alone would leave the order permanently
+   * unconfirmable: the customer pays for real, staff press Confirm, the insert
+   * loses to the old row, `apply` reports a replay and the order sits in
+   * PENDING with nothing to say why.
+   *
+   * So the reference is rewritten as well as the status. `voided:` mirrors the
+   * `refund:` prefix `recordRefund` uses and for the same reason — it frees
+   * the natural key for the genuine confirmation that follows while keeping
+   * the original reference legible inside it. The row itself is kept, never
+   * deleted: what a customer's order looked like on the day is not the shop's
+   * to tidy away, and `VOIDED` says exactly what happened to it.
+   *
+   * Only `SUCCEEDED` rows are touched. A refund row is a different fact and a
+   * failed attempt was never a confirmation.
+   *
+   * `Transaction`, because voiding a payment and putting the order back to
+   * PENDING are one act: either alone is a worse state than the mistake being
+   * corrected.
+   *
+   * @returns how many rows were withdrawn — zero is normal for an order
+   *   confirmed by transition rather than by a recorded transfer.
+   */
+  async voidConfirmed(
+    orderId: string,
+    context: { reason: string; voidedBy: string },
+    tx: Transaction,
+  ): Promise<number> {
+    const voided = await tx
+      .update(payments)
+      .set({
+        status: "VOIDED",
+        providerReferenceId: sql`'voided:' || ${payments.id} || ':' || ${payments.providerReferenceId}`,
+        rawResponse: sql`coalesce(${payments.rawResponse}, '{}'::jsonb) || ${JSON.stringify({
+          voidedBy: context.voidedBy,
+          voidedAt: new Date().toISOString(),
+          voidReason: context.reason,
+        })}::jsonb`,
+      })
+      .where(and(eq(payments.orderId, orderId), eq(payments.status, "SUCCEEDED")))
+      .returning({ id: payments.id });
+
+    return voided.length;
   }
 
   /** Payments recorded against an order, oldest first. */

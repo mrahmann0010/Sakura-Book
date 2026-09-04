@@ -22,7 +22,16 @@ export type AuditAction =
    * duplicate-payment block was bypassed" should be a filter on this column,
    * not a text search through notes.
    */
-  | "DUPLICATE_RECEIPT_OVERRIDE";
+  | "DUPLICATE_RECEIPT_OVERRIDE"
+  /**
+   * A member of staff withdrew a payment confirmation made in error, giving a
+   * written reason.
+   *
+   * Its own action for the same reason as the override above: the shop should
+   * be able to ask "how often are we accepting payments that had not arrived"
+   * as a filter on this column rather than as a text search.
+   */
+  | "PAYMENT_REVERT";
 
 /**
  * Who acted.

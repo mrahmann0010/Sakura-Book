@@ -13,6 +13,7 @@ import {
   adminPaymentNumbersSchema,
   adminRestockScheduleSchema,
   adminRecordRefundRequestSchema,
+  adminRevertPaymentRequestSchema,
   adminRegionSchema,
   adminSessionSchema,
   adminShippingTermsSchema,
@@ -43,6 +44,7 @@ import {
   type AdminWaitlistBook,
   type WaitlistBooksUpdate,
   type AdminRecordRefundRequest,
+  type AdminRevertPaymentRequest,
   type AdminRegion,
   type AdminRegionCreate,
   type AdminRegionUpdate,
@@ -477,6 +479,23 @@ export function confirmAdminOrderPayment(
   const validated = validate(adminConfirmPaymentRequestSchema, request);
   return adminFetch(
     `/admin/orders/${encodeURIComponent(orderNumber)}/payments/confirm`,
+    adminOrderDetailSchema,
+    { method: "POST", body: validated },
+  );
+}
+
+/**
+ * Withdraw a confirmation made in error. ADMIN only — a STAFF token gets a
+ * 403, which the panel surfaces as the API's own message rather than hiding
+ * the control, so a staff member learns who to ask.
+ */
+export function revertAdminOrderPayment(
+  orderNumber: string,
+  request: AdminRevertPaymentRequest,
+): Promise<AdminOrderDetail> {
+  const validated = validate(adminRevertPaymentRequestSchema, request);
+  return adminFetch(
+    `/admin/orders/${encodeURIComponent(orderNumber)}/payments/revert`,
     adminOrderDetailSchema,
     { method: "POST", body: validated },
   );

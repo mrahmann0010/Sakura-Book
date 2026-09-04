@@ -190,7 +190,13 @@ export const adminPaymentSchema = z.object({
   provider: z.string(),
   referenceId: z.string().nullable(),
   amountCents: z.number().int(),
-  status: z.enum(["PENDING", "SUCCEEDED", "FAILED", "REFUNDED"]),
+  /**
+   * `VOIDED` is a confirmation that was withdrawn — see
+   * `adminRevertPaymentRequestSchema`. Distinct from `FAILED`: the money did
+   * not fail to arrive, it was never there, and someone said otherwise by
+   * mistake. The row survives the revert so the panel can show both moments.
+   */
+  status: z.enum(["PENDING", "SUCCEEDED", "FAILED", "REFUNDED", "VOIDED"]),
   recordedAt: z.string().datetime(),
 });
 
@@ -358,6 +364,41 @@ export const adminConfirmPaymentRequestSchema = z.object({
 });
 
 export type AdminConfirmPaymentRequest = z.infer<typeof adminConfirmPaymentRequestSchema>;
+
+/**
+ * Withdrawing a payment confirmation that should not have been made.
+ *
+ * The undo for the mistake this panel makes easiest: an order is accepted
+ * against a receipt that turns out not to exist, or the wrong row is clicked
+ * on a busy morning. Without it the only exits were to cancel the order —
+ * terminal, so a customer who is about to pay loses their order — or to record
+ * a refund for money that never arrived, which puts a fiction in the accounts.
+ *
+ * A reason is required, at the same length the duplicate-receipt override
+ * demands and for the same reason: this walks an order backwards through a
+ * lifecycle that otherwise only moves forward, and the sentence explaining why
+ * is the whole record of it. "mistake" is not a reason.
+ *
+ * There is no amount. Nothing is being paid or returned — the confirmation is
+ * being withdrawn in full, because a confirmation is not a thing that can be
+ * partly untrue.
+ */
+export const adminRevertPaymentRequestSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(15, "Explain why this payment confirmation is being withdrawn.")
+    .max(500),
+  /**
+   * Lands on the customer-visible status history, like every other transition
+   * note. Optional and separate from `reason`, which is staff-facing and goes
+   * to the audit log — "confirmed the wrong order number" is the truth and is
+   * not what the customer's tracking page should read.
+   */
+  note: z.string().trim().max(280).optional(),
+});
+
+export type AdminRevertPaymentRequest = z.infer<typeof adminRevertPaymentRequestSchema>;
 
 /**
  * Recording a refund that has been issued elsewhere.

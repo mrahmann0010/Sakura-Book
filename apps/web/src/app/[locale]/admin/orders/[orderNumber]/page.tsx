@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import type { AdminOrderDetail, AdminOrderVerifyPaymentResult, OrderStatus } from "@sakura/contracts";
+import type {
+  AdminOrderDetail,
+  AdminOrderVerifyPaymentResult,
+  OrderStatus,
+} from "@sakura/contracts";
 
 import { AdminShell } from "@/components/admin/admin-shell";
 import { ReceiptBadge, VerificationBadge } from "@/components/admin/payment-safety";
@@ -13,6 +17,7 @@ import {
   confirmAdminOrderPayment,
   getAdminOrder,
   recordAdminOrderRefund,
+  revertAdminOrderPayment,
   setAdminOrderNote,
   transitionAdminOrder,
   verifyAdminOrderPayment,
@@ -55,6 +60,19 @@ export default function AdminOrderDetailPage() {
   const [internalNote, setInternalNote] = useState("");
   const [internalNoteSaved, setInternalNoteSaved] = useState(false);
 
+  /**
+   * The reason for withdrawing a confirmation, and whether the control is
+   * open at all.
+   *
+   * Collapsed behind a link rather than sitting on the page as a button, for
+   * the same reason the duplicate-receipt box only appears when there is a
+   * duplicate: this walks an order backwards, and it should take a deliberate
+   * two steps to reach rather than sitting one mis-click away from "Mark as
+   * Processing".
+   */
+  const [reverting, setReverting] = useState(false);
+  const [revertReason, setRevertReason] = useState("");
+
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
 
@@ -79,15 +97,18 @@ export default function AdminOrderDetailPage() {
     };
   }, [checking, orderNumber]);
 
-  async function run(action: () => Promise<AdminOrderDetail>) {
+  /** @returns whether the action succeeded, for callers with their own form to clear. */
+  async function run(action: () => Promise<AdminOrderDetail>): Promise<boolean> {
     setBusy(true);
     setError(null);
     try {
       const updated = await action();
       setOrder(updated);
       setNote("");
+      return true;
     } catch (err) {
       setError(messageOf(err, "That action failed."));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -169,6 +190,25 @@ export default function AdminOrderDetailPage() {
     }
   }
 
+  async function revertPayment() {
+    const reason = revertReason.trim();
+    if (reason.length < 15) {
+      setError("Explain why this payment confirmation is being withdrawn.");
+      return;
+    }
+
+    const ok = await run(() => revertAdminOrderPayment(orderNumber, { reason }));
+
+    // Closed and cleared only on success. A failed revert that also threw away
+    // the typed reason would mean writing it out again just to find out it
+    // still fails — and the likeliest failure here is a STAFF token being told
+    // this is ADMIN-only, where the reason is still wanted, by someone else.
+    if (!ok) return;
+
+    setReverting(false);
+    setRevertReason("");
+  }
+
   async function refund() {
     const amountCents = Math.round(Number(refundAmount) * 100);
     if (!Number.isFinite(amountCents) || amountCents <= 0) {
@@ -198,8 +238,18 @@ export default function AdminOrderDetailPage() {
 
   const canRefund = order.allowedTransitions.includes("REFUNDED");
   const otherTransitions = order.allowedTransitions.filter(
-    (status) => status !== "REFUNDED" && !(order.status === "PENDING" && status === "CANCELLED"),
+    (status) =>
+      status !== "REFUNDED" &&
+      !(order.status === "PENDING" && status === "CANCELLED") &&
+      // The machine allows PAYMENT_CONFIRMED → PENDING, but it is not an
+      // ordinary "mark as" move: it withdraws the payment record too, and the
+      // API refuses it through the transition endpoint. It has its own control
+      // below, which asks for the reason that one requires.
+      status !== "PENDING",
   );
+
+  /** Only from a standing confirmation — see the machine's one backward edge. */
+  const canRevertPayment = order.allowedTransitions.includes("PENDING");
 
   return (
     <AdminShell checking={checking}>
@@ -320,8 +370,8 @@ export default function AdminOrderDetailPage() {
               <ul className="mt-4 flex flex-col gap-1">
                 {order.payments.map((payment, index) => (
                   <li key={index} className="text-13.5 text-secondary">
-                    {payment.provider} · {formatMoney(payment.amountCents, "en-GB", order.currency)} ·{" "}
-                    {payment.status} · {new Date(payment.recordedAt).toLocaleString()}
+                    {payment.provider} · {formatMoney(payment.amountCents, "en-GB", order.currency)}{" "}
+                    · {payment.status} · {new Date(payment.recordedAt).toLocaleString()}
                   </li>
                 ))}
               </ul>
@@ -420,6 +470,66 @@ export default function AdminOrderDetailPage() {
           </section>
         ) : null}
 
+        {canRevertPayment ? (
+          <section className="rounded-container border-rule bg-surface p-card border">
+            <h2 className="text-h4 text-ink font-serif">Confirmed by mistake?</h2>
+            <p className="text-13.5 text-secondary mt-1">
+              Withdraws the confirmation and puts the order back to Pending. The payment record is
+              voided so a real payment can be confirmed later, and the sale comes back off the
+              books. Stock stays reserved for this customer.
+            </p>
+            {/* Said plainly, because it is the one consequence the button
+                cannot undo and the one an operator will not think of. */}
+            <p className="text-13.5 text-clay-deep mt-2">
+              The customer was emailed when this order was confirmed. That email cannot be unsent —
+              call them.
+            </p>
+
+            {reverting ? (
+              <>
+                <Textarea
+                  label="Why is this being withdrawn? (staff-only, goes to the audit log)"
+                  value={revertReason}
+                  onChange={(event) => setRevertReason(event.target.value)}
+                  rows={2}
+                  className="mt-3"
+                  error={
+                    revertReason.trim().length > 0 && revertReason.trim().length < 15
+                      ? "Explain why this payment confirmation is being withdrawn."
+                      : undefined
+                  }
+                />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    loading={busy}
+                    onClick={() => void revertPayment()}
+                  >
+                    Withdraw confirmation
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setReverting(false);
+                      setRevertReason("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="mt-3">
+                <Button type="button" variant="secondary" onClick={() => setReverting(true)}>
+                  Revert payment confirmation
+                </Button>
+              </div>
+            )}
+          </section>
+        ) : null}
+
         {canRefund ? (
           <section className="rounded-container border-rule bg-surface p-card border">
             <h2 className="text-h4 text-ink font-serif">Refund</h2>
@@ -443,7 +553,12 @@ export default function AdminOrderDetailPage() {
                 placeholder="Reason"
                 className="rounded-control border-rule bg-page text-13.5 text-ink flex-1 border px-3 py-2"
               />
-              <Button type="button" variant="secondary" loading={busy} onClick={() => void refund()}>
+              <Button
+                type="button"
+                variant="secondary"
+                loading={busy}
+                onClick={() => void refund()}
+              >
                 Record refund
               </Button>
             </div>

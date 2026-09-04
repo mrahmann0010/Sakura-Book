@@ -169,6 +169,13 @@
       "when": 1788247277949,
       "tag": "0023_waitlist_enabled_books",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788497949226,
+      "tag": "0024_lowly_kinsey_walden",
+      "breakpoints": true
     }
   ]
 }
