@@ -9,6 +9,7 @@ import type {
   AdminOrderTransitionRequest,
   AdminOrderVerifyPaymentResult,
   AdminRecordRefundRequest,
+  AdminRevertPaymentRequest,
 } from "@sakura/contracts";
 import { eq, inArray, sql } from "drizzle-orm";
 import { InvalidInputError, ResourceNotFoundError } from "../../common/errors";
@@ -454,6 +455,24 @@ export class AdminOrdersService {
       await this.guardDuplicateReceipt(order, request.duplicateReceiptOverride, context);
     }
 
+    /* The machine allows PAYMENT_CONFIRMED → PENDING; this endpoint does not.
+       Walking that edge is only half of undoing a confirmation — the payment
+       row has to be voided and the sale un-counted in the same breath — and
+       `revertPaymentConfirmation` is the only thing that does all three. A
+       bare transition here would leave a SUCCEEDED payment row holding the
+       order number, which makes the order unconfirmable ever after, and it
+       would carry no reason.
+
+       Refused rather than silently redirected: this is an API, and quietly
+       performing a larger action than the one asked for is worse than saying
+       no. */
+    if (entering.includes("PENDING")) {
+      throw new InvalidInputError(
+        "Use the revert-payment endpoint to withdraw a confirmation; a plain transition would leave the payment record behind.",
+        { orderNumber, from, requested: request.status },
+      );
+    }
+
     const note = request.note ?? `Set to ${request.status} by ${context.actor.email}`;
 
     if (request.advance) {
@@ -548,6 +567,116 @@ export class AdminOrdersService {
       // usually means two people are working the same statement.
       this.logger.log(`Manual confirmation for ${orderNumber} was a replay; order unchanged`);
     }
+
+    return this.detail(orderNumber);
+  }
+
+  /**
+   * Withdraw a payment confirmation that should not have been made, and put
+   * the order back to PENDING.
+   *
+   * The undo for the mistake the desk makes most easily: an order accepted
+   * against a receipt that was never really there. Before this existed the
+   * only ways out were both wrong — cancel the order, which is terminal and
+   * costs a customer who is about to pay their place in the queue, or record a
+   * refund for money that never arrived, which puts a fiction in the accounts
+   * and cannot be told apart later from a real one.
+   *
+   * ## The three things it has to do together
+   *
+   * **Void the payment row**, which is the half that bites if it is skipped —
+   * see `PaymentsService.voidConfirmed` for why an order whose row is left
+   * alone can never be confirmed again.
+   *
+   * **Move the status**, through `transition` like everything else, so the
+   * history row and the guarded update come for free. Stock is untouched by
+   * construction: PENDING is not terminal, so `releasesStock` is false and the
+   * copies stay reserved for the customer whose order this still is.
+   *
+   * **Un-count the sale**, which is not done here at all — it is done by the
+   * rollup listener reacting to the status event, exactly as counting it was.
+   * That is why the event below is emitted rather than skipped: without it
+   * `units_sold` keeps the copies, and the next genuine confirmation counts
+   * them a second time.
+   *
+   * One transaction for the payment row, the status and the audit entry, in
+   * the atomic form `recordRefund` uses rather than the detached form
+   * `transition` uses. The reasoning is the same as the refund's: a voided
+   * payment whose audit entry was lost is a confirmation that vanished with
+   * nobody's name on it, and unlike an ordinary transition there is no second
+   * append-only record to reconstruct the *why* from.
+   *
+   * Refused unless the order is sitting exactly at PAYMENT_CONFIRMED. The
+   * machine enforces that on its own — PENDING is reachable from nowhere else
+   * — so an order already being packed gets `InvalidStatusTransitionError`,
+   * which is the honest answer: at that point the question is not "was this
+   * confirmed by mistake" but "where is the parcel", and that is a
+   * cancellation or a refund.
+   *
+   * **The customer has already been emailed.** The confirmation goes out the
+   * moment the order reaches PAYMENT_CONFIRMED and nothing can unsend it. No
+   * correction email is sent from here — someone at the shop calls. The
+   * reverted status and its note are on the tracking page, which is the most
+   * this can honestly claim to have done.
+   */
+  async revertPaymentConfirmation(
+    orderNumber: string,
+    request: AdminRevertPaymentRequest,
+    context: AdminContext,
+  ): Promise<AdminOrderDetail> {
+    const order = await this.requireOrder(orderNumber);
+
+    const note = request.note ?? "Payment confirmation withdrawn";
+
+    const voidedCount = await this.dbService.db.transaction(async (tx) => {
+      /* Before the transition, mirroring the order `confirmPayment` uses on
+         the way in: the payment record is settled first, and the order's
+         status is the consequence. If the transition is refused — someone
+         moved the order to PROCESSING a second ago — the whole thing rolls
+         back and the payment row is untouched. */
+      const voided = await this.paymentsService.voidConfirmed(
+        order.id,
+        { reason: request.reason, voidedBy: context.actor.email },
+        tx,
+      );
+
+      await this.ordersService.transition(order.id, "PENDING", tx, note);
+
+      await this.auditService.record(
+        {
+          ...auditContext(context),
+          action: "PAYMENT_REVERT",
+          entityType: "orders",
+          entityId: orderNumber,
+          before: { status: order.status },
+          // The count is on the record because zero is meaningful and looks
+          // identical to one from the outside: it means the order was
+          // confirmed by a transition rather than by a recorded transfer, so
+          // there was no payment row to withdraw.
+          after: { status: "PENDING", voidedPayments: voided },
+          note: request.reason,
+        },
+        tx,
+      );
+
+      return voided;
+    });
+
+    /* After commit, and by hand because this method owned the transaction —
+       the same rule and the same reason as `recordRefund`. This is also the
+       call that un-counts the sale: the rollup listens for exactly this event,
+       and without it `units_sold` keeps copies the shop has not sold. */
+    this.ordersService.announceStatusChange({
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      from: order.status,
+      to: "PENDING",
+    });
+
+    this.logger.warn(
+      `Payment confirmation on ${orderNumber} withdrawn by ${context.actor.email} ` +
+        `(${voidedCount} payment row(s) voided): ${request.reason}`,
+    );
 
     return this.detail(orderNumber);
   }

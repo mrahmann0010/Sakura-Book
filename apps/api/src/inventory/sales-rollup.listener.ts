@@ -122,6 +122,19 @@ export function directionFor(event: OrderStatusChangedEvent): 1 | -1 | 0 {
   // reach CANCELLED — read off the transition map, not guessed.
   if (event.to === "CANCELLED" && COUNTED_STATUSES.includes(event.from)) return -1;
 
+  /* A confirmation withdrawn. The only backward edge in the machine, and it
+     has to be un-counted here or `units_sold` ratchets upward every time a
+     mistaken acceptance is corrected — the order goes back to PENDING and is
+     later confirmed for real, counting the same copies twice.
+
+     Written as its own clause rather than folded into the one above, because
+     the rule there is "a cancellation of something already counted" and this
+     is not a cancellation. `from` is pinned to PAYMENT_CONFIRMED rather than
+     tested against COUNTED_STATUSES for the same care: PENDING is reachable
+     from nowhere else, and if that ever changes this should stop matching
+     until someone has thought about it. */
+  if (event.to === "PENDING" && event.from === "PAYMENT_CONFIRMED") return -1;
+
   return 0;
 }
 

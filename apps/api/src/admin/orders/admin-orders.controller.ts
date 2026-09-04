@@ -18,6 +18,7 @@ import {
   adminOrderQuerySchema,
   adminOrderTransitionRequestSchema,
   adminRecordRefundRequestSchema,
+  adminRevertPaymentRequestSchema,
   type AdminOrderDetail,
   type AdminOrderList,
   type AdminOrderVerifyPaymentResult,
@@ -32,6 +33,7 @@ class AdminOrderQueryDto extends createZodDto(adminOrderQuerySchema) {}
 class AdminOrderTransitionDto extends createZodDto(adminOrderTransitionRequestSchema) {}
 class AdminConfirmPaymentDto extends createZodDto(adminConfirmPaymentRequestSchema) {}
 class AdminRecordRefundDto extends createZodDto(adminRecordRefundRequestSchema) {}
+class AdminRevertPaymentDto extends createZodDto(adminRevertPaymentRequestSchema) {}
 class AdminInternalNoteDto extends createZodDto(adminInternalNoteRequestSchema) {}
 
 /**
@@ -176,7 +178,35 @@ export class AdminOrdersController {
   }
 
   /**
-   * Record a refund. **ADMIN only** — the one restricted route here.
+   * Withdraw a payment confirmation made in error. **ADMIN only.**
+   *
+   * Unlike confirming, which STAFF do all day from the bank app, this walks an
+   * order backwards through a lifecycle that otherwise only moves forward, and
+   * it erases a payment record. The line ADMIN_ROLES draws is "can this person
+   * change what a customer pays", and un-saying that a customer paid is on the
+   * far side of it. Confirming in error is recoverable by asking the owner;
+   * quietly un-confirming is how a paid order goes back to looking unpaid with
+   * nobody accountable.
+   */
+  @Post(":orderNumber/payments/revert")
+  @Roles("ADMIN")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Withdraw a payment confirmation and return the order to pending." })
+  async revertPayment(
+    @Param("orderNumber") orderNumber: string,
+    @Body() body: AdminRevertPaymentDto,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminOrderDetail> {
+    return this.adminOrdersService.revertPaymentConfirmation(
+      orderNumber,
+      body,
+      contextOf(admin, request),
+    );
+  }
+
+  /**
+   * Record a refund. **ADMIN only**, like the revert above.
    *
    * The line drawn in ADMIN_ROLES is "can this person change what a customer
    * pays", and a refund is the sharpest instance of it: it is the only action

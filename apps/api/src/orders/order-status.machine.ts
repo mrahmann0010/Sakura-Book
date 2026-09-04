@@ -21,9 +21,25 @@ export const ORDER_STATUS_TRANSITIONS: Readonly<Record<OrderStatus, readonly Ord
     // by either side while it does.
     PENDING: ["PAYMENT_CONFIRMED", "CANCELLED"],
 
-    // COD confirms on delivery, not before, so this is reachable from PENDING
-    // by a webhook or by an admin marking a bank transfer received.
-    PAYMENT_CONFIRMED: ["PROCESSING", "CANCELLED", "REFUNDED"],
+    /* COD confirms on delivery, not before, so this is reachable from PENDING
+       by a webhook or by an admin marking a bank transfer received.
+
+       PENDING is the one backward edge in the table, and it exists for exactly
+       one action: an admin undoing a confirmation they made by mistake. Before
+       it, the only ways out of a wrongly-confirmed order were to cancel it —
+       terminal, so the customer loses their order and their place — or to
+       record a refund for money that never arrived. Both lie about what
+       happened; this one says it plainly.
+
+       It is deliberately not reachable from PROCESSING or SHIPPED. Once the
+       parcel is being packed the question stops being "was this confirmed in
+       error" and becomes "where is the stock", which is a cancellation or a
+       refund. And it is not offered through the generic transition endpoint:
+       see `AdminOrdersService.transition`, which refuses it and points at
+       `revertPaymentConfirmation` — the only caller that also voids the
+       payment row and un-counts the sale. A bare status flip would leave both
+       behind. */
+    PAYMENT_CONFIRMED: ["PROCESSING", "CANCELLED", "REFUNDED", "PENDING"],
 
     // Picked and packed. Still cancellable — nothing has left the building.
     PROCESSING: ["SHIPPED", "CANCELLED"],

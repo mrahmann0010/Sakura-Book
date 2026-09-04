@@ -75,11 +75,19 @@ export const paymentVerificationOutcomeEnum = pgEnum(
   paymentVerificationOutcomes,
 );
 
+/**
+ * `VOIDED` is a payment that was recorded and then withdrawn — an admin
+ * confirmed an order by mistake and reverted it. Distinct from `FAILED`, which
+ * means the money did not arrive: a voided row means nobody ever should have
+ * said it did. The row is kept rather than deleted, because "this was
+ * confirmed at 09:12 and withdrawn at 09:20" is the fact worth having.
+ */
 export const paymentStatusEnum = pgEnum("payment_status", [
   "PENDING",
   "SUCCEEDED",
   "FAILED",
   "REFUNDED",
+  "VOIDED",
 ]);
 
 /**
@@ -131,4 +139,9 @@ export const auditActionEnum = pgEnum("audit_action", [
      with a written reason. Its own value so "every time the duplicate-payment
      block was bypassed" is an indexed filter rather than a text search. */
   "DUPLICATE_RECEIPT_OVERRIDE",
+  /* Staff withdrew a payment confirmation they had made in error, with a
+     written reason. Its own value for the same reason as the override above:
+     "how often are we confirming payments that had not arrived" is a question
+     the shop should be able to ask as a filter. */
+  "PAYMENT_REVERT",
 ]);
