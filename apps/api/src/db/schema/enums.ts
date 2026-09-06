@@ -129,6 +129,22 @@ export const waitlistStatusEnum = pgEnum("waitlist_status", [
 export const waitlistInviteModeEnum = pgEnum("waitlist_invite_mode", ["LOCKED", "OPEN"]);
 
 /**
+ * Whether the text carrying an invite link actually reached the gateway.
+ *
+ * Distinct from the entry's own `status`, which answers "have we told this
+ * person yet" and only ever moves forward. This answers the narrower,
+ * retryable question staff need on a restock morning: *this* send, the one
+ * that just ran, either left the building or did not. A FAILED row is the
+ * unit of "retry precisely these" — without it a partial batch is only
+ * legible in the HTTP response that reported it, which is gone the moment
+ * the tab closes.
+ */
+export const waitlistInviteSmsStatusEnum = pgEnum("waitlist_invite_sms_status", [
+  "SENT",
+  "FAILED",
+]);
+
+/**
  * A review's moderation state. Built from the contract's `reviewStatuses` for
  * the same reason `payment_verification_outcome` is built from its union: the
  * queue's tabs, the API's filter and this column must agree on what states

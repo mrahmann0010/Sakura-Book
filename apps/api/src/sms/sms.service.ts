@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { Env } from "../config/env.schema";
-import { SmsNotConfiguredError, SmsSendFailedError } from "./sms.errors";
+import { SmsGatewayUnreachableError, SmsNotConfiguredError, SmsSendFailedError } from "./sms.errors";
 import { SmsSettingsService } from "./sms-settings.service";
 
 /**
@@ -41,19 +41,43 @@ export class SmsService {
 
     const sim = simNumber ?? (await this.settings.simNumber()) ?? undefined;
 
-    const response = await fetch(`${baseUrl}/messages`, {
-      method: "POST",
-      headers: {
-        authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
-        "content-type": "application/json",
-        accept: "application/json",
-      },
-      body: JSON.stringify({
-        message,
-        phoneNumbers: [to],
-        ...(sim ? { simNumber: sim } : {}),
-      }),
-    });
+    /* Bounded on purpose — see SMS_GATEWAY_TIMEOUT_MS. `fetch` waits forever
+       by default, and forever is the one duration a caller sending to a batch
+       of people cannot survive: the failure stops being "this text didn't go"
+       and becomes "nothing after it was even attempted". */
+    const timeoutMs = this.config.get("SMS_GATEWAY_TIMEOUT_MS", { infer: true });
+
+    let response: Response;
+
+    try {
+      response = await fetch(`${baseUrl}/messages`, {
+        method: "POST",
+        headers: {
+          authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
+          "content-type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify({
+          message,
+          phoneNumbers: [to],
+          ...(sim ? { simNumber: sim } : {}),
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (error) {
+      /* An aborted fetch rejects with a TimeoutError; a refused or dropped
+         connection rejects with a bare TypeError. Both surface here as a
+         DomainError rather than a raw fetch rejection, so a caller catching
+         "the SMS didn't send" catches this too — an unwrapped TypeError
+         escaping a best-effort send would take down the request around it. */
+      const timedOut = error instanceof Error && error.name === "TimeoutError";
+
+      throw new SmsGatewayUnreachableError(
+        timedOut ? "timeout" : "network",
+        error instanceof Error ? error.message : String(error),
+        timeoutMs,
+      );
+    }
 
     if (!response.ok) {
       throw new SmsSendFailedError(response.status, await response.text());

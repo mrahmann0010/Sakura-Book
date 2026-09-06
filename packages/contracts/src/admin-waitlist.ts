@@ -95,6 +95,26 @@ export const adminWaitlistEntrySchema = z.object({
   convertedOrderNumber: z.string().nullable(),
   internalNote: z.string().nullable(),
 
+  /**
+   * How the last invite text went, or null if this entry has never been sent
+   * one.
+   *
+   * Deliberately separate from `status`/`notifiedAt`, which answer "has this
+   * person been reached, ever" and only move forward. This answers the
+   * retryable question a restock morning asks — did *that* send get through —
+   * and it is what lets staff re-text the three that failed instead of all
+   * twenty. Read from the database rather than from the invite response, so
+   * it survives the request that produced it.
+   */
+  inviteSms: z
+    .object({
+      status: z.enum(["SENT", "FAILED"]),
+      /** The gateway's complaint, truncated. Null on a successful send. */
+      error: z.string().nullable(),
+      at: z.string(),
+    })
+    .nullable(),
+
   signedUpAt: z.string(),
 });
 

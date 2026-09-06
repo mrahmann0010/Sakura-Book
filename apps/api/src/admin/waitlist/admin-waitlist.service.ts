@@ -66,6 +66,9 @@ export class AdminWaitlistService {
       status: waitlistEntries.status,
       notifiedAt: waitlistEntries.notifiedAt,
       internalNote: waitlistEntries.internalNote,
+      inviteSmsStatus: waitlistEntries.inviteSmsStatus,
+      inviteSmsError: waitlistEntries.inviteSmsError,
+      inviteSmsAt: waitlistEntries.inviteSmsAt,
       createdAt: waitlistEntries.createdAt,
       /* Left join: `converted_order_id` is nullable and the order it points
          at may have been deleted, and neither case should drop the waitlist

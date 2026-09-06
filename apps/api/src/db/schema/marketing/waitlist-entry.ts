@@ -1,7 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import { index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { books } from "../catalog/book";
-import { waitlistInviteModeEnum, waitlistStatusEnum } from "../enums";
+import { waitlistInviteModeEnum, waitlistInviteSmsStatusEnum, waitlistStatusEnum } from "../enums";
 import { orders } from "../orders/order";
 import { timestamps } from "../timestamps";
 
@@ -91,6 +91,31 @@ export const waitlistEntries = pgTable(
     // and every check re-reads it under a row lock so two racing redemptions
     // of the same link can't both succeed.
     inviteUsedAt: timestamp("invite_used_at", { withTimezone: true }),
+
+    // Did the last invite text actually reach the gateway, and if not, why.
+    //
+    // These three are the durable half of a bulk invite. The send loop
+    // already refuses to mark an entry NOTIFIED unless its SMS went out, so
+    // the entry's status never lies — but before these columns existed, a
+    // *failure* was reported only in the HTTP response and then forgotten.
+    // A closed tab or a timed-out request took the list of who to retry with
+    // it, leaving staff to either re-text all 20 or guess. Written on every
+    // attempt, success or failure, so the answer survives the request that
+    // produced it.
+    //
+    // Overwritten per attempt rather than appended to: the question staff
+    // ask is "did this person's invite get through", and a retry's outcome
+    // is the current answer. The audit log keeps the history.
+    inviteSmsStatus: waitlistInviteSmsStatusEnum("invite_sms_status"),
+
+    // The gateway's complaint, truncated — only ever set alongside a FAILED
+    // status. Staff-facing: "phone offline" and "bad credentials" call for
+    // very different responses, and both look identical without it.
+    inviteSmsError: text("invite_sms_error"),
+
+    // When that attempt ran. Distinct from `notifiedAt`, which records only
+    // the *first* successful contact and deliberately never restamps.
+    inviteSmsAt: timestamp("invite_sms_at", { withTimezone: true }),
 
     ...timestamps,
   },

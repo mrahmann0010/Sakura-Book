@@ -360,6 +360,25 @@ export const envSchema = z.object({
   SMS_GATEWAY_PASSWORD: z.string().min(1).optional(),
 
   /**
+   * How long a single gateway call may take before it is abandoned.
+   *
+   * `fetch` has no timeout of its own, and the thing on the other end is a
+   * phone: it sleeps, loses signal, and gets picked up mid-send. Without a
+   * bound, one unlucky call does not merely fail — it stops the clock, and
+   * every recipient queued behind it is never attempted while the browser
+   * waits for a response that will not come.
+   *
+   * Five seconds is a "something is wrong" threshold, not a normal-operation
+   * one: a healthy send through the gateway phone answers in well under a
+   * second, so anything approaching this is a phone that is asleep, off the
+   * network, or has the app killed — and the useful response to that is to
+   * fail fast, tell staff, and let them retry once the phone is awake. It is
+   * also short enough that a worst-case batch (every send timing out, five in
+   * flight) stays far inside any proxy's own cutoff.
+   */
+  SMS_GATEWAY_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(5_000),
+
+  /**
    * The store name written into every row of the Pathao bulk-order CSV.
    *
    * Configurable rather than a constant in the exporter because it is a fact

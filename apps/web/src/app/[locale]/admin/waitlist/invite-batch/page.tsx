@@ -23,6 +23,18 @@ const DEFAULT_COUNT = 20;
    Selection defaults to everyone in the fetched batch (checked), staff can
    uncheck the odd one, and Send reuses the same invite endpoint the main
    page's row-level "Invite" button already calls.
+
+   ## Recovering a partial send
+
+   A successful send moves its entry to NOTIFIED, so it drops out of this
+   PENDING-only list; a failed one stays put and reappears on the next
+   refresh. That alone makes "click Send again" roughly right — but only
+   roughly, because the refreshed list backfills to N with people who were
+   never attempted. The `inviteSms` column is what makes it exact: it records
+   each attempt in the database rather than only in the response, so after a
+   dropped connection or a closed tab the failures are still identifiable,
+   and "Select failed" re-sends to precisely those. Nobody who already got
+   their link gets a second one as the price of retrying.
    -------------------------------------------------------------------------- */
 
 export default function AdminWaitlistInviteBatchPage() {
@@ -83,6 +95,15 @@ export default function AdminWaitlistInviteBatchPage() {
     setSelected(allSelected ? new Set() : new Set(items.map((entry) => entry.id)));
   }
 
+  /* The precise retry. Reads the database's record of the last attempt, not
+     the last response, so it still works after a reload — which is the case
+     it exists for. */
+  const failed = items.filter((entry) => entry.inviteSms?.status === "FAILED");
+
+  function selectFailed() {
+    setSelected(new Set(failed.map((entry) => entry.id)));
+  }
+
   async function sendInvites() {
     if (selected.size === 0) return;
 
@@ -93,12 +114,12 @@ export default function AdminWaitlistInviteBatchPage() {
     try {
       const result = await inviteAdminWaitlist({ ids: [...selected] });
       const sent = result.results.filter((row) => row.sent).length;
-      const failed = result.results.length - sent;
+      const failedCount = result.results.length - sent;
 
       setNotice(
-        failed === 0
+        failedCount === 0
           ? `Sent ${sent} invite${sent === 1 ? "" : "s"}.`
-          : `Sent ${sent} invite${sent === 1 ? "" : "s"}, ${failed} failed — see the entries.`,
+          : `Sent ${sent} invite${sent === 1 ? "" : "s"}, ${failedCount} failed — use "Select failed" to retry just those.`,
       );
 
       await loadBatch();
@@ -152,9 +173,16 @@ export default function AdminWaitlistInviteBatchPage() {
                 {items.length} shown · {selected.size} selected · {selectedBookCount} book
                 {selectedBookCount === 1 ? "" : "s"} to deliver
               </span>
-              <Button type="button" loading={busy} disabled={selected.size === 0} onClick={() => void sendInvites()}>
-                {`Send ${selected.size} invite${selected.size === 1 ? "" : "s"}`}
-              </Button>
+              <div className="flex items-center gap-2">
+                {failed.length > 0 ? (
+                  <Button type="button" variant="secondary" onClick={selectFailed}>
+                    {`Select ${failed.length} failed`}
+                  </Button>
+                ) : null}
+                <Button type="button" loading={busy} disabled={selected.size === 0} onClick={() => void sendInvites()}>
+                  {`Send ${selected.size} invite${selected.size === 1 ? "" : "s"}`}
+                </Button>
+              </div>
             </div>
 
             <div className="rounded-container border-rule bg-surface overflow-x-auto border">
@@ -176,6 +204,7 @@ export default function AdminWaitlistInviteBatchPage() {
                     <th className="px-4 py-3 font-medium">Qty</th>
                     <th className="px-4 py-3 font-medium">Lang</th>
                     <th className="px-4 py-3 font-medium">Waiting on</th>
+                    <th className="px-4 py-3 font-medium">Last invite SMS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -203,11 +232,38 @@ export default function AdminWaitlistInviteBatchPage() {
                       <td className="text-secondary px-4 py-3">
                         {entry.bookTitle ?? <span className="text-muted">General</span>}
                       </td>
+                      <td className="px-4 py-3">
+                        {entry.inviteSms ? (
+                          <>
+                            <span
+                              className={
+                                entry.inviteSms.status === "FAILED"
+                                  ? "text-clay-deep block"
+                                  : "text-secondary block"
+                              }
+                            >
+                              {entry.inviteSms.status === "FAILED" ? "Failed" : "Sent"}
+                              {" · "}
+                              {new Date(entry.inviteSms.at).toLocaleTimeString()}
+                            </span>
+                            {/* The gateway's own words. "Phone asleep" and
+                                "bad credentials" need opposite responses and
+                                are indistinguishable without them. */}
+                            {entry.inviteSms.error ? (
+                              <span className="text-caption text-muted block">
+                                {entry.inviteSms.error}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {items.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="text-muted px-4 py-6 text-center">
+                      <td colSpan={9} className="text-muted px-4 py-6 text-center">
                         No pending sign-ups.
                       </td>
                     </tr>
