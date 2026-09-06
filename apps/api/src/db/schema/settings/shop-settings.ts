@@ -83,6 +83,36 @@ export const shopSettings = pgTable(
     reopenDate: date("reopen_date"),
 
     /**
+     * Which SIM slot the admin "Send SMS" panel (and any other transactional
+     * text) sends from. Null → let the gateway app's own sim_selection_mode
+     * setting decide, same "unconfigured" meaning as the other columns here.
+     *
+     * Lives here rather than as component state on the Send SMS page: a phone
+     * gateway's SIM choice is a fact about the shop's messaging setup, not
+     * something to reselect on every message, and a value only React
+     * remembers is gone on the next refresh — see the column's own history.
+     */
+    smsSimNumber: integer("sms_sim_number"),
+
+    /**
+     * How many hours a waitlist invite link stays redeemable after
+     * `WaitlistInviteService.issue()` mints it. Null → the service's own
+     * 48-hour default, same "unconfigured" meaning as every other column
+     * here — staff who never open this setting still get a sane TTL.
+     */
+    waitlistInviteTtlHours: integer("waitlist_invite_ttl_hours"),
+
+    /**
+     * Which language the invite SMS is written in. Null → "customer", the
+     * same meaning as every other column here except it names a fallback
+     * rather than a number: with no staff override, the text goes out in
+     * whatever locale the waitlist entry itself was submitted under (see
+     * `waitlistEntries.locale`). "en" or "bn" pins every invite to that
+     * language regardless of what the customer signed up under.
+     */
+    waitlistInviteLanguage: text("waitlist_invite_language"),
+
+    /**
      * Who last saved, and when.
      *
      * Denormalised alongside the FK for the same reason `audit_log` freezes
@@ -108,6 +138,18 @@ export const shopSettings = pgTable(
       "shop_settings_non_negative",
       sql`(${table.deliveryFlatCents} is null or ${table.deliveryFlatCents} >= 0)
           and (${table.freeDeliveryThresholdCents} is null or ${table.freeDeliveryThresholdCents} >= 0)`,
+    ),
+    check(
+      "shop_settings_sms_sim_number_range",
+      sql`${table.smsSimNumber} is null or ${table.smsSimNumber} between 1 and 3`,
+    ),
+    check(
+      "shop_settings_waitlist_invite_ttl_hours_range",
+      sql`${table.waitlistInviteTtlHours} is null or ${table.waitlistInviteTtlHours} between 1 and 720`,
+    ),
+    check(
+      "shop_settings_waitlist_invite_language_values",
+      sql`${table.waitlistInviteLanguage} is null or ${table.waitlistInviteLanguage} in ('en', 'bn', 'customer')`,
     ),
   ],
 );

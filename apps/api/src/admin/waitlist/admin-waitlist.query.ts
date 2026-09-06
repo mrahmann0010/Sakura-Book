@@ -1,5 +1,5 @@
 import type { AdminWaitlistQuery } from "@sakura/contracts";
-import { and, asc, desc, gte, ilike, inArray, lte, or, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, or, type SQL } from "drizzle-orm";
 import { waitlistEntries } from "../../db/schema";
 
 /**
@@ -50,6 +50,7 @@ export function adminWaitlistFilters(
   if (query.q) conditions.push(textMatch(query.q));
   if (query.source) conditions.push(ilike(waitlistEntries.source, query.source));
   if (query.locale) conditions.push(ilike(waitlistEntries.locale, query.locale));
+  if (query.bookId) conditions.push(eq(waitlistEntries.bookId, query.bookId));
 
   if (query.signedFrom) {
     conditions.push(gte(waitlistEntries.createdAt, new Date(`${query.signedFrom}T00:00:00.000Z`)));

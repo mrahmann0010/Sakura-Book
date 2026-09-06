@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { paginated, pageQuerySchema } from "./pagination";
-import { waitlistStatuses } from "./waitlist";
+import { waitlistInviteModes, waitlistStatuses } from "./waitlist";
 
 /* --------------------------------------------------------------------------
    The waitlist, as staff see it.
@@ -46,6 +46,10 @@ export const adminWaitlistQuerySchema = pageQuerySchema({ defaultPageSize: 50 })
 
   /** Exact match on the entry point, e.g. "restock-notify-page". */
   source: z.string().trim().min(1).max(64).optional(),
+
+  /** Narrow the list to one title's queue — what makes "first in line for
+   *  this book" a filter rather than a manual scroll through everyone. */
+  bookId: z.string().uuid().optional(),
 
   /** Exact match on the submission language, so an SMS blast can go out one
    *  language at a time rather than needing a translator per batch. */
@@ -170,3 +174,68 @@ export const adminWaitlistUpdateRequestSchema = z
   );
 
 export type AdminWaitlistUpdateRequest = z.infer<typeof adminWaitlistUpdateRequestSchema>;
+
+/* --------------------------------------------------------------------------
+   Inviting: mint a token per entry and text it out. Same ids-in-a-batch shape
+   as `notify` above, and the same request also covers a single-row send — the
+   panel's per-row "Invite" button just sends one id.
+   -------------------------------------------------------------------------- */
+
+export const adminWaitlistInviteRequestSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1, "Select at least one entry.").max(500),
+});
+
+export type AdminWaitlistInviteRequest = z.infer<typeof adminWaitlistInviteRequestSchema>;
+
+/** One entry's outcome. `sent: false` covers both "not eligible" (already
+ *  converted or cancelled) and "the gateway call failed" — `error` says which. */
+export const adminWaitlistInviteOutcomeSchema = z.object({
+  id: z.string().uuid(),
+  sent: z.boolean(),
+  mode: z.enum(waitlistInviteModes).nullable(),
+  expiresAt: z.string().nullable(),
+  error: z.string().optional(),
+});
+
+export type AdminWaitlistInviteOutcome = z.infer<typeof adminWaitlistInviteOutcomeSchema>;
+
+export const adminWaitlistInviteResultSchema = z.object({
+  results: z.array(adminWaitlistInviteOutcomeSchema),
+  invitedAt: z.string(),
+});
+
+export type AdminWaitlistInviteResult = z.infer<typeof adminWaitlistInviteResultSchema>;
+
+/* --------------------------------------------------------------------------
+   How long an issued invite stays redeemable — shop configuration, same
+   "singleton settings row" home as the SMS SIM choice (see admin-sms.ts).
+   -------------------------------------------------------------------------- */
+
+/** "customer" defers to whatever locale the waitlist entry was submitted
+ *  under; "en"/"bn" pin every invite to that language regardless. */
+export const waitlistInviteLanguages = ["en", "bn", "customer"] as const;
+export type WaitlistInviteLanguage = (typeof waitlistInviteLanguages)[number];
+
+export const adminWaitlistInviteSettingsSchema = z.object({
+  /** Null → WaitlistInviteSettingsService's own default (48 hours). */
+  ttlHours: z.number().int().min(1).max(720).nullable(),
+  /** Null → WaitlistInviteSettingsService's own default ("customer"). */
+  language: z.enum(waitlistInviteLanguages).nullable(),
+  updatedAt: z.string().nullable(),
+  updatedByEmail: z.string().nullable(),
+});
+
+export type AdminWaitlistInviteSettings = z.infer<typeof adminWaitlistInviteSettingsSchema>;
+
+export const adminWaitlistInviteSettingsUpdateSchema = z.object({
+  ttlHours: z
+    .number()
+    .int()
+    .min(1, "Enter at least 1 hour.")
+    .max(720, "Keep it under 720 hours (30 days)."),
+  language: z.enum(waitlistInviteLanguages),
+});
+
+export type AdminWaitlistInviteSettingsUpdate = z.infer<
+  typeof adminWaitlistInviteSettingsUpdateSchema
+>;

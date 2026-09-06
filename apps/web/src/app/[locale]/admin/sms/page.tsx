@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Button, Input, Notice, Textarea, Toast } from "@/components/ui";
@@ -11,10 +13,12 @@ import { useAdminGate } from "@/lib/use-admin-gate";
  * The whole feature: a phone number, a message, a Send button. Fires through
  * SmsService on the API side, which talks to whatever the gateway currently
  * points at (android-sms-gateway today) — nothing here knows or cares which
- * provider is behind it.
+ * provider is behind it, and which SIM it sends from is configured once in
+ * Shop Settings → SMS rather than chosen again on every message.
  */
 export default function AdminSmsPage() {
   const { checking } = useAdminGate();
+  const { locale } = useParams<{ locale: string }>();
 
   const [to, setTo] = useState("");
   const [message, setMessage] = useState("");
@@ -51,7 +55,12 @@ export default function AdminSmsPage() {
 
         <p className="text-13.5 text-secondary">
           Sends one text through the configured SMS gateway. Enter the number exactly as the
-          gateway expects it (e.g. with the country code) — nothing here reformats it.
+          gateway expects it (e.g. with the country code) — nothing here reformats it. Which SIM it
+          sends from is set in{" "}
+          <Link href={`/${locale}/admin/settings/sms`} className="text-clay underline">
+            Shop Settings → SMS
+          </Link>
+          .
         </p>
 
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">

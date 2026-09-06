@@ -2,13 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { BellRing, BookMarked, CircleX, Clock3, PackageCheck } from "lucide-react";
-import type { AdminWaitlistCounts, AdminWaitlistEntry, WaitlistStatus } from "@sakura/contracts";
+import type {
+  AdminWaitlistBook,
+  AdminWaitlistCounts,
+  AdminWaitlistEntry,
+  WaitlistStatus,
+} from "@sakura/contracts";
 
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Button } from "@/components/ui";
 import {
   AdminApiError,
   downloadAdminWaitlistCsv,
+  getAdminWaitlistBooks,
+  inviteAdminWaitlist,
   listAdminWaitlist,
   notifyAdminWaitlist,
   updateAdminWaitlistEntry,
@@ -61,6 +68,8 @@ export default function AdminWaitlistPage() {
   const [q, setQ] = useState("");
   const [source, setSource] = useState("");
   const [locale, setLocale] = useState("");
+  const [bookId, setBookId] = useState("");
+  const [books, setBooks] = useState<AdminWaitlistBook[]>([]);
 
   // The checked rows, by id. Cleared whenever the underlying list changes —
   // keeping a selection across a tab switch would mean the "Mark 12 notified"
@@ -79,6 +88,14 @@ export default function AdminWaitlistPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checking, tab]);
 
+  // The book filter's options — fetched once, not per tab switch.
+  useEffect(() => {
+    if (checking) return;
+    getAdminWaitlistBooks()
+      .then(setBooks)
+      .catch(() => undefined);
+  }, [checking]);
+
   async function load(activeTab: WaitlistStatus, pageNumber: number) {
     setError(null);
     try {
@@ -87,6 +104,7 @@ export default function AdminWaitlistPage() {
         q: q || undefined,
         source: source || undefined,
         locale: locale || undefined,
+        bookId: bookId || undefined,
         page: pageNumber,
       });
 
@@ -145,6 +163,34 @@ export default function AdminWaitlistPage() {
     }
   }
 
+  /** Shared by the bulk "Invite" button and the per-row one — a single id is
+   *  exactly what a per-row send is. */
+  async function invite(ids: string[]) {
+    if (ids.length === 0) return;
+
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const result = await inviteAdminWaitlist({ ids });
+      const sent = result.results.filter((row) => row.sent).length;
+      const failed = result.results.length - sent;
+
+      setNotice(
+        failed === 0
+          ? `Sent ${sent} invite${sent === 1 ? "" : "s"}.`
+          : `Sent ${sent} invite${sent === 1 ? "" : "s"}, ${failed} failed — see the entries.`,
+      );
+
+      await load(tab, page);
+    } catch (err) {
+      setError(err instanceof AdminApiError ? err.message : "Could not send those invites.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function setStatus(entry: AdminWaitlistEntry, status: WaitlistStatus) {
     setBusy(true);
     setError(null);
@@ -183,6 +229,7 @@ export default function AdminWaitlistPage() {
         q: q || undefined,
         source: source || undefined,
         locale: locale || undefined,
+        bookId: bookId || undefined,
       });
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Could not export the waitlist.");
@@ -225,9 +272,18 @@ export default function AdminWaitlistPage() {
 
           <div className="flex gap-2">
             {selected.size > 0 ? (
-              <Button type="button" loading={busy} onClick={() => void markNotified()}>
-                {`Mark ${selected.size} notified`}
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  loading={busy}
+                  onClick={() => void invite([...selected])}
+                >
+                  {`Invite ${selected.size}`}
+                </Button>
+                <Button type="button" variant="secondary" loading={busy} onClick={() => void markNotified()}>
+                  {`Mark ${selected.size} notified`}
+                </Button>
+              </>
             ) : null}
             <Button type="button" variant="secondary" disabled={busy} onClick={() => void exportCsv()}>
               Export CSV
@@ -277,6 +333,23 @@ export default function AdminWaitlistPage() {
             <option value="bn">Bangla</option>
             <option value="en">English</option>
             <option value="ja">Japanese</option>
+          </select>
+
+          {/* Narrows to one title's queue — the "first in line for this book"
+              view the Invite action is meant to be used from, since the list
+              is already oldest-first by default. */}
+          <select
+            value={bookId}
+            onChange={(event) => setBookId(event.target.value)}
+            className="rounded-control border-rule bg-surface text-13.5 text-ink border px-3 py-2"
+            aria-label="Book"
+          >
+            <option value="">All books</option>
+            {books.map((book) => (
+              <option key={book.id} value={book.id}>
+                {book.title}
+              </option>
+            ))}
           </select>
 
           {/* Populated from the data, not a constant — `source` is free text so
@@ -370,11 +443,21 @@ export default function AdminWaitlistPage() {
                     ) : null}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
+                    {entry.status !== "CANCELLED" && entry.status !== "CONVERTED" ? (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void invite([entry.id])}
+                        className="text-clay hover:text-clay-deep"
+                      >
+                        Invite
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       disabled={busy}
                       onClick={() => void editNote(entry)}
-                      className="text-clay hover:text-clay-deep"
+                      className="text-clay hover:text-clay-deep ml-3"
                     >
                       Note
                     </button>

@@ -13,6 +13,7 @@ export class AdminSmsService {
   constructor(private readonly sms: SmsService) {}
 
   async send(request: AdminSmsSendRequest): Promise<AdminSmsSendResult> {
+    // No simNumber here — SmsService falls back to the shop's saved setting.
     await this.sms.send(request.to, request.message);
     return { sentAt: new Date().toISOString() };
   }
