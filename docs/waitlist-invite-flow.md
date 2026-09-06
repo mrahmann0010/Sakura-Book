@@ -67,15 +67,17 @@ sequenceDiagram
 
   Staff->>Panel: filter by book, select rows, "Invite N"
   Panel->>Api: POST /admin/waitlist/invite { ids }
-  loop per id, sequentially
+  loop per id, 5 in flight at a time
     Api->>Api: skip CANCELLED / CONVERTED
     Api->>Api: mode = bookId ? LOCKED : OPEN
     Api->>Db: issue() — token, mode, expiresAt, used_at = null
-    Api->>Gw: sendInviteLink(phone, WEB_ORIGIN/{locale}/waitlist/invite/{token})
+    Api->>Gw: sendInviteLink(...), abandoned after SMS_GATEWAY_TIMEOUT_MS
     alt gateway accepted
+      Api->>Db: invite_sms_status = SENT, invite_sms_at
       Api->>Db: PENDING → NOTIFIED (notified_at kept if already set)
-    else send failed
-      Api-->>Panel: sent:false, token still issued
+    else send failed or gateway unreachable
+      Api->>Db: invite_sms_status = FAILED, invite_sms_error
+      Api-->>Panel: sent:false, token still issued, entry stays PENDING
     end
   end
   Api->>Api: audit "invited" with the ids that sent
@@ -147,6 +149,19 @@ Token state lives on the same row, independent of `status`:
 | `invite_mode`       | `issue()`             | `LOCKED` (book + qty fixed) or `OPEN` (any cart) |
 | `invite_expires_at` | `issue()`             | `now + ttlHours`, TTL from shop settings         |
 | `invite_used_at`    | `consume()`, in-order | Non-null = spent; re-issuing clears it           |
+| `invite_sms_status` | `recordSmsOutcome()`  | `SENT` / `FAILED` for the **last** attempt       |
+| `invite_sms_error`  | `recordSmsOutcome()`  | The gateway's reason, truncated. Null on success |
+| `invite_sms_at`     | `recordSmsOutcome()`  | When that attempt ran — not `notified_at`        |
+
+The three `invite_sms_*` columns are the recovery mechanism for a partial batch. Every
+attempt writes one, success or failure, **before** the HTTP response is built — so a
+closed tab or a timed-out request no longer takes the list of who to retry with it. The
+invite-batch page reads them back as a "Select N failed" button, which re-sends to
+exactly the failures rather than to everyone selected.
+
+They are deliberately distinct from `status` / `notified_at`, which answer "has this
+person ever been reached" and only move forward. These answer the retryable question:
+did *this* send get through. Overwritten per attempt — the audit log keeps history.
 
 `status` and `converted_order_id` are written by `markConverted()` in the same
 transaction, right after the order row exists.
@@ -165,4 +180,12 @@ transaction, right after the order row exists.
   someone who already ordered — in practice the eligibility check refuses them, since
   redeeming an invite now moves the entry to `CONVERTED`.
 - **The SMS is English only**, though `locale` is on the row and used to build the URL.
-- **Bulk invites send serially** inside the request, up to 500 ids.
+- **Bulk invites still send inside the request**, five at a time, up to 500 ids. Bounded
+  now rather than open-ended — each gateway call is abandoned after
+  `SMS_GATEWAY_TIMEOUT_MS` (5s by default), so a batch's worst case is
+  `ceil(n / 5) × timeout` rather than unbounded. At the ~20 per click a restock morning
+  actually sends that is comfortably inside any proxy cutoff; at several hundred it
+  would not be, and the answer there is a job table plus a worker, not a bigger loop.
+- **Delivery means "the gateway accepted it"**, not that it arrived. `invite_sms_status`
+  records what the Android gateway said; a carrier dropping the message afterwards is
+  invisible here, so a customer reporting a missing link is still re-invited by hand.

@@ -23,6 +23,9 @@ export type WaitlistRow = {
   internalNote: string | null;
   createdAt: Date;
   convertedOrderNumber: string | null;
+  inviteSmsStatus: "SENT" | "FAILED" | null;
+  inviteSmsError: string | null;
+  inviteSmsAt: Date | null;
 };
 
 export function toAdminWaitlistEntry(row: WaitlistRow): AdminWaitlistEntry {
@@ -39,6 +42,17 @@ export function toAdminWaitlistEntry(row: WaitlistRow): AdminWaitlistEntry {
     notifiedAt: row.notifiedAt?.toISOString() ?? null,
     convertedOrderNumber: row.convertedOrderNumber,
     internalNote: row.internalNote,
+    /* Both columns or neither: `recordSmsOutcome` writes status and timestamp
+       in one statement, so a status without an `at` would mean a row written
+       by something else — treated as "never sent" rather than half-rendered. */
+    inviteSms:
+      row.inviteSmsStatus && row.inviteSmsAt
+        ? {
+            status: row.inviteSmsStatus,
+            error: row.inviteSmsError,
+            at: row.inviteSmsAt.toISOString(),
+          }
+        : null,
     signedUpAt: row.createdAt.toISOString(),
   };
 }
@@ -54,6 +68,8 @@ const CSV_COLUMNS = [
   "Source",
   "Status",
   "Notified at",
+  "Invite SMS",
+  "Invite SMS at",
   "Converted order",
   "Internal note",
 ] as const;
@@ -95,6 +111,8 @@ export function toWaitlistCsv(entries: AdminWaitlistEntry[]): string {
         cell(entry.source),
         cell(entry.status),
         cell(entry.notifiedAt),
+        cell(entry.inviteSms?.status ?? null),
+        cell(entry.inviteSms?.at ?? null),
         cell(entry.convertedOrderNumber),
         cell(entry.internalNote),
       ].join(","),

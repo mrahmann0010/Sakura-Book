@@ -32,3 +32,26 @@ export class SmsSendFailedError extends DomainError {
     super(`SMS send failed (${status}): ${body.slice(0, 500)}`);
   }
 }
+
+/**
+ * The gateway never answered — the call timed out, or the connection failed
+ * outright (phone asleep, off the network, app killed, wrong host).
+ *
+ * Separate from `SmsSendFailedError` because the two mean different things to
+ * whoever reads the message: that one is the gateway rejecting a send and
+ * saying why, this one is nobody being home. Both are `DomainError`s with the
+ * same status, so callers treating SMS as best-effort still catch them
+ * identically — the distinction is for the human, not the control flow.
+ */
+export class SmsGatewayUnreachableError extends DomainError {
+  readonly code = "SMS_GATEWAY_UNREACHABLE";
+  readonly status = HttpStatus.BAD_GATEWAY;
+
+  constructor(reason: "timeout" | "network", detail: string, timeoutMs?: number) {
+    super(
+      reason === "timeout"
+        ? `SMS gateway did not respond within ${timeoutMs}ms — the phone may be asleep or off the network.`
+        : `SMS gateway unreachable: ${detail.slice(0, 200)}`,
+    );
+  }
+}
