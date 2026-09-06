@@ -37,3 +37,4 @@ export * from "./waitlist";
 export * from "./admin-waitlist";
 export * from "./review";
 export * from "./admin-review";
+export * from "./admin-sms";

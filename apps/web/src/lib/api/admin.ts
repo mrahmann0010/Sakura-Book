@@ -18,6 +18,8 @@ import {
   adminSessionSchema,
   adminShippingTermsSchema,
   adminUploadResultSchema,
+  adminSmsSendRequestSchema,
+  adminSmsSendResultSchema,
   adminWaitlistBooksSchema,
   adminWaitlistEntrySchema,
   adminWaitlistListSchema,
@@ -50,6 +52,8 @@ import {
   type AdminRegionUpdate,
   type AdminSession,
   type AdminShippingTerms,
+  type AdminSmsSendRequest,
+  type AdminSmsSendResult,
   type AdminUploadResult,
   type AdminWaitlistEntry,
   type AdminWaitlistList,
@@ -752,6 +756,14 @@ export function notifyAdminWaitlist(
 ): Promise<AdminWaitlistNotifyResult> {
   const validated = validate(adminWaitlistNotifyRequestSchema, request);
   return adminFetch("/admin/waitlist/notify", adminWaitlistNotifyResultSchema, {
+    method: "POST",
+    body: validated,
+  });
+}
+
+export function sendAdminSms(request: AdminSmsSendRequest): Promise<AdminSmsSendResult> {
+  const validated = validate(adminSmsSendRequestSchema, request);
+  return adminFetch("/admin/sms/send", adminSmsSendResultSchema, {
     method: "POST",
     body: validated,
   });

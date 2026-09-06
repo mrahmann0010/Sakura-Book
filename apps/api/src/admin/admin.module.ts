@@ -8,6 +8,7 @@ import { InventoryModule } from "../inventory";
 import { OrdersModule } from "../orders";
 import { PaymentNumbersModule, PaymentsModule } from "../payments";
 import { ShippingModule } from "../shipping";
+import { SmsModule } from "../sms";
 import { WaitlistModule } from "../waitlist";
 import { StorageModule } from "../storage";
 import { AdminAuthController } from "./auth/admin-auth.controller";
@@ -20,6 +21,7 @@ import { AdminOrdersController, AdminOrdersService } from "./orders";
 import { AdminPaymentsController, AdminPaymentsService } from "./payments";
 import { AdminReviewsController, AdminReviewsService } from "./reviews";
 import { AdminSettingsController, AdminSettingsService } from "./settings";
+import { AdminSmsController, AdminSmsService } from "./sms";
 import { AdminWaitlistController, AdminWaitlistService } from "./waitlist";
 
 /**
@@ -61,6 +63,8 @@ import { AdminWaitlistController, AdminWaitlistService } from "./waitlist";
     // For RestockScheduleService — the storefront read and the admin write of
     // the reopening date go through one service. See waitlist.module.ts.
     WaitlistModule,
+    // For SmsService — the admin "send SMS" panel below.
+    SmsModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env, true>) => ({
@@ -108,6 +112,7 @@ import { AdminWaitlistController, AdminWaitlistService } from "./waitlist";
     AdminUploadsController,
     AdminWaitlistController,
     AdminReviewsController,
+    AdminSmsController,
   ],
   providers: [
     AdminAuthService,
@@ -118,6 +123,7 @@ import { AdminWaitlistController, AdminWaitlistService } from "./waitlist";
     AdminBooksService,
     AdminWaitlistService,
     AdminReviewsService,
+    AdminSmsService,
     { provide: APP_GUARD, useClass: AdminJwtGuard },
     { provide: APP_GUARD, useClass: AdminRolesGuard },
   ],
