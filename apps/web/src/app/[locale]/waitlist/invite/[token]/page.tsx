@@ -46,12 +46,13 @@ export default async function WaitlistInvitePage({
       {invite.mode === "LOCKED" ? (
         <InviteCheckoutView
           locale={locale}
+          token={token}
           bookId={invite.bookId!}
           quantity={invite.quantity}
           prefill={prefill}
         />
       ) : (
-        <CheckoutView locale={locale} prefill={prefill} />
+        <CheckoutView locale={locale} prefill={prefill} inviteToken={token} />
       )}
     </PageShell>
   );

@@ -94,6 +94,27 @@ export class TransactionIdAlreadyUsedError extends BusinessRuleError {
 }
 
 /**
+ * A LOCKED waitlist invite was redeemed with a cart that isn't the one it
+ * reserved.
+ *
+ * A BusinessRuleError (422): the invite names one book at one quantity, and
+ * an order for anything else is not a race that a retry resolves — it is the
+ * wrong request. `WaitlistInviteInvalidError` (404) covers the token itself
+ * being wrong/expired/spent; this is the one case where the token is good but
+ * what it was spent on isn't.
+ */
+export class WaitlistInviteMismatchError extends BusinessRuleError {
+  readonly code = "WAITLIST_INVITE_MISMATCH";
+
+  constructor(bookId: string, quantity: number) {
+    super(`This invite is reserved for one book (${bookId}) at quantity ${quantity}`, {
+      bookId,
+      quantity,
+    });
+  }
+}
+
+/**
  * An order number could not be minted in ORDER_NUMBER_ATTEMPTS draws.
  *
  * Retryable in principle, hence a conflict — but in practice this means the

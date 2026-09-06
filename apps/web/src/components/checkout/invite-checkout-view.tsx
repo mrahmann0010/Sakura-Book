@@ -53,20 +53,20 @@ import { ShippingFields } from "./shipping-fields";
    or writes the cart slice. An OPEN invite doesn't need any of this: it
    renders the ordinary CheckoutView with contact fields pre-filled instead.
 
-   Token consumption — actually marking the invite spent — is not wired yet.
-   This places the order the same way a normal checkout does; the follow-up
-   is threading the token through so order creation calls
-   WaitlistInviteService.consume() in the same transaction. That follow-up is
-   also what will add the token back in here, to send with the order.
+   `token` travels with the order and is spent by
+   WaitlistInviteService.consume() in the same transaction that creates it —
+   see CheckoutService.writeOrder.
    -------------------------------------------------------------------------- */
 
 export function InviteCheckoutView({
   locale,
+  token,
   bookId,
   quantity,
   prefill,
 }: {
   locale: Locale;
+  token: string;
   bookId: string;
   quantity: number;
   prefill: Pick<CheckoutValues, "fullName" | "email" | "phone">;
@@ -166,7 +166,7 @@ export function InviteCheckoutView({
 
     try {
       const order = await placeOrderRequest(
-        { items: [{ bookId, quantity }], customer: values },
+        { items: [{ bookId, quantity }], customer: values, inviteToken: token },
         crypto.randomUUID(),
       );
 

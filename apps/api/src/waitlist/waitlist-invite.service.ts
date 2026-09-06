@@ -146,4 +146,31 @@ export class WaitlistInviteService {
     // that has a live, unexpired token.
     return row ? { ...row, mode: row.mode! } : null;
   }
+
+  /**
+   * Record which order an invite became, and move the entry to CONVERTED.
+   *
+   * The other half of `consume`. Spending a token proves the customer came
+   * back; it does not say what they bought, because at the moment the token
+   * is spent the order row does not exist yet. So this runs after the insert,
+   * inside the same transaction — an entry is never marked converted against
+   * an order that rolled back, and an order placed through an invite never
+   * commits leaving its entry sitting in NOTIFIED. Without it the Converted
+   * tab reads zero forever and "how many of our 200 invites became orders?"
+   * is a spreadsheet exercise in matching phone numbers.
+   *
+   * `status` is set unconditionally rather than through the invite's own
+   * guard: `consume` already established that this entry held a live token,
+   * and it hands back the id precisely so the caller can finish the job.
+   */
+  async markConverted(
+    entryId: string,
+    orderId: string,
+    tx: PostgresJsDatabase<typeof schema> = this.dbService.db,
+  ): Promise<void> {
+    await tx
+      .update(waitlistEntries)
+      .set({ status: "CONVERTED", convertedOrderId: orderId, updatedAt: sql`now()` })
+      .where(eq(waitlistEntries.id, entryId));
+  }
 }

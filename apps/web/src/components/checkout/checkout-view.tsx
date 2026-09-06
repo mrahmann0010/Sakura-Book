@@ -62,6 +62,7 @@ import { ShippingFields } from "./shipping-fields";
 export function CheckoutView({
   locale,
   prefill,
+  inviteToken,
 }: {
   locale: Locale;
   /**
@@ -70,6 +71,13 @@ export function CheckoutView({
    * shopper's own; only these three fields are known ahead of time.
    */
   prefill?: Partial<Pick<CheckoutValues, "fullName" | "email" | "phone">>;
+  /**
+   * Set only when this checkout came from an OPEN waitlist invite link —
+   * sent with the order so WaitlistInviteService.consume() spends it
+   * atomically with the order that used it. Absent for an ordinary cart
+   * checkout, which has no invite to spend.
+   */
+  inviteToken?: string;
 }) {
   const { t } = useTranslation();
   const path = routes(locale);
@@ -196,7 +204,7 @@ export function CheckoutView({
 
     try {
       const order = await placeOrderRequest(
-        { items: cart.entries, customer: values },
+        { items: cart.entries, customer: values, ...(inviteToken ? { inviteToken } : {}) },
         crypto.randomUUID(),
       );
 
