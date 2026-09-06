@@ -73,6 +73,10 @@ export default function AdminWaitlistInviteBatchPage() {
     });
   }
 
+  const selectedBookCount = items
+    .filter((entry) => selected.has(entry.id))
+    .reduce((total, entry) => total + entry.quantity, 0);
+
   const allSelected = items.length > 0 && items.every((entry) => selected.has(entry.id));
 
   function toggleAll() {
@@ -145,7 +149,8 @@ export default function AdminWaitlistInviteBatchPage() {
           <>
             <div className="flex items-center justify-between">
               <span className="text-13.5 text-secondary">
-                {items.length} shown · {selected.size} selected
+                {items.length} shown · {selected.size} selected · {selectedBookCount} book
+                {selectedBookCount === 1 ? "" : "s"} to deliver
               </span>
               <Button type="button" loading={busy} disabled={selected.size === 0} onClick={() => void sendInvites()}>
                 {`Send ${selected.size} invite${selected.size === 1 ? "" : "s"}`}
