@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import type { Env } from "../config/env.schema";
 import { SmsGatewayUnreachableError, SmsNotConfiguredError, SmsSendFailedError } from "./sms.errors";
 import { SmsSettingsService } from "./sms-settings.service";
+import { toE164Bd } from "./phone";
 
 /**
  * A thin client for the Android SMS Gateway app (capcom6/android-sms-gateway)
@@ -59,7 +60,10 @@ export class SmsService {
         },
         body: JSON.stringify({
           message,
-          phoneNumbers: [to],
+          // Normalised here, not by callers: the gateway takes E.164 only
+          // and answers anything else with `400 invalid phone number`, while
+          // the numbers we hold were typed freely at signup. See toE164Bd.
+          phoneNumbers: [toE164Bd(to)],
           ...(sim ? { simNumber: sim } : {}),
         }),
         signal: AbortSignal.timeout(timeoutMs),
