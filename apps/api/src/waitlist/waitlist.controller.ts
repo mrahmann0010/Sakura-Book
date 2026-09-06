@@ -1,16 +1,18 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Res } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Res } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   waitlistSubscribeRequestSchema,
   type RestockSchedule,
   type WaitlistBook,
   type WaitlistEntry,
+  type WaitlistInvite,
 } from "@sakura/contracts";
 import type { Response } from "express";
 import { createZodDto } from "nestjs-zod";
 import { StrictThrottle } from "../common/throttling/strict-throttle.decorator";
 import { RestockScheduleService } from "./restock-schedule.service";
 import { WaitlistBooksService } from "./waitlist-books.service";
+import { WaitlistInviteService } from "./waitlist-invite.service";
 import { WaitlistService } from "./waitlist.service";
 
 class WaitlistSubscribeDto extends createZodDto(waitlistSubscribeRequestSchema) {}
@@ -22,6 +24,7 @@ export class WaitlistController {
     private readonly waitlistService: WaitlistService,
     private readonly restockScheduleService: RestockScheduleService,
     private readonly waitlistBooksService: WaitlistBooksService,
+    private readonly waitlistInviteService: WaitlistInviteService,
   ) {}
 
   /**
@@ -70,5 +73,21 @@ export class WaitlistController {
   @ApiOperation({ summary: "Join the restock waitlist." })
   async subscribe(@Body() body: WaitlistSubscribeDto): Promise<WaitlistEntry> {
     return this.waitlistService.subscribe(body);
+  }
+
+  /**
+   * Redeem a waitlist invite link — what a checkout page calls on load to
+   * find out whose invite this is and pre-fill itself. Read-only: this does
+   * not spend the token, so reloading the page or opening it twice is safe.
+   * The actual, single-use check happens where the order is created.
+   *
+   * Throttled like `subscribe` — an unauthenticated endpoint that answers
+   * "does this identifier exist", the exact shape `StrictThrottle` exists for.
+   */
+  @Get("invite/:token")
+  @StrictThrottle()
+  @ApiOperation({ summary: "Look up an invite token, without spending it." })
+  async invite(@Param("token") token: string): Promise<WaitlistInvite> {
+    return this.waitlistInviteService.redeem(token);
   }
 }

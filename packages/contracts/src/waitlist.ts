@@ -128,3 +128,24 @@ export const restockScheduleSchema = z.object({
 });
 
 export type RestockSchedule = z.infer<typeof restockScheduleSchema>;
+
+/* --------------------------------------------------------------------------
+   Invite tokens — "your turn to order".
+
+   A waitlist entry that has been invited carries a single-use token in its
+   link. This is the customer's view of redeeming one: enough to pre-fill and
+   lock the checkout form, nothing more.
+   -------------------------------------------------------------------------- */
+
+export const waitlistInviteSchema = z.object({
+  fullName: z.string(),
+  email: z.string(),
+  phone: z.string(),
+  /** The snapshotted title, or null for the general list. */
+  bookTitle: z.string().nullable(),
+  quantity: z.number().int(),
+  /** When this link stops working. ISO 8601. */
+  expiresAt: z.string(),
+});
+
+export type WaitlistInvite = z.infer<typeof waitlistInviteSchema>;
