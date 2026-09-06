@@ -9,6 +9,14 @@ import { waitlistEntries } from "../db/schema";
 import { WaitlistInviteInvalidError } from "./waitlist-invite.errors";
 
 /**
+ * However many books a waitlist entry asked for, an invite never entitles
+ * its holder to order more than this many — a customer who waitlisted for 6
+ * still only ever gets to check out with 3. Applied wherever an entry's raw
+ * `quantity` would otherwise reach the customer or the order it places.
+ */
+const MAX_INVITE_QUANTITY = 3;
+
+/**
  * The invite-token mechanism: issuing, reading, and single-use redemption.
  *
  * Deliberately separate from `WaitlistService` (which owns signup) and from
@@ -89,7 +97,7 @@ export class WaitlistInviteService {
       phone: entry.customerPhone,
       bookId: entry.bookId,
       bookTitle: entry.bookTitleSnapshot,
-      quantity: entry.quantity,
+      quantity: Math.min(entry.quantity, MAX_INVITE_QUANTITY),
       // Non-null: issue() always sets mode alongside the token this query
       // just matched on.
       mode: entry.inviteMode!,
@@ -144,7 +152,9 @@ export class WaitlistInviteService {
     // mode is non-null by the same invariant redeem() relies on: it is only
     // ever null before an invite exists, and this UPDATE only matched a row
     // that has a live, unexpired token.
-    return row ? { ...row, mode: row.mode! } : null;
+    return row
+      ? { ...row, quantity: Math.min(row.quantity, MAX_INVITE_QUANTITY), mode: row.mode! }
+      : null;
   }
 
   /**
