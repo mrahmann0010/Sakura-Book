@@ -1,0 +1,2 @@
+ALTER TABLE "shop_settings" ADD COLUMN "sms_sim_number" integer;--> statement-breakpoint
+ALTER TABLE "shop_settings" ADD CONSTRAINT "shop_settings_sms_sim_number_range" CHECK ("shop_settings"."sms_sim_number" is null or "shop_settings"."sms_sim_number" between 1 and 3);

@@ -6,7 +6,11 @@ import type {
   AdminRegionUpdate,
   AdminRestockSchedule,
   AdminShippingTerms,
+  AdminSmsSettings,
+  AdminSmsSettingsUpdate,
   AdminWaitlistBook,
+  AdminWaitlistInviteSettings,
+  AdminWaitlistInviteSettingsUpdate,
   PaymentNumbersUpdate,
   RestockScheduleUpdate,
   ShippingTermsUpdate,
@@ -17,7 +21,12 @@ import { DbService } from "../../db/db.service";
 import { UnitsSoldReconciler } from "../../inventory";
 import { PaymentNumbersService } from "../../payments";
 import { RegionsService, ShippingTermsService } from "../../shipping";
-import { RestockScheduleService, WaitlistBooksService } from "../../waitlist";
+import { SmsSettingsService } from "../../sms";
+import {
+  RestockScheduleService,
+  WaitlistBooksService,
+  WaitlistInviteSettingsService,
+} from "../../waitlist";
 import { AuditService } from "../../audit";
 import type { AdminContext } from "../orders";
 
@@ -45,12 +54,95 @@ export class AdminSettingsService {
     private readonly paymentNumbersService: PaymentNumbersService,
     private readonly restockScheduleService: RestockScheduleService,
     private readonly waitlistBooksService: WaitlistBooksService,
+    private readonly smsSettingsService: SmsSettingsService,
+    private readonly waitlistInviteSettingsService: WaitlistInviteSettingsService,
     private readonly reconciler: UnitsSoldReconciler,
     private readonly auditService: AuditService,
   ) {}
 
   async restockSchedule(): Promise<AdminRestockSchedule> {
     return this.restockScheduleService.describe();
+  }
+
+  async smsSettings(): Promise<AdminSmsSettings> {
+    return this.smsSettingsService.describe();
+  }
+
+  /**
+   * Set or clear the SIM the gateway phone sends from.
+   *
+   * Audited like the reopening date: a small, single-valued fact, but one
+   * where "who changed it, and from what" is exactly what gets asked the day
+   * a message unexpectedly goes out from the wrong number.
+   */
+  async updateSmsSettings(
+    changes: AdminSmsSettingsUpdate,
+    context: AdminContext,
+  ): Promise<AdminSmsSettings> {
+    const before = await this.smsSettingsService.describe();
+
+    await this.dbService.db.transaction(async (tx) => {
+      await this.smsSettingsService.update(
+        changes.simNumber,
+        { id: context.actor.sub, email: context.actor.email },
+        tx,
+      );
+
+      await this.auditService.record(
+        {
+          ...auditActor(context),
+          action: "UPDATE",
+          entityType: "shop_settings",
+          entityId: "sms_settings",
+          before: { simNumber: before.simNumber },
+          after: { simNumber: changes.simNumber },
+        },
+        tx,
+      );
+    });
+
+    return this.smsSettingsService.describe();
+  }
+
+  async waitlistInviteSettings(): Promise<AdminWaitlistInviteSettings> {
+    return this.waitlistInviteSettingsService.describe();
+  }
+
+  /**
+   * Set how many hours a waitlist invite link stays redeemable.
+   *
+   * Audited like the SIM setting above: one number, but one that decides how
+   * long a customer has to act on an SMS before the reservation it names
+   * recycles to someone else.
+   */
+  async updateWaitlistInviteSettings(
+    changes: AdminWaitlistInviteSettingsUpdate,
+    context: AdminContext,
+  ): Promise<AdminWaitlistInviteSettings> {
+    const before = await this.waitlistInviteSettingsService.describe();
+
+    await this.dbService.db.transaction(async (tx) => {
+      await this.waitlistInviteSettingsService.update(
+        changes.ttlHours,
+        changes.language,
+        { id: context.actor.sub, email: context.actor.email },
+        tx,
+      );
+
+      await this.auditService.record(
+        {
+          ...auditActor(context),
+          action: "UPDATE",
+          entityType: "shop_settings",
+          entityId: "waitlist_invite_settings",
+          before: { ttlHours: before.ttlHours, language: before.language },
+          after: { ttlHours: changes.ttlHours, language: changes.language },
+        },
+        tx,
+      );
+    });
+
+    return this.waitlistInviteSettingsService.describe();
   }
 
   /**

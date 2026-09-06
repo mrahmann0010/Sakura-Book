@@ -23,6 +23,7 @@ import { PaymentNumbersModule, PaymentsModule } from "./payments";
 import { PricingModule } from "./pricing";
 import { ShippingModule } from "./shipping";
 import { ReviewsModule } from "./reviews";
+import { SmsModule } from "./sms";
 import { WaitlistModule } from "./waitlist";
 
 @Module({
@@ -41,6 +42,7 @@ import { WaitlistModule } from "./waitlist";
     AuditModule,
     PaymentVerificationModule,
     EmailModule,
+    SmsModule,
 
     CatalogModule,
     CouponsModule,

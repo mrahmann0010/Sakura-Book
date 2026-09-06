@@ -128,3 +128,40 @@ export const restockScheduleSchema = z.object({
 });
 
 export type RestockSchedule = z.infer<typeof restockScheduleSchema>;
+
+/* --------------------------------------------------------------------------
+   Invite tokens — "your turn to order".
+
+   A waitlist entry that has been invited carries a single-use token in its
+   link. This is the customer's view of redeeming one: enough to pre-fill and
+   lock the checkout form, nothing more.
+   -------------------------------------------------------------------------- */
+
+export const waitlistInviteModes = ["LOCKED", "OPEN"] as const;
+export type WaitlistInviteMode = (typeof waitlistInviteModes)[number];
+
+export const waitlistInviteSchema = z.object({
+  fullName: z.string(),
+  email: z.string(),
+  phone: z.string(),
+  /**
+   * The book this entry names, or null for the general list. Present
+   * alongside `bookTitle` (rather than the title alone) because a LOCKED
+   * invite's checkout needs a real id to price and order against — the
+   * title alone is display copy, not something `/cart/quote` accepts.
+   */
+  bookId: z.string().uuid().nullable(),
+  /** The snapshotted title, or null for the general list. */
+  bookTitle: z.string().nullable(),
+  quantity: z.number().int(),
+  /**
+   * LOCKED: checkout is fixed to bookTitle/quantity above, editable only in
+   * that it can be completed or abandoned. OPEN: these are a pre-fill only —
+   * the cart behaves normally. See the DB enum's own comment for why.
+   */
+  mode: z.enum(waitlistInviteModes),
+  /** When this link stops working. ISO 8601. */
+  expiresAt: z.string(),
+});
+
+export type WaitlistInvite = z.infer<typeof waitlistInviteSchema>;

@@ -29,6 +29,11 @@ const NAV = [
   { href: "/payments", label: "Payments" },
   { href: "/books", label: "Books" },
   { href: "/waitlist", label: "Waitlist" },
+  // Split out from the list above: that page filters and pages through
+  // everyone, this one answers the narrower "first 20 sign-ups, send them
+  // the link" question a restock morning actually asks.
+  { href: "/waitlist/invite-batch", label: "Invite Waitlist" },
+  { href: "/sms", label: "Send SMS" },
   // Last, and one entry rather than four: payments, shipping, the reopening
   // date, and the notify page's book list are all configuration, edited a few
   // times a month. As separate entries they made this list ten items long and

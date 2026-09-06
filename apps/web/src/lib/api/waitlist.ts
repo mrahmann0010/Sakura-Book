@@ -2,10 +2,12 @@ import {
   restockScheduleSchema,
   waitlistBooksSchema,
   waitlistEntrySchema,
+  waitlistInviteSchema,
   waitlistSubscribeRequestSchema,
   type RestockSchedule,
   type WaitlistBook,
   type WaitlistEntry,
+  type WaitlistInvite,
   type WaitlistSubscribeRequest,
 } from "@sakura/contracts";
 
@@ -43,4 +45,19 @@ export function getRestockSchedule(): Promise<RestockSchedule> {
  */
 export function getWaitlistBooks(): Promise<WaitlistBook[]> {
   return apiFetch("/waitlist/books", waitlistBooksSchema, { revalidate: 300 });
+}
+
+/**
+ * GET /waitlist/invite/:token — read-only lookup, what the invite checkout
+ * page calls on load. Throws `ApiError` with `isNotFound` for a wrong,
+ * expired, or already-used token — the API can't and shouldn't distinguish
+ * those (see WaitlistInviteInvalidError), so the page renders one "this
+ * link isn't valid" state for all three.
+ *
+ * Never cached: a single-use token must not be served stale after it's spent.
+ */
+export function getWaitlistInvite(token: string): Promise<WaitlistInvite> {
+  return apiFetch(`/waitlist/invite/${encodeURIComponent(token)}`, waitlistInviteSchema, {
+    revalidate: false,
+  });
 }

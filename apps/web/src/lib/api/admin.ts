@@ -18,8 +18,16 @@ import {
   adminSessionSchema,
   adminShippingTermsSchema,
   adminUploadResultSchema,
+  adminSmsSendRequestSchema,
+  adminSmsSendResultSchema,
+  adminSmsSettingsSchema,
+  adminSmsSettingsUpdateSchema,
   adminWaitlistBooksSchema,
   adminWaitlistEntrySchema,
+  adminWaitlistInviteRequestSchema,
+  adminWaitlistInviteResultSchema,
+  adminWaitlistInviteSettingsSchema,
+  adminWaitlistInviteSettingsUpdateSchema,
   adminWaitlistListSchema,
   adminWaitlistNotifyRequestSchema,
   adminWaitlistNotifyResultSchema,
@@ -50,8 +58,16 @@ import {
   type AdminRegionUpdate,
   type AdminSession,
   type AdminShippingTerms,
+  type AdminSmsSendRequest,
+  type AdminSmsSendResult,
+  type AdminSmsSettings,
+  type AdminSmsSettingsUpdate,
   type AdminUploadResult,
   type AdminWaitlistEntry,
+  type AdminWaitlistInviteRequest,
+  type AdminWaitlistInviteResult,
+  type AdminWaitlistInviteSettings,
+  type AdminWaitlistInviteSettingsUpdate,
   type AdminWaitlistList,
   type AdminWaitlistNotifyRequest,
   type AdminWaitlistNotifyResult,
@@ -731,6 +747,7 @@ function waitlistSearch(query: Partial<AdminWaitlistQuery>): string {
   if (query.q) search.set("q", query.q);
   if (query.source) search.set("source", query.source);
   if (query.locale) search.set("locale", query.locale);
+  if (query.bookId) search.set("bookId", query.bookId);
   if (query.signedFrom) search.set("signedFrom", query.signedFrom);
   if (query.signedTo) search.set("signedTo", query.signedTo);
   if (query.sort) search.set("sort", query.sort);
@@ -753,6 +770,52 @@ export function notifyAdminWaitlist(
   const validated = validate(adminWaitlistNotifyRequestSchema, request);
   return adminFetch("/admin/waitlist/notify", adminWaitlistNotifyResultSchema, {
     method: "POST",
+    body: validated,
+  });
+}
+
+export function inviteAdminWaitlist(
+  request: AdminWaitlistInviteRequest,
+): Promise<AdminWaitlistInviteResult> {
+  const validated = validate(adminWaitlistInviteRequestSchema, request);
+  return adminFetch("/admin/waitlist/invite", adminWaitlistInviteResultSchema, {
+    method: "POST",
+    body: validated,
+  });
+}
+
+export function getAdminWaitlistInviteSettings(): Promise<AdminWaitlistInviteSettings> {
+  return adminFetch("/admin/settings/waitlist-invite", adminWaitlistInviteSettingsSchema);
+}
+
+export function updateAdminWaitlistInviteSettings(
+  request: AdminWaitlistInviteSettingsUpdate,
+): Promise<AdminWaitlistInviteSettings> {
+  const validated = validate(adminWaitlistInviteSettingsUpdateSchema, request);
+  return adminFetch("/admin/settings/waitlist-invite", adminWaitlistInviteSettingsSchema, {
+    method: "PATCH",
+    body: validated,
+  });
+}
+
+export function sendAdminSms(request: AdminSmsSendRequest): Promise<AdminSmsSendResult> {
+  const validated = validate(adminSmsSendRequestSchema, request);
+  return adminFetch("/admin/sms/send", adminSmsSendResultSchema, {
+    method: "POST",
+    body: validated,
+  });
+}
+
+export function getAdminSmsSettings(): Promise<AdminSmsSettings> {
+  return adminFetch("/admin/settings/sms", adminSmsSettingsSchema);
+}
+
+export function updateAdminSmsSettings(
+  request: AdminSmsSettingsUpdate,
+): Promise<AdminSmsSettings> {
+  const validated = validate(adminSmsSettingsUpdateSchema, request);
+  return adminFetch("/admin/settings/sms", adminSmsSettingsSchema, {
+    method: "PATCH",
     body: validated,
   });
 }

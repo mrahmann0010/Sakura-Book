@@ -1,7 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import { index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { books } from "../catalog/book";
-import { waitlistStatusEnum } from "../enums";
+import { waitlistInviteModeEnum, waitlistStatusEnum } from "../enums";
 import { orders } from "../orders/order";
 import { timestamps } from "../timestamps";
 
@@ -66,6 +66,32 @@ export const waitlistEntries = pgTable(
 
     internalNote: text("internal_note"), // staff-only: never shown to customer
 
+    // The magic-link credential for "come place your order" — a random,
+    // unguessable string, set only once an entry is actually invited. Null
+    // for every entry still waiting: there is no state where a token exists
+    // but nothing has been offered to the customer holding it.
+    //
+    // Stored as plain text rather than hashed: it is not a password (nothing
+    // else authenticates this customer, so there is no credential reuse to
+    // protect against), and hashing it would turn the public lookup this
+    // enables into a table scan instead of an indexed equality check.
+    inviteToken: text("invite_token"),
+
+    // LOCKED or OPEN — see the enum's own comment. Set alongside
+    // inviteToken, same as inviteExpiresAt: never one without the others.
+    inviteMode: waitlistInviteModeEnum("invite_mode"),
+
+    // When the invite stops being redeemable. Set alongside inviteToken —
+    // never one without the other.
+    inviteExpiresAt: timestamp("invite_expires_at", { withTimezone: true }),
+
+    // When the token was actually spent placing an order. Null means
+    // unused. This is what makes a token single-use: consuming it means
+    // writing this column, in the same transaction that creates the order,
+    // and every check re-reads it under a row lock so two racing redemptions
+    // of the same link can't both succeed.
+    inviteUsedAt: timestamp("invite_used_at", { withTimezone: true }),
+
     ...timestamps,
   },
   (table) => [
@@ -85,6 +111,13 @@ export const waitlistEntries = pgTable(
 
     index("waitlist_entries_status_idx").on(table.status),
     index("waitlist_entries_book_id_idx").on(table.bookId),
+
+    // Partial: most rows never have a token, and the public invite lookup
+    // only ever queries the rows that do. Unique so two entries can never
+    // collide on the same link even if the generator ever repeated itself.
+    uniqueIndex("waitlist_entries_invite_token_idx")
+      .on(table.inviteToken)
+      .where(sql`${table.inviteToken} is not null`),
   ],
 );
 

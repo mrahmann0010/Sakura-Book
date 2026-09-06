@@ -9,12 +9,14 @@ import { orderItems, orders, orderStatusHistory } from "../db/schema";
 import { InventoryService } from "../inventory";
 import { PricingService, type PricedCart } from "../pricing";
 import { RegionsService } from "../shipping";
+import { WaitlistInviteInvalidError, WaitlistInviteService } from "../waitlist";
 import { generateOrderNumber, ORDER_NUMBER_ATTEMPTS } from "./order-number";
 import {
   CartNotOrderableError,
   CouponNotApplicableError,
   OrderNumberExhaustedError,
   TransactionIdAlreadyUsedError,
+  WaitlistInviteMismatchError,
 } from "./order.errors";
 import { findTransactionIdClaim } from "./transaction-id-claim";
 import { toOrderResponse, type OrderRow } from "./order.mapper";
@@ -43,6 +45,7 @@ export class CheckoutService {
     private readonly inventoryService: InventoryService,
     private readonly couponsService: CouponsService,
     private readonly regionsService: RegionsService,
+    private readonly waitlistInviteService: WaitlistInviteService,
   ) {}
 
   /**
@@ -139,6 +142,13 @@ export class CheckoutService {
        consumed no coupon, so there is nothing for the rollback to undo. */
     await this.rejectReusedTransactionId(request, tx);
 
+    // Same reasoning, same position: spending an invalid/expired/already-used
+    // token is the next cheapest refusal, and it must happen before pricing so
+    // a rejected invite never touches stock either. The guarded UPDATE inside
+    // consume() re-checks unused-and-unexpired itself — this does not trust
+    // whatever the checkout page rendered a minute ago.
+    const invitedEntryId = request.inviteToken ? await this.consumeInvite(request, tx) : undefined;
+
     const priced = await this.repriceForOrder(request, tx);
 
     // Sequential, not Promise.all. These are guarded UPDATEs against rows two
@@ -176,6 +186,16 @@ export class CheckoutService {
     // first moment — a timeline that starts at the *second* status is a
     // timeline with a hole no later query can fill.
     await tx.insert(orderStatusHistory).values({ orderId, status: "PENDING" });
+
+    /* Close the loop on the invite. This cannot happen up at consumeInvite —
+       the order it links to did not exist yet — but it belongs to the same
+       transaction, so the entry is CONVERTED with its order id if and only if
+       that order commits. Skipping it is what left every invited customer
+       stranded in NOTIFIED, indistinguishable from the ones who ignored the
+       SMS. */
+    if (invitedEntryId) {
+      await this.waitlistInviteService.markConverted(invitedEntryId, orderId, tx);
+    }
 
     return orderId;
   }
@@ -328,6 +348,41 @@ export class CheckoutService {
     );
 
     throw new TransactionIdAlreadyUsedError(transactionId ?? "", claim.orderNumber);
+  }
+
+  /**
+   * Spend the invite token this checkout arrived with, and enforce what it
+   * reserved.
+   *
+   * `consume` throws `WaitlistInviteInvalidError` itself when the token is
+   * wrong, expired, or already spent — nothing to add here. What this adds is
+   * the LOCKED-mode check `WaitlistInviteService.consume`'s own comment
+   * documents as the caller's job: a LOCKED invite reserved one book at one
+   * quantity, and an order for anything else is refused even though the token
+   * itself was genuine. An OPEN invite has nothing further to check — the
+   * token being spent is the whole requirement.
+   *
+   * @returns the waitlist entry the token belonged to, so `writeOrder` can
+   * stamp the order onto it once the order exists.
+   */
+  private async consumeInvite(request: PlaceOrderRequest, tx: Transaction): Promise<string> {
+    // Non-null: only called when request.inviteToken is set.
+    const reservation = await this.waitlistInviteService.consume(request.inviteToken!, tx);
+
+    if (!reservation) throw new WaitlistInviteInvalidError();
+
+    if (reservation.mode === "LOCKED") {
+      const matches =
+        request.items.length === 1 &&
+        request.items[0].bookId === reservation.bookId &&
+        request.items[0].quantity === reservation.quantity;
+
+      if (!matches) {
+        throw new WaitlistInviteMismatchError(reservation.bookId ?? "", reservation.quantity);
+      }
+    }
+
+    return reservation.entryId;
   }
 
   private async findByIdempotencyKey(key: string): Promise<OrderRow | undefined> {

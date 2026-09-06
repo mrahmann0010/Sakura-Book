@@ -1,6 +1,8 @@
 import { Module } from "@nestjs/common";
 import { RestockScheduleService } from "./restock-schedule.service";
 import { WaitlistBooksService } from "./waitlist-books.service";
+import { WaitlistInviteSettingsService } from "./waitlist-invite-settings.service";
+import { WaitlistInviteService } from "./waitlist-invite.service";
 import { WaitlistController } from "./waitlist.controller";
 import { WaitlistService } from "./waitlist.service";
 
@@ -14,11 +16,28 @@ import { WaitlistService } from "./waitlist.service";
  */
 @Module({
   controllers: [WaitlistController],
-  providers: [WaitlistService, RestockScheduleService, WaitlistBooksService],
+  providers: [
+    WaitlistService,
+    RestockScheduleService,
+    WaitlistBooksService,
+    WaitlistInviteService,
+    WaitlistInviteSettingsService,
+  ],
   // RestockScheduleService is exported for AdminSettingsModule, which owns the
   // editing half of the same setting — the storefront read and the admin write
   // must go through one service, or the two grow separate ideas of what null
-  // means.
-  exports: [WaitlistService, RestockScheduleService, WaitlistBooksService],
+  // means. WaitlistInviteService is exported so the admin invite action
+  // (issues tokens) and checkout (consumes them) share this same instance
+  // rather than a second idea of what a valid token is.
+  // WaitlistInviteSettingsService is exported for the same reason as
+  // RestockScheduleService: AdminSettingsModule owns editing the TTL, this
+  // module owns reading it when an invite is issued.
+  exports: [
+    WaitlistService,
+    RestockScheduleService,
+    WaitlistBooksService,
+    WaitlistInviteService,
+    WaitlistInviteSettingsService,
+  ],
 })
 export class WaitlistModule {}

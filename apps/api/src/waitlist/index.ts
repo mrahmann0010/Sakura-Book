@@ -7,3 +7,6 @@ export { WaitlistModule } from "./waitlist.module";
 export { WaitlistService } from "./waitlist.service";
 export { RestockScheduleService } from "./restock-schedule.service";
 export { WaitlistBooksService } from "./waitlist-books.service";
+export { WaitlistInviteService } from "./waitlist-invite.service";
+export { WaitlistInviteSettingsService } from "./waitlist-invite-settings.service";
+export { WaitlistInviteInvalidError } from "./waitlist-invite.errors";

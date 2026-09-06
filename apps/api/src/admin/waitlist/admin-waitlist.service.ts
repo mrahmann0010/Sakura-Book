@@ -36,11 +36,14 @@ import { adminWaitlistFilters, adminWaitlistOrder } from "./admin-waitlist.query
  * that claimed to send would be a button that lies the first time the gateway
  * is down, and an audit trail that records an intention rather than an event.
  *
- * It does not set `convertedOrderId` either. Linking a signup to the order it
- * became needs a matching rule — phone equality is the obvious one and is
- * wrong for a household sharing a number — and that is a decision about the
- * business, not a default worth inventing here. The column and its display
- * are ready for whatever rule you choose.
+ * It does not set `convertedOrderId` either — it only displays it. That link
+ * is written by `CheckoutService`, in the transaction that creates the order,
+ * for the one case where the connection is a fact rather than a guess: the
+ * customer arrived holding an invite token, so the entry is known exactly. An
+ * order placed by someone who was on the list but never used their link stays
+ * unlinked, because matching it back would need a rule — phone equality is
+ * the obvious one and is wrong for a household sharing a number — and that is
+ * a decision about the business, not a default worth inventing here.
  */
 @Injectable()
 export class AdminWaitlistService {

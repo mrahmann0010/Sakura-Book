@@ -59,7 +59,26 @@ import { ShippingFields } from "./shipping-fields";
    where the shopper edits and commits in the same breath.
    -------------------------------------------------------------------------- */
 
-export function CheckoutView({ locale }: { locale: Locale }) {
+export function CheckoutView({
+  locale,
+  prefill,
+  inviteToken,
+}: {
+  locale: Locale;
+  /**
+   * Contact fields to seed the form with — an OPEN waitlist invite's
+   * customer details, so far the only source of these. The cart stays the
+   * shopper's own; only these three fields are known ahead of time.
+   */
+  prefill?: Partial<Pick<CheckoutValues, "fullName" | "email" | "phone">>;
+  /**
+   * Set only when this checkout came from an OPEN waitlist invite link —
+   * sent with the order so WaitlistInviteService.consume() spends it
+   * atomically with the order that used it. Absent for an ordinary cart
+   * checkout, which has no invite to spend.
+   */
+  inviteToken?: string;
+}) {
   const { t } = useTranslation();
   const path = routes(locale);
 
@@ -102,7 +121,7 @@ export function CheckoutView({ locale }: { locale: Locale }) {
     formState: { errors, isSubmitting, isSubmitted, isValid },
   } = useForm<CheckoutValues>({
     resolver: zodResolver(checkoutSchema),
-    defaultValues: checkoutDefaults,
+    defaultValues: { ...checkoutDefaults, ...prefill },
     mode: "onBlur",
   });
 
@@ -185,7 +204,7 @@ export function CheckoutView({ locale }: { locale: Locale }) {
 
     try {
       const order = await placeOrderRequest(
-        { items: cart.entries, customer: values },
+        { items: cart.entries, customer: values, ...(inviteToken ? { inviteToken } : {}) },
         crypto.randomUUID(),
       );
 

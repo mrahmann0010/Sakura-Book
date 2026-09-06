@@ -15,6 +15,8 @@ import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   adminRegionCreateSchema,
   adminRegionUpdateSchema,
+  adminSmsSettingsUpdateSchema,
+  adminWaitlistInviteSettingsUpdateSchema,
   paymentNumbersUpdateSchema,
   restockScheduleUpdateSchema,
   shippingTermsUpdateSchema,
@@ -23,7 +25,9 @@ import {
   type AdminRegion,
   type AdminRestockSchedule,
   type AdminShippingTerms,
+  type AdminSmsSettings,
   type AdminWaitlistBook,
+  type AdminWaitlistInviteSettings,
   type UnitsSoldReport,
 } from "@sakura/contracts";
 import type { Request } from "express";
@@ -39,6 +43,10 @@ class AdminRegionUpdateDto extends createZodDto(adminRegionUpdateSchema) {}
 class PaymentNumbersUpdateDto extends createZodDto(paymentNumbersUpdateSchema) {}
 class RestockScheduleUpdateDto extends createZodDto(restockScheduleUpdateSchema) {}
 class WaitlistBooksUpdateDto extends createZodDto(waitlistBooksUpdateSchema) {}
+class AdminSmsSettingsUpdateDto extends createZodDto(adminSmsSettingsUpdateSchema) {}
+class AdminWaitlistInviteSettingsUpdateDto extends createZodDto(
+  adminWaitlistInviteSettingsUpdateSchema,
+) {}
 
 /**
  * Shop policy and maintenance.
@@ -132,6 +140,46 @@ export class AdminSettingsController {
     @Req() request: Request,
   ): Promise<AdminRestockSchedule> {
     return this.settingsService.updateRestockSchedule(body, contextOf(admin, request));
+  }
+
+  @Get("sms")
+  @ApiOperation({ summary: "Which SIM the gateway phone sends SMS from, and who last set it." })
+  async smsSettings(): Promise<AdminSmsSettings> {
+    return this.settingsService.smsSettings();
+  }
+
+  /**
+   * Set or clear the SIM slot. PATCH, and `simNumber` is written
+   * unconditionally including when null — same reasoning as
+   * updateRestockSchedule: null here means "let the gateway decide", not
+   * "leave it alone".
+   */
+  @Patch("sms")
+  @Roles("ADMIN")
+  @ApiOperation({ summary: "Set which SIM the Send SMS panel sends from, or clear it." })
+  async updateSmsSettings(
+    @Body() body: AdminSmsSettingsUpdateDto,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminSmsSettings> {
+    return this.settingsService.updateSmsSettings(body, contextOf(admin, request));
+  }
+
+  @Get("waitlist-invite")
+  @ApiOperation({ summary: "How many hours a waitlist invite link stays redeemable." })
+  async waitlistInviteSettings(): Promise<AdminWaitlistInviteSettings> {
+    return this.settingsService.waitlistInviteSettings();
+  }
+
+  @Patch("waitlist-invite")
+  @Roles("ADMIN")
+  @ApiOperation({ summary: "Set how many hours a waitlist invite link stays redeemable." })
+  async updateWaitlistInviteSettings(
+    @Body() body: AdminWaitlistInviteSettingsUpdateDto,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminWaitlistInviteSettings> {
+    return this.settingsService.updateWaitlistInviteSettings(body, contextOf(admin, request));
   }
 
   @Get("waitlist-books")

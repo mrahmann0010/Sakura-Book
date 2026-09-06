@@ -128,6 +128,12 @@ export const placeOrderRequestSchema = z.object({
   items: z.array(cartItemSchema).min(1, "Your basket is empty.").max(100),
   customer: checkoutSchema,
   couponCode: z.string().trim().min(1).max(64).optional(),
+  /**
+   * Present when this checkout came from a waitlist invite link — spent
+   * atomically with the order by WaitlistInviteService.consume(). A LOCKED
+   * invite's `items` must match the reservation exactly; see the service.
+   */
+  inviteToken: z.string().trim().min(1).optional(),
 });
 
 export type PlaceOrderRequest = z.infer<typeof placeOrderRequestSchema>;

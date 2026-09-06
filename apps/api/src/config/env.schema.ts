@@ -343,6 +343,23 @@ export const envSchema = z.object({
   EMAIL_FROM_NAME: z.string().trim().min(1).default("Nihonova Books"),
 
   /**
+   * Base URL of the Android SMS Gateway app (capcom6/android-sms-gateway)
+   * relaying texts through a phone — e.g. `http://<phone-ip>:8080/api/mobile/v1`
+   * for local mode, or `https://api.sms-gate.app/3rdparty/v1` for the hosted
+   * cloud relay. SmsService appends `/message` to this.
+   *
+   * Optional, same shape as EMAIL_SERVICE: unset means SmsService throws
+   * SmsNotConfiguredError rather than silently pretending it sent.
+   */
+  SMS_GATEWAY_URL: z.string().url().optional(),
+
+  /** HTTP Basic Auth username for the gateway above. Only meaningful alongside SMS_GATEWAY_URL. */
+  SMS_GATEWAY_USERNAME: z.string().min(1).optional(),
+
+  /** HTTP Basic Auth password for the gateway above. Only meaningful alongside SMS_GATEWAY_URL. */
+  SMS_GATEWAY_PASSWORD: z.string().min(1).optional(),
+
+  /**
    * The store name written into every row of the Pathao bulk-order CSV.
    *
    * Configurable rather than a constant in the exporter because it is a fact

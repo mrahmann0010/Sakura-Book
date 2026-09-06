@@ -17,6 +17,8 @@ const TABS = [
   { href: "/settings/shipping", label: "Shipping" },
   { href: "/settings/restock", label: "Reopening Date" },
   { href: "/settings/notify-books", label: "Notify Page Books" },
+  { href: "/settings/sms", label: "SMS" },
+  { href: "/settings/waitlist-invite", label: "Waitlist Invites" },
 ] as const;
 
 /**

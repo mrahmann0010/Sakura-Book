@@ -1,0 +1,2 @@
+ALTER TABLE "shop_settings" ADD COLUMN "waitlist_invite_language" text;--> statement-breakpoint
+ALTER TABLE "shop_settings" ADD CONSTRAINT "shop_settings_waitlist_invite_language_values" CHECK ("shop_settings"."waitlist_invite_language" is null or "shop_settings"."waitlist_invite_language" in ('en', 'bn', 'customer'));

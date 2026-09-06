@@ -1,0 +1,2 @@
+ALTER TABLE "shop_settings" ADD COLUMN "waitlist_invite_ttl_hours" integer;--> statement-breakpoint
+ALTER TABLE "shop_settings" ADD CONSTRAINT "shop_settings_waitlist_invite_ttl_hours_range" CHECK ("shop_settings"."waitlist_invite_ttl_hours" is null or "shop_settings"."waitlist_invite_ttl_hours" between 1 and 720);

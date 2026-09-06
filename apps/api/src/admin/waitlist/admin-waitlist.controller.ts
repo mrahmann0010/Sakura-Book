@@ -1,10 +1,12 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
+  adminWaitlistInviteRequestSchema,
   adminWaitlistNotifyRequestSchema,
   adminWaitlistQuerySchema,
   adminWaitlistUpdateRequestSchema,
   type AdminWaitlistEntry,
+  type AdminWaitlistInviteResult,
   type AdminWaitlistList,
   type AdminWaitlistNotifyResult,
 } from "@sakura/contracts";
@@ -13,11 +15,13 @@ import { createZodDto } from "nestjs-zod";
 import { CurrentAdmin, Roles } from "../auth/admin-auth.decorators";
 import type { AccessClaims } from "../auth/tokens";
 import type { AdminContext } from "../orders";
+import { AdminWaitlistInviteService } from "./admin-waitlist-invite.service";
 import { AdminWaitlistService } from "./admin-waitlist.service";
 
 class AdminWaitlistQueryDto extends createZodDto(adminWaitlistQuerySchema) {}
 class AdminWaitlistNotifyDto extends createZodDto(adminWaitlistNotifyRequestSchema) {}
 class AdminWaitlistUpdateDto extends createZodDto(adminWaitlistUpdateRequestSchema) {}
+class AdminWaitlistInviteDto extends createZodDto(adminWaitlistInviteRequestSchema) {}
 
 /**
  * Who is waiting, over HTTP.
@@ -33,7 +37,10 @@ class AdminWaitlistUpdateDto extends createZodDto(adminWaitlistUpdateRequestSche
 @ApiTags("admin-waitlist")
 @Controller("admin/waitlist")
 export class AdminWaitlistController {
-  constructor(private readonly adminWaitlistService: AdminWaitlistService) {}
+  constructor(
+    private readonly adminWaitlistService: AdminWaitlistService,
+    private readonly adminWaitlistInviteService: AdminWaitlistInviteService,
+  ) {}
 
   /**
    * The list. No cache headers, for the same reason the order queue has none:
@@ -88,6 +95,25 @@ export class AdminWaitlistController {
     @Req() request: Request,
   ): Promise<AdminWaitlistNotifyResult> {
     return this.adminWaitlistService.notify(body, contextOf(admin, request));
+  }
+
+  /**
+   * Issue an invite token to each selected entry and text them the link.
+   *
+   * Same request shape as `notify` — a single id is the panel's per-row
+   * "Invite" button, several ids is the bulk send. Unlike `notify` this one
+   * does send: see AdminWaitlistInviteService's own comment for why it lives
+   * apart from the class above.
+   */
+  @Post("invite")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Issue invite tokens to selected entries and text them the link." })
+  async invite(
+    @Body() body: AdminWaitlistInviteDto,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminWaitlistInviteResult> {
+    return this.adminWaitlistInviteService.invite(body, contextOf(admin, request));
   }
 
   /**

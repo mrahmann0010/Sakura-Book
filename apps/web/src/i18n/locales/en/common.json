@@ -549,5 +549,16 @@
       "retry": "Try again",
       "home": "Back to the shop"
     }
+  },
+  "waitlistInvite": {
+    "eyebrow": "Your turn to order",
+    "title": "Complete your order",
+    "lockedNotice": "This link reserves {{bookTitle}} × {{quantity}} for you — the order can't be changed to something else.",
+    "expired": {
+      "eyebrow": "Invite link",
+      "title": "This invite link isn't valid",
+      "description": "It may have expired or already been used. Contact us if you think this is a mistake.",
+      "action": "Contact us"
+    }
   }
 }
