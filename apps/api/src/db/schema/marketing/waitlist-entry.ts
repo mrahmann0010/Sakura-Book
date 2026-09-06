@@ -1,7 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import { index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { books } from "../catalog/book";
-import { waitlistStatusEnum } from "../enums";
+import { waitlistInviteModeEnum, waitlistStatusEnum } from "../enums";
 import { orders } from "../orders/order";
 import { timestamps } from "../timestamps";
 
@@ -76,6 +76,10 @@ export const waitlistEntries = pgTable(
     // protect against), and hashing it would turn the public lookup this
     // enables into a table scan instead of an indexed equality check.
     inviteToken: text("invite_token"),
+
+    // LOCKED or OPEN — see the enum's own comment. Set alongside
+    // inviteToken, same as inviteExpiresAt: never one without the others.
+    inviteMode: waitlistInviteModeEnum("invite_mode"),
 
     // When the invite stops being redeemable. Set alongside inviteToken —
     // never one without the other.

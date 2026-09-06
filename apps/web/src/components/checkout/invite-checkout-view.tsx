@@ -1,18 +1,12 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import Link from "next/link";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useForm, useWatch, type FieldErrors } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
-import {
-  CollapsibleOrderRecap,
-  EmptyState,
-  OrderRecap,
-  SummaryRow,
-  type RecapLine,
-} from "@/components/domain";
+import { CollapsibleOrderRecap, OrderRecap, SummaryRow, type RecapLine } from "@/components/domain";
 import { CheckoutProgress, PageHeader, RailLayout, Shell, StickyBar } from "@/components/layout";
 import {
   Button,
@@ -24,20 +18,18 @@ import {
   Skeleton,
   Toast,
 } from "@/components/ui";
-import { useCart } from "@/hooks/use-cart";
-import { useCartStepEvent } from "@/hooks/use-cart-step-event";
 import type { Locale } from "@/i18n/settings";
 import { trackPurchase } from "@/lib/analytics";
 import { ApiError } from "@/lib/api/client";
+import { quoteCart } from "@/lib/api/cart";
 import { placeOrder as placeOrderRequest } from "@/lib/api/orders";
-import { titlesInStock } from "@/lib/books";
 import {
   checkoutDefaults,
   checkoutSchema,
-  type CheckoutValues,
   type AcceptedPaymentMethod,
+  type CheckoutValues,
 } from "@/lib/checkout";
-import { FREE_DELIVERY_THRESHOLD, summaryLines } from "@/lib/cart";
+import { cartFromQuote, priceCart, summaryLines, FREE_DELIVERY_THRESHOLD } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 
@@ -49,53 +41,44 @@ import {
 import { ShippingFields } from "./shipping-fields";
 
 /* --------------------------------------------------------------------------
-   The checkout page's one job: say where the books go and how they are paid
-   for.
+   Checkout for a LOCKED waitlist invite — one reserved book, at a fixed
+   quantity, that cannot become a different order.
 
-   It cannot change the order. The cart's contents appear here as a read-only
-   recap with a single link back — quantity as "×n", no steppers, no remove.
-   That separation is the whole reason these are two pages: one is for deciding
-   what to buy, this one is for committing to it, and mixing them gives a page
-   where the shopper edits and commits in the same breath.
+   Deliberately its own component rather than CheckoutView plus branches: the
+   two share the delivery/payment form (ShippingFields, PaymentSection) and
+   the recap presentation, but not the thing underneath it. CheckoutView's
+   "cart" is Redux state a shopper edits; this one is a single `{ bookId,
+   quantity }` pair that came from the invite and never changes — no add,
+   remove, or quantity control anywhere on this page, and nothing here reads
+   or writes the cart slice. An OPEN invite doesn't need any of this: it
+   renders the ordinary CheckoutView with contact fields pre-filled instead.
+
+   Token consumption — actually marking the invite spent — is not wired yet.
+   This places the order the same way a normal checkout does; the follow-up
+   is threading the token through so order creation calls
+   WaitlistInviteService.consume() in the same transaction. That follow-up is
+   also what will add the token back in here, to send with the order.
    -------------------------------------------------------------------------- */
 
-export function CheckoutView({
+export function InviteCheckoutView({
   locale,
+  bookId,
+  quantity,
   prefill,
 }: {
   locale: Locale;
-  /**
-   * Contact fields to seed the form with — an OPEN waitlist invite's
-   * customer details, so far the only source of these. The cart stays the
-   * shopper's own; only these three fields are known ahead of time.
-   */
-  prefill?: Partial<Pick<CheckoutValues, "fullName" | "email" | "phone">>;
+  bookId: string;
+  quantity: number;
+  prefill: Pick<CheckoutValues, "fullName" | "email" | "phone">;
 }) {
   const { t } = useTranslation();
   const path = routes(locale);
 
   const [placedOrder, setPlacedOrder] = useState<{ id: string; email: string } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  /* Held apart from `submitError` because this one refusal has somewhere to
-     send the shopper. The order number is the whole point: the usual cause of
-     a reused transaction ID is not fraud but someone who believes their first
-     order failed, and the useful answer is a link to it rather than a
-     sentence saying no. */
-  const [reusedForOrder, setReusedForOrder] = useState<string | null>(null);
   const [verification, setVerification] = useState<PaymentVerificationStatus | null>(null);
-  /* Holds the just-placed order between the modal resolving and the shopper
-     clicking "See order info" — the modal's result is the only thing on
-     screen until then, so the confirmation page and the cart clear wait for
-     that click rather than firing themselves. */
   const [pendingOrder, setPendingOrder] = useState<{ id: string; email: string } | null>(null);
-
   const [step, setStep] = useState<"delivery" | "payment">("delivery");
-
-  /* A missed field is currently silent where it matters most: "Next" simply
-     does not advance, and the error it set may be off-screen on a phone. The
-     toast names what is missing so the shopper is not left tapping a button
-     that appears dead. Local to this page rather than an app-wide host —
-     Toast is presentational by design, and checkout is the only caller. */
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -117,15 +100,8 @@ export function CheckoutView({
     mode: "onBlur",
   });
 
-  /* Only the delivery fields — `region` is derived from the address picker
-     rather than typed, so it validates along with the rest of the address
-     but never blocks Next on its own before a division is chosen. */
   const deliveryFields = ["fullName", "email", "phone", "address", "city", "region"] as const;
 
-  /* Which form field each name points at on screen. `city` and `region` are
-     never typed — the district and division pickers write them — so the toast
-     names the control the shopper has to touch, not the schema field behind
-     it, which they would look for and never find. */
   const fieldLabels: Partial<Record<keyof CheckoutValues, string>> = {
     fullName: t("checkout.shipping.fullName"),
     email: t("checkout.shipping.email"),
@@ -141,8 +117,6 @@ export function CheckoutView({
   function missingToast(names: readonly (keyof CheckoutValues)[]) {
     const labels = names.map((name) => fieldLabels[name] ?? name);
     if (labels.length === 0) return;
-    /* Intl rather than join(", ") — the separator and the final conjunction
-       differ per locale, and this string is read in three. */
     const list = new Intl.ListFormat(intlLocale(locale), {
       style: "long",
       type: "conjunction",
@@ -151,10 +125,6 @@ export function CheckoutView({
   }
 
   async function goToPayment() {
-    /* Validated one field at a time rather than as an array: `trigger(fields)`
-       answers only whether all of them passed, and the toast has to name the
-       ones that did not. Reading `errors` straight after would race the
-       formState update this same call triggers. */
     const results = await Promise.all(
       deliveryFields.map(async (name) => [name, await trigger(name)] as const),
     );
@@ -169,66 +139,43 @@ export function CheckoutView({
     missingToast(missing);
   }
 
-  /* The submit's failure path. react-hook-form hands the errors straight in,
-     so unlike goToPayment there is nothing to re-derive. */
   function onInvalid(formErrors: FieldErrors<CheckoutValues>) {
     missingToast(Object.keys(formErrors) as (keyof CheckoutValues)[]);
   }
 
-  /* useWatch rather than `watch()`: watch returns a fresh function each render,
-     which opts the whole component out of the React Compiler's memoisation. */
   const method = useWatch({ control, name: "method" }) as AcceptedPaymentMethod;
-  /* The region the address form derived from the chosen division. */
   const region = useWatch({ control, name: "region" });
-  /* Whether the shopper has actually chosen a division. Not derivable from
-     `region`: checkoutDefaults seeds it to "inside-dhaka", so it is a real
-     zone from the first render and would price delivery before anyone said
-     where the books are going. ShippingFields reports the choice up. */
   const [divisionChosen, setDivisionChosen] = useState(false);
-  const cart = useCart(divisionChosen ? region || undefined : undefined);
 
-  useCartStepEvent("begin_checkout", cart);
+  /* One fixed entry, priced the same way the ordinary cart is — through the
+     real quote endpoint, so this page never shows a price it made up itself.
+     Keyed on the entry and region exactly like useCart's own quote query. */
+  const { data: quote, isLoading } = useQuery({
+    queryKey: ["invite-quote", bookId, quantity, divisionChosen ? region : undefined],
+    queryFn: () =>
+      quoteCart([{ bookId, quantity }], { region: divisionChosen ? region : undefined }),
+    placeholderData: keepPreviousData,
+    staleTime: 0,
+  });
+
+  const cart = quote ? cartFromQuote(quote) : { lines: [], isEmpty: true, ...priceCart([]) };
 
   async function placeOrder(values: CheckoutValues) {
     setSubmitError(null);
-    setReusedForOrder(null);
     setVerification("verifying");
 
     try {
       const order = await placeOrderRequest(
-        { items: cart.entries, customer: values },
+        { items: [{ bookId, quantity }], customer: values },
         crypto.randomUUID(),
       );
 
-      /* The auto-verify check already ran server-side, inside the same
-         request — a manual-transfer order comes back PAYMENT_CONFIRMED when
-         the transaction was matched against the gateway, PENDING otherwise.
-         This is just reading that result, not triggering a second check. */
       setPendingOrder({ id: order.orderNumber, email: values.email });
       setVerification(order.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");
-
-      /* Revenue is reported here, from the order the API returned, and not
-         from `cart` — the server re-prices every order regardless of what the
-         browser sent, so its totals are the money and the cart's are a guess.
-         Sent on the order existing rather than on the shopper clicking through
-         to the confirmation page below: the sale is made either way, and
-         anyone who closes the tab on the modal would otherwise never be
-         counted. `trackPurchase` is idempotent per order number, so a retry or
-         a re-render cannot sell the same order twice. */
       trackPurchase(order);
     } catch (err) {
       setVerification(null);
-
-      /* The one API refusal with its own copy. Everything else falls through
-         to the server's message, which is staff-facing English — acceptable
-         for the rare failures, wrong for the one a shopper hits by honest
-         mistake and reads in Bengali. */
-      const claimedBy = reusedOrderNumberOf(err);
-
-      setReusedForOrder(claimedBy);
-      setSubmitError(
-        claimedBy ? null : err instanceof ApiError ? err.message : t("checkout.submitError"),
-      );
+      setSubmitError(err instanceof ApiError ? err.message : t("checkout.submitError"));
     }
   }
 
@@ -237,14 +184,10 @@ export function CheckoutView({
     setVerification(null);
     setPlacedOrder(pendingOrder);
     setPendingOrder(null);
-    cart.clear();
   }
 
-  if (!cart.hydrated || cart.quoting) return <CheckoutSkeleton />;
+  if (isLoading && !quote) return <InviteCheckoutSkeleton />;
 
-  /* The order is in. The cart is now empty by design, so this state has to be
-     checked before the empty-cart guard below or placing an order would bounce
-     the shopper straight to "there is nothing to check out". */
   if (placedOrder) {
     return (
       <Shell className="py-14 lg:py-20">
@@ -277,31 +220,7 @@ export function CheckoutView({
     );
   }
 
-  if (cart.isEmpty) {
-    return (
-      <Shell className="py-14 lg:py-20">
-        <PageHeader size="lg" title={t("checkout.title")} />
-        <EmptyState
-          className="mt-10"
-          eyebrow={t("checkout.empty.eyebrow")}
-          title={t("checkout.empty.title")}
-          description={t("checkout.empty.description", { count: titlesInStock })}
-          action={<LinkButton href={path.catalog}>{t("checkout.empty.action")}</LinkButton>}
-        />
-      </Shell>
-    );
-  }
-
-  /* One BCP 47 tag for every amount on the page. Derived once so a row
-     cannot end up formatted for a different locale than the total below it. */
   const money = intlLocale(locale);
-
-  /* Delivery is priced per zone, and the zone comes from the division the
-     address picker resolves. Until that happens the quote is still carrying
-     the flat placeholder rate, so the rail says so instead of showing a
-     figure the shopper would read as final — and the total, which cannot be
-     known without it, waits with it. Both fill in together the moment a
-     division is chosen. */
   const deliveryKnown = divisionChosen;
 
   const rows = summaryLines(
@@ -316,7 +235,6 @@ export function CheckoutView({
     },
     money,
   );
-
   const total = deliveryKnown ? formatMoney(cart.total, money) : t("cart.summary.totalPending");
 
   const recapLines: RecapLine[] = cart.lines.map((line) => ({
@@ -325,17 +243,6 @@ export function CheckoutView({
     amount: formatMoney(line.lineTotal, money),
   }));
 
-  const editCart = (
-    <Link href={path.cart} className="text-clay hover:text-clay-deep">
-      {t("checkout.recap.edit")}
-    </Link>
-  );
-
-  /* One primary action node, placed in the form on desktop and in the docked
-     bar on mobile. `form="checkout"` lets the mobile copy live outside the
-     <form> and still submit it. On the delivery step this is "Next" (advances
-     local step state, no submit); on the payment step it becomes the one real
-     submit button for the whole order. */
   const primaryAction =
     step === "delivery" ? (
       <Button type="button" block onClick={goToPayment}>
@@ -344,7 +251,7 @@ export function CheckoutView({
     ) : (
       <Button
         type="submit"
-        form="checkout"
+        form="invite-checkout"
         block
         loading={isSubmitting}
         loadingLabel={t("checkout.placing")}
@@ -360,14 +267,18 @@ export function CheckoutView({
           label={t("checkout.steps.label")}
           current={1}
           steps={[
-            { id: "cart", label: t("checkout.steps.cart"), href: path.cart },
             { id: "checkout", label: t("checkout.steps.checkout") },
             { id: "confirmation", label: t("checkout.steps.confirmation") },
           ]}
         />
 
-        {/* Mobile keeps the recap collapsed above the form: the form is the job
-            here, and the recap is reassurance the shopper asks for. */}
+        <Notice tone="info" className="mt-6">
+          {t("waitlistInvite.lockedNotice", {
+            bookTitle: recapLines[0]?.book.title ?? "",
+            quantity,
+          })}
+        </Notice>
+
         <CollapsibleOrderRecap
           className="mt-6 lg:hidden"
           summaryLabel={t("checkout.recap.mobile", { count: cart.itemCount })}
@@ -385,7 +296,6 @@ export function CheckoutView({
               <SummaryRow key={row.key} label={row.label} value={row.value} tone={row.tone} />
             ))}
             <SummaryRow tone="total" label={t("cart.summary.total")} value={total} />
-            <p className="text-13 mt-2">{editCart}</p>
           </div>
         </CollapsibleOrderRecap>
 
@@ -396,19 +306,17 @@ export function CheckoutView({
             <OrderRecap
               className="hidden lg:block"
               title={t("checkout.recap.title")}
-              editAction={editCart}
               lines={recapLines}
-              note={t("checkout.recap.note")}
               rows={rows}
               totalLabel={t("cart.summary.total")}
               totalValue={total}
             />
           }
         >
-          <PageHeader size="md" title={t("checkout.title")} />
+          <PageHeader size="md" title={t("waitlistInvite.title")} />
 
           <form
-            id="checkout"
+            id="invite-checkout"
             noValidate
             onSubmit={handleSubmit(placeOrder, onInvalid)}
             className="mt-9 flex flex-col gap-10"
@@ -448,28 +356,10 @@ export function CheckoutView({
               </>
             ) : null}
 
-            {/* Errors are already stated under each field; this only points at
-                them, and only once a submit has actually failed. */}
             {isSubmitted && !isValid ? (
               <Notice tone="error">{t("checkout.errorSummary")}</Notice>
             ) : null}
-
             {submitError ? <Notice tone="error">{submitError}</Notice> : null}
-
-            {/* The lead carries the state, the body says what it means, and
-                the link is the way out — this refusal is the one where the
-                shopper most likely already has what they came for. */}
-            {reusedForOrder ? (
-              <Notice tone="error" lead={t("checkout.transactionIdReusedLead")}>
-                {t("checkout.transactionIdReused", { orderNumber: reusedForOrder })}{" "}
-                <Link
-                  href={path.order(reusedForOrder)}
-                  className="text-clay hover:text-clay-deep font-semibold"
-                >
-                  {t("checkout.transactionIdReusedTrack")}
-                </Link>
-              </Notice>
-            ) : null}
 
             <div className="hidden lg:block">
               {primaryAction}
@@ -482,21 +372,8 @@ export function CheckoutView({
       </Shell>
 
       <StickyBar
-        /* The total only earns its line once there is one. Before a division
-           the figure is "—", so on the address step the bar was spending a
-           row, a gap and a hairline to say nothing while sitting on top of
-           the form being typed into. It collapses to just the button there,
-           and grows as the order becomes known. */
         label={deliveryKnown ? t("cart.summary.total") : undefined}
         value={deliveryKnown ? total : undefined}
-        /* The same rows the desktop rail draws, from the same derivation — but
-           only on the payment step. On a phone the docked bar sits on top of
-           whatever is being typed, and three extra rows plus a hairline left
-           the address form almost no room to work in. There is also nothing
-           to read yet: delivery has no figure until a division is chosen, so
-           on the delivery step the breakdown costs a third of the screen to
-           say "not known". By the payment step it is priced, and it is the
-           figure being typed into a banking app. */
         breakdown={
           step === "payment"
             ? rows.map((row) => (
@@ -507,9 +384,6 @@ export function CheckoutView({
         action={primaryAction}
       />
 
-      {/* Above the docked bar rather than under it: the bar is the thing the
-          shopper just tapped, and a message hidden behind it would be the
-          same silence this replaces. */}
       {toast ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 pb-40 lg:pb-8">
           <div className="shell flex justify-center">
@@ -523,25 +397,7 @@ export function CheckoutView({
   );
 }
 
-/**
- * The order number holding this transaction ID, if that is why the checkout
- * was refused. Null for every other failure.
- *
- * Both halves are checked — the code *and* a usable order number in details —
- * because the copy this drives is built around linking to that order. A
- * TRANSACTION_ID_ALREADY_USED that somehow arrived without one would render a
- * sentence with a hole in it and a link to nowhere; falling back to the
- * server's own message is worse English but honest.
- */
-function reusedOrderNumberOf(error: unknown): string | null {
-  if (!(error instanceof ApiError) || error.code !== "TRANSACTION_ID_ALREADY_USED") return null;
-
-  const claimedBy = error.body?.details?.claimedBy;
-
-  return typeof claimedBy === "string" && claimedBy ? claimedBy : null;
-}
-
-function CheckoutSkeleton() {
+function InviteCheckoutSkeleton() {
   return (
     <Shell className="py-10 lg:py-16" aria-busy="true">
       <Skeleton className="h-4 w-64" />

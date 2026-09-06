@@ -116,6 +116,19 @@ export const waitlistStatusEnum = pgEnum("waitlist_status", [
 ]);
 
 /**
+ * What an invite link lets its holder do at checkout.
+ *
+ * LOCKED: the book and quantity are fixed to what the entry was invited
+ * for — the customer can complete or abandon, not substitute. Meant for
+ * scarce stock a specific allocation was reserved against.
+ *
+ * OPEN: the invite is only proof that this waitlist turn has arrived —
+ * contact details pre-fill, but the cart is a normal, editable one. Meant
+ * for a general restock where nothing was reserved per-entry.
+ */
+export const waitlistInviteModeEnum = pgEnum("waitlist_invite_mode", ["LOCKED", "OPEN"]);
+
+/**
  * A review's moderation state. Built from the contract's `reviewStatuses` for
  * the same reason `payment_verification_outcome` is built from its union: the
  * queue's tabs, the API's filter and this column must agree on what states

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { Injectable } from "@nestjs/common";
-import type { WaitlistInvite } from "@sakura/contracts";
+import type { WaitlistInvite, WaitlistInviteMode } from "@sakura/contracts";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { DbService } from "../db/db.service";
@@ -28,17 +28,26 @@ export class WaitlistInviteService {
    * and updates its status alongside this. This method only ever does one
    * thing: attach a fresh, unguessable credential.
    *
+   * `mode` travels with the token rather than being inferred from the entry
+   * (e.g. from `bookId` being set): the same kind of entry can be invited
+   * either way depending on whether *this* release reserved stock against
+   * it, so the caller states it explicitly each time.
+   *
    * Regenerating overwrites any previous token, which quietly invalidates it
    * — the old link stops resolving because the row it pointed at now holds a
    * different value. There is no need to explicitly revoke it.
    */
-  async issue(entryId: string, ttlHours: number): Promise<{ token: string; expiresAt: Date }> {
+  async issue(
+    entryId: string,
+    ttlHours: number,
+    mode: WaitlistInviteMode,
+  ): Promise<{ token: string; expiresAt: Date }> {
     const token = randomBytes(32).toString("base64url");
     const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
 
     await this.dbService.db
       .update(waitlistEntries)
-      .set({ inviteToken: token, inviteExpiresAt: expiresAt, inviteUsedAt: null })
+      .set({ inviteToken: token, inviteMode: mode, inviteExpiresAt: expiresAt, inviteUsedAt: null })
       .where(eq(waitlistEntries.id, entryId));
 
     return { token, expiresAt };
@@ -64,8 +73,10 @@ export class WaitlistInviteService {
         customerName: true,
         customerEmail: true,
         customerPhone: true,
+        bookId: true,
         bookTitleSnapshot: true,
         quantity: true,
+        inviteMode: true,
         inviteExpiresAt: true,
       },
     });
@@ -76,8 +87,12 @@ export class WaitlistInviteService {
       fullName: entry.customerName,
       email: entry.customerEmail,
       phone: entry.customerPhone,
+      bookId: entry.bookId,
       bookTitle: entry.bookTitleSnapshot,
       quantity: entry.quantity,
+      // Non-null: issue() always sets mode alongside the token this query
+      // just matched on.
+      mode: entry.inviteMode!,
       // Non-null: the query above requires it to be in the future.
       expiresAt: entry.inviteExpiresAt!.toISOString(),
     };
@@ -95,11 +110,20 @@ export class WaitlistInviteService {
    *
    * `tx` lets this run inside the order-creation transaction, so a token
    * spend and the order it paid for commit or roll back together.
+   *
+   * Returns `mode` alongside the reservation so the caller can enforce it:
+   * a LOCKED invite's order must match `bookId`/`quantity` exactly before
+   * this transaction commits; an OPEN one only needed the token spent.
    */
   async consume(
     token: string,
     tx: PostgresJsDatabase<typeof schema> = this.dbService.db,
-  ): Promise<{ entryId: string; bookId: string | null; quantity: number } | null> {
+  ): Promise<{
+    entryId: string;
+    bookId: string | null;
+    quantity: number;
+    mode: WaitlistInviteMode;
+  } | null> {
     const [row] = await tx
       .update(waitlistEntries)
       .set({ inviteUsedAt: sql`now()`, updatedAt: sql`now()` })
@@ -114,8 +138,12 @@ export class WaitlistInviteService {
         entryId: waitlistEntries.id,
         bookId: waitlistEntries.bookId,
         quantity: waitlistEntries.quantity,
+        mode: waitlistEntries.inviteMode,
       });
 
-    return row ?? null;
+    // mode is non-null by the same invariant redeem() relies on: it is only
+    // ever null before an invite exists, and this UPDATE only matched a row
+    // that has a live, unexpired token.
+    return row ? { ...row, mode: row.mode! } : null;
   }
 }

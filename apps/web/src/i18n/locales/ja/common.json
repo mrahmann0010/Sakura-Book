@@ -547,5 +547,16 @@
       "retry": "再試行",
       "home": "トップへ戻る"
     }
+  },
+  "waitlistInvite": {
+    "eyebrow": "ご注文の順番です",
+    "title": "ご注文を完了する",
+    "lockedNotice": "このリンクは{{bookTitle}} × {{quantity}}を確保しています — 内容を変更することはできません。",
+    "expired": {
+      "eyebrow": "招待リンク",
+      "title": "この招待リンクは無効です",
+      "description": "期限切れか、すでに使用されている可能性があります。心当たりがない場合はお問い合わせください。",
+      "action": "お問い合わせ"
+    }
   }
 }
