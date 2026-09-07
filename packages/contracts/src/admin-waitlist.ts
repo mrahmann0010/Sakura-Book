@@ -28,6 +28,29 @@ export const adminWaitlistSorts = ["oldest", "recent", "quantity-desc"] as const
 
 export type AdminWaitlistSort = (typeof adminWaitlistSorts)[number];
 
+/**
+ * Narrow the list by what happened to the entry's invite token, rather than
+ * by its status.
+ *
+ * `status` cannot answer this on its own. A NOTIFIED entry is one that was
+ * *reached*, which says nothing about whether the link it was sent has been
+ * spent — and the entries staff most need to find after a restock are exactly
+ * the ones where those two diverge: texted, never ordered. Reading it off
+ * `inviteUsedAt`/`inviteExpiresAt` makes that a filter instead of a manual
+ * scan.
+ *
+ *   unused    a token was issued and has not been redeemed. Includes links
+ *             that are still live.
+ *   expired   the same, narrowed to links whose window has already closed —
+ *             the ones where re-inviting is the only way back in.
+ *
+ * There is deliberately no "used" member: an entry whose token was spent is
+ * already CONVERTED, and the status filter says that more plainly.
+ */
+export const adminWaitlistInviteStates = ["unused", "expired"] as const;
+
+export type AdminWaitlistInviteState = (typeof adminWaitlistInviteStates)[number];
+
 export const adminWaitlistQuerySchema = pageQuerySchema({ defaultPageSize: 50 }).extend({
   /**
    * Repeatable, same `preprocess` reason as the order queue's: one occurrence
@@ -54,6 +77,10 @@ export const adminWaitlistQuerySchema = pageQuerySchema({ defaultPageSize: 50 })
   /** Exact match on the submission language, so an SMS blast can go out one
    *  language at a time rather than needing a translator per batch. */
   locale: z.string().trim().min(2).max(12).optional(),
+
+  /** See `adminWaitlistInviteStates`. Absent means "don't filter on the
+   *  token at all", which is every screen except the re-invite tab. */
+  inviteState: z.enum(adminWaitlistInviteStates).optional(),
 
   /** Inclusive date bounds on when they signed up. ISO-8601 dates. */
   signedFrom: z.iso.date().optional(),
@@ -112,6 +139,26 @@ export const adminWaitlistEntrySchema = z.object({
       /** The gateway's complaint, truncated. Null on a successful send. */
       error: z.string().nullable(),
       at: z.string(),
+    })
+    .nullable(),
+
+  /**
+   * The invite token's own state, or null if this entry has never had one.
+   *
+   * Distinct from `inviteSms` above, which answers "did the text leave the
+   * gateway". This answers what became of the link inside it — still live,
+   * lapsed, or spent — which is the question the re-invite tab is built on
+   * and the one nothing else on the row can answer.
+   *
+   * The token itself is never sent: it is a bearer credential for placing
+   * somebody else's order, and no admin screen needs it. Only its lifecycle.
+   */
+  invite: z
+    .object({
+      mode: z.enum(waitlistInviteModes),
+      expiresAt: z.string(),
+      /** When it was spent. Null while the link is still redeemable. */
+      usedAt: z.string().nullable(),
     })
     .nullable(),
 

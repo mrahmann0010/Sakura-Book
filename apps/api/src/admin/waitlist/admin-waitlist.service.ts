@@ -69,6 +69,10 @@ export class AdminWaitlistService {
       inviteSmsStatus: waitlistEntries.inviteSmsStatus,
       inviteSmsError: waitlistEntries.inviteSmsError,
       inviteSmsAt: waitlistEntries.inviteSmsAt,
+      /* The token's lifecycle, never the token. See the mapper. */
+      inviteMode: waitlistEntries.inviteMode,
+      inviteExpiresAt: waitlistEntries.inviteExpiresAt,
+      inviteUsedAt: waitlistEntries.inviteUsedAt,
       createdAt: waitlistEntries.createdAt,
       /* Left join: `converted_order_id` is nullable and the order it points
          at may have been deleted, and neither case should drop the waitlist

@@ -1,5 +1,19 @@
 import type { AdminWaitlistQuery } from "@sakura/contracts";
-import { and, asc, desc, eq, gte, ilike, inArray, lte, or, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { waitlistEntries } from "../../db/schema";
 
 /**
@@ -51,6 +65,21 @@ export function adminWaitlistFilters(
   if (query.source) conditions.push(ilike(waitlistEntries.source, query.source));
   if (query.locale) conditions.push(ilike(waitlistEntries.locale, query.locale));
   if (query.bookId) conditions.push(eq(waitlistEntries.bookId, query.bookId));
+
+  /* "Issued and not spent" is three columns, not one: a row with no token was
+     never invited, and `inviteUsedAt` alone would sweep those in too — which
+     on the re-invite tab would mean texting people a *second* link who never
+     got a first. `expired` narrows the same set by the clock, evaluated in
+     Postgres rather than against a JS `new Date()` so a long-running list and
+     its count can't straddle the expiry of a row between them. */
+  if (query.inviteState) {
+    conditions.push(isNotNull(waitlistEntries.inviteToken));
+    conditions.push(isNull(waitlistEntries.inviteUsedAt));
+
+    if (query.inviteState === "expired") {
+      conditions.push(lte(waitlistEntries.inviteExpiresAt, sql`now()`));
+    }
+  }
 
   if (query.signedFrom) {
     conditions.push(gte(waitlistEntries.createdAt, new Date(`${query.signedFrom}T00:00:00.000Z`)));
