@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import type { AdminSmsSettings } from "@sakura/contracts";
 
-import { useAdminChecking } from "@/components/admin/admin-shell";
 import { Notice, Radio, RadioGroup } from "@/components/ui";
 import { AdminApiError, getAdminSmsSettings, updateAdminSmsSettings } from "@/lib/api/admin";
 
@@ -27,7 +26,6 @@ function choiceOf(simNumber: AdminSmsSettings["simNumber"]): SimChoice {
  * heading all live in `AdminSettingsShell`.
  */
 export default function AdminSmsSettingsPage() {
-  const checking = useAdminChecking();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,8 +35,6 @@ export default function AdminSmsSettingsPage() {
   const [choice, setChoice] = useState<SimChoice>("default");
 
   useEffect(() => {
-    if (checking) return;
-
     let cancelled = false;
 
     getAdminSmsSettings()
@@ -58,7 +54,7 @@ export default function AdminSmsSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [checking]);
+  }, []);
 
   async function save(next: SimChoice) {
     setChoice(next);

@@ -3,7 +3,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { AdminRestockSchedule } from "@sakura/contracts";
 
-import { useAdminChecking } from "@/components/admin/admin-shell";
 import { Button, Input } from "@/components/ui";
 import {
   AdminApiError,
@@ -28,7 +27,6 @@ import {
  * the page heading all live in `AdminSettingsShell`.
  */
 export default function AdminRestockSettingsPage() {
-  const checking = useAdminChecking();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +38,6 @@ export default function AdminRestockSettingsPage() {
   const [reopenDate, setReopenDate] = useState("");
 
   useEffect(() => {
-    if (checking) return;
-
     let cancelled = false;
 
     getAdminRestockSchedule()
@@ -63,7 +59,7 @@ export default function AdminRestockSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [checking]);
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();

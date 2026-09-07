@@ -4,12 +4,10 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AdminBookDetail } from "@sakura/contracts";
 
-import { useAdminChecking } from "@/components/admin/admin-shell";
 import { BookForm, type BookFormValues } from "@/components/admin/book-form";
 import { AdminApiError, getAdminBook, updateAdminBook } from "@/lib/api/admin";
 
 export default function EditAdminBookPage() {
-  const checking = useAdminChecking();
   const { id } = useParams<{ id: string }>();
 
   const [book, setBook] = useState<AdminBookDetail | null>(null);
@@ -17,11 +15,10 @@ export default function EditAdminBookPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (checking) return;
     getAdminBook(id)
       .then(setBook)
       .catch((err: unknown) => setError(messageOf(err, "Could not load this book.")));
-  }, [checking, id]);
+  }, [id]);
 
   async function submit(values: BookFormValues) {
     setSaved(false);

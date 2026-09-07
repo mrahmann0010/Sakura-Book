@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AdminOrderSummary, OrderStatus } from "@sakura/contracts";
 
-import { useAdminChecking } from "@/components/admin/admin-shell";
 import { Button } from "@/components/ui";
 import { bdDivisions } from "@/lib/bd-geo";
 import {
@@ -74,7 +73,6 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 export default function AdminAcceptedOrdersPage() {
-  const checking = useAdminChecking();
   const { locale } = useParams<{ locale: string }>();
 
   const [tab, setTab] = useState<TabKey>("todo");
@@ -102,10 +100,9 @@ export default function AdminAcceptedOrdersPage() {
   // choosing either is the whole point of the screen, and asking someone to
   // press Search after picking one from a dropdown reads as a broken filter.
   useEffect(() => {
-    if (checking) return;
     void load(tab, division, q, 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checking, tab, division]);
+  }, [tab, division]);
 
   async function load(
     activeKey: TabKey,

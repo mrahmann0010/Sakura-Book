@@ -5,14 +5,12 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AdminBookSummary } from "@sakura/contracts";
 
-import { useAdminChecking } from "@/components/admin/admin-shell";
 import { Button, LinkButton, Modal } from "@/components/ui";
 import { AdminApiError, deleteAdminBook, listAdminBooks } from "@/lib/api/admin";
 import { formatMoney } from "@/lib/money";
 import { fileUrl } from "@/lib/storage-url";
 
 export default function AdminBooksPage() {
-  const checking = useAdminChecking();
   const { locale } = useParams<{ locale: string }>();
 
   const [items, setItems] = useState<AdminBookSummary[]>([]);
@@ -25,9 +23,9 @@ export default function AdminBooksPage() {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    if (!checking) void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- load() closes over `q`/page, re-run only on the gate clearing
-  }, [checking]);
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load() closes over `q`/page; this is the mount fetch
+  }, []);
 
   async function load(query = q) {
     setError(null);

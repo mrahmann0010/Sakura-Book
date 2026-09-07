@@ -3,7 +3,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { AdminWaitlistInviteSettings } from "@sakura/contracts";
 
-import { useAdminChecking } from "@/components/admin/admin-shell";
 import { Button, Input, Select } from "@/components/ui";
 import {
   AdminApiError,
@@ -33,7 +32,6 @@ const LANGUAGE_OPTIONS: { value: WaitlistInviteLanguage; label: string }[] = [
  * and the page heading all live in `AdminSettingsShell`.
  */
 export default function AdminWaitlistInviteSettingsPage() {
-  const checking = useAdminChecking();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,8 +43,6 @@ export default function AdminWaitlistInviteSettingsPage() {
   const [language, setLanguage] = useState<WaitlistInviteLanguage>(DEFAULT_LANGUAGE);
 
   useEffect(() => {
-    if (checking) return;
-
     let cancelled = false;
 
     getAdminWaitlistInviteSettings()
@@ -67,7 +63,7 @@ export default function AdminWaitlistInviteSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [checking]);
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();

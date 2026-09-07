@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { AdminWaitlistBook } from "@sakura/contracts";
 
-import { useAdminChecking } from "@/components/admin/admin-shell";
 import { Button, Checkbox, Input, Notice, Toast } from "@/components/ui";
 import { AdminApiError, getAdminWaitlistBooks, updateAdminWaitlistBooks } from "@/lib/api/admin";
 
@@ -25,7 +24,6 @@ import { AdminApiError, getAdminWaitlistBooks, updateAdminWaitlistBooks } from "
  * and the page heading all live in `AdminSettingsShell`.
  */
 export default function AdminNotifyBooksPage() {
-  const checking = useAdminChecking();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,8 +44,6 @@ export default function AdminNotifyBooksPage() {
   }, [toast]);
 
   useEffect(() => {
-    if (checking) return;
-
     let cancelled = false;
 
     getAdminWaitlistBooks()
@@ -67,7 +63,7 @@ export default function AdminNotifyBooksPage() {
     return () => {
       cancelled = true;
     };
-  }, [checking]);
+  }, []);
 
   /* Filtering the rendered rows only — `selected` is keyed by id and untouched
      by it, so a title scrolled out of view by a search stays selected and is

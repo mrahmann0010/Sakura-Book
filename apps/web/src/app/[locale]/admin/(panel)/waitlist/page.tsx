@@ -9,7 +9,6 @@ import type {
   WaitlistStatus,
 } from "@sakura/contracts";
 
-import { useAdminChecking } from "@/components/admin/admin-shell";
 import { Button } from "@/components/ui";
 import {
   AdminApiError,
@@ -53,8 +52,6 @@ const EMPTY_COUNTS: AdminWaitlistCounts = {
 };
 
 export default function AdminWaitlistPage() {
-  const checking = useAdminChecking();
-
   const [tab, setTab] = useState<WaitlistStatus>("PENDING");
   const [items, setItems] = useState<AdminWaitlistEntry[]>([]);
   const [counts, setCounts] = useState<AdminWaitlistCounts>(EMPTY_COUNTS);
@@ -80,20 +77,18 @@ export default function AdminWaitlistPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    if (checking) return;
     void load(tab, 1);
     // Filters are applied by the Search button rather than on every keystroke,
     // so they are deliberately not dependencies here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checking, tab]);
+  }, [tab]);
 
   // The book filter's options — fetched once, not per tab switch.
   useEffect(() => {
-    if (checking) return;
     getAdminWaitlistBooks()
       .then(setBooks)
       .catch(() => undefined);
-  }, [checking]);
+  }, []);
 
   async function load(activeTab: WaitlistStatus, pageNumber: number) {
     setError(null);

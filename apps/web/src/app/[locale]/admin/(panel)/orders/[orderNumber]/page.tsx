@@ -9,7 +9,6 @@ import type {
   OrderStatus,
 } from "@sakura/contracts";
 
-import { useAdminChecking } from "@/components/admin/admin-shell";
 import { ReceiptBadge, VerificationBadge } from "@/components/admin/payment-safety";
 import { Button, Notice, Textarea } from "@/components/ui";
 import {
@@ -35,7 +34,6 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
 };
 
 export default function AdminOrderDetailPage() {
-  const checking = useAdminChecking();
   const { orderNumber, locale } = useParams<{ orderNumber: string; locale: string }>();
 
   const [order, setOrder] = useState<AdminOrderDetail | null>(null);
@@ -76,7 +74,6 @@ export default function AdminOrderDetailPage() {
   const [refundReason, setRefundReason] = useState("");
 
   useEffect(() => {
-    if (checking) return;
     let cancelled = false;
 
     getAdminOrder(orderNumber)
@@ -94,7 +91,7 @@ export default function AdminOrderDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [checking, orderNumber]);
+  }, [orderNumber]);
 
   /** @returns whether the action succeeded, for callers with their own form to clear. */
   async function run(action: () => Promise<AdminOrderDetail>): Promise<boolean> {

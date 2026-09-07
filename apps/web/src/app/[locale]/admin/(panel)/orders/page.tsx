@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AdminOrderSummary, OrderStatus } from "@sakura/contracts";
 
-import { useAdminChecking } from "@/components/admin/admin-shell";
 import { PaymentSafetyBadges } from "@/components/admin/payment-safety";
 import { Button } from "@/components/ui";
 import { AdminApiError, listAdminOrders } from "@/lib/api/admin";
@@ -31,7 +30,6 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 export default function AdminOrdersPage() {
-  const checking = useAdminChecking();
   const { locale } = useParams<{ locale: string }>();
 
   const [tab, setTab] = useState<TabKey>("pending");
@@ -43,9 +41,8 @@ export default function AdminOrdersPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (checking) return;
     void load(tab, "", 1);
-  }, [checking, tab]);
+  }, [tab]);
 
   async function load(activeTab: TabKey, query: string, pageNumber: number) {
     setError(null);

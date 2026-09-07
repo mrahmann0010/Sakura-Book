@@ -3,7 +3,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { AdminRegion, AdminShippingTerms } from "@sakura/contracts";
 
-import { useAdminChecking } from "@/components/admin/admin-shell";
 import { Button, Input, Select } from "@/components/ui";
 import {
   AdminApiError,
@@ -46,7 +45,6 @@ function taka(cents: number | null): string {
  * page heading all live in `AdminSettingsShell`.
  */
 export default function AdminShippingSettingsPage() {
-  const checking = useAdminChecking();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,8 +64,6 @@ export default function AdminShippingSettingsPage() {
   const [savingSlug, setSavingSlug] = useState<string | null>(null);
 
   useEffect(() => {
-    if (checking) return;
-
     let cancelled = false;
 
     Promise.all([getAdminShippingTerms(), listAdminRegions()])
@@ -95,7 +91,7 @@ export default function AdminShippingSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [checking]);
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();

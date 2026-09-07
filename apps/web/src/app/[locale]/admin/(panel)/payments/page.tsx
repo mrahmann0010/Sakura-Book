@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import type { PaymentBreakdown, PaymentBreakdownRange, PaymentPlatform } from "@sakura/contracts";
 
-import { useAdminChecking } from "@/components/admin/admin-shell";
 import { AdminApiError, getAdminPaymentBreakdown } from "@/lib/api/admin";
 import { formatCredit, formatMoney } from "@/lib/money";
 
@@ -81,8 +80,6 @@ function todayIso(): string {
 }
 
 export default function AdminPaymentsPage() {
-  const checking = useAdminChecking();
-
   const [range, setRange] = useState<PaymentBreakdownRange>("all");
   const [from, setFrom] = useState(todayIso());
   const [to, setTo] = useState(todayIso());
@@ -90,7 +87,6 @@ export default function AdminPaymentsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (checking) return;
     // A custom range is only requestable once both ends are set and ordered —
     // otherwise the API would answer a 400 for every keystroke in the date
     // fields, and the reader would watch an error flash as they type.
@@ -111,7 +107,7 @@ export default function AdminPaymentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [checking, range, from, to]);
+  }, [range, from, to]);
 
   /**
    * Whether what is on screen is the answer to what is selected.

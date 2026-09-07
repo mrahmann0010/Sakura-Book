@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { adminLogout, adminRefreshSession } from "@/lib/api/admin";
 import { ADMIN_AUTHED_KEY } from "@/lib/admin-auth";
@@ -44,25 +44,6 @@ const NAV = [
 ] as const;
 
 /**
- * How the pages below the shell learn the gate's verdict.
- *
- * They each used to call `useAdminGate()` themselves and hand the answer back
- * down as `AdminShell`'s `checking` prop. Now the `(panel)` layout owns the
- * shell and the gate, and a page calling the hook again would mean a second
- * `/admin/auth/me` per load for an answer it is already being handed.
- */
-const CheckingContext = createContext(true);
-
-/**
- * `true` while the session is still being verified. Pages read this and hold
- * off fetching until it goes false — the same contract `useAdminGate` had with
- * them before.
- */
-export function useAdminChecking(): boolean {
-  return useContext(CheckingContext);
-}
-
-/**
  * The chrome every authenticated admin page renders inside: a persistent
  * sidebar, a sign-out control, and the dark-themed surface `theme-lock.tsx`
  * activates for the whole `/admin` segment.
@@ -76,9 +57,15 @@ export function useAdminChecking(): boolean {
  *
  * Login sits outside the group on purpose — it is the one `/admin` route that
  * must render without a session.
+ *
+ * The gate here does not hold the screen back. Once the local sign-in flag
+ * says this browser has a session, `children` render and fetch immediately
+ * while `/admin/auth/me` is still in the air beside them — see `useAdminGate`
+ * for why that is safe, and for what the flag is still trusted to decide
+ * synchronously.
  */
 export function AdminShell({ children }: { children: ReactNode }) {
-  const { checking } = useAdminGate();
+  const status = useAdminGate();
   const { locale } = useParams<{ locale: string }>();
   const pathname = usePathname();
   const router = useRouter();
@@ -97,20 +84,22 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   // Keep the session ahead of the access token's expiry while a page sits
   // open and idle — signing out from under someone mid-task is the failure
-  // this exists to prevent. Not started until the gate clears, and it stops
-  // itself on unmount; a failed tick is silently left for the next one, or
-  // for the reactive retry in `adminFetch`, to sort out.
+  // this exists to prevent. Not started until the panel is actually up, and it
+  // stops itself on unmount; a failed tick is silently left for the next one,
+  // or for the reactive retry in `adminFetch`, to sort out.
   useEffect(() => {
-    if (checking) return;
+    if (status !== "allowed") return;
 
     const id = setInterval(() => {
       void adminRefreshSession();
     }, SESSION_REFRESH_INTERVAL_MS);
 
     return () => clearInterval(id);
-  }, [checking]);
+  }, [status]);
 
-  if (checking) {
+  // `denied` covers both the hydration render, before localStorage can be
+  // read, and a real rejection with a redirect already in flight.
+  if (status !== "allowed") {
     return (
       <div className="bg-page text-secondary flex min-h-screen items-center justify-center">
         Checking session…
@@ -211,9 +200,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <div className="mt-auto px-3 py-6">{signOutButton}</div>
       </aside>
 
-      <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-        <CheckingContext value={checking}>{children}</CheckingContext>
-      </main>
+      <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">{children}</main>
     </div>
   );
 }

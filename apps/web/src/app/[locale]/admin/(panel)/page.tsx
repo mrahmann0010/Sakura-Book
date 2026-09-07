@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Dashboard, MonthlyReport } from "@sakura/contracts";
 
-import { useAdminChecking } from "@/components/admin/admin-shell";
 import { BarChart, type BarPoint } from "@/components/admin/bar-chart";
 import { AdminApiError, getAdminDashboard, getAdminMonthlyReport } from "@/lib/api/admin";
 import { formatMoney } from "@/lib/money";
@@ -40,8 +39,6 @@ function currentMonth(): string {
 }
 
 export default function AdminDashboardPage() {
-  const checking = useAdminChecking();
-
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,14 +47,12 @@ export default function AdminDashboardPage() {
   const [reportError, setReportError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (checking) return;
     getAdminDashboard()
       .then(setDashboard)
       .catch((err: unknown) => setError(messageOf(err, "Could not load the dashboard.")));
-  }, [checking]);
+  }, []);
 
   useEffect(() => {
-    if (checking) return;
     let cancelled = false;
 
     getAdminMonthlyReport(month)
@@ -73,7 +68,7 @@ export default function AdminDashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [checking, month]);
+  }, [month]);
 
   const trendPoints: BarPoint[] = useMemo(
     () =>
