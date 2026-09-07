@@ -109,7 +109,7 @@ export default function AdminOrdersPage() {
       <div className="rounded-container border-rule bg-surface overflow-x-auto border">
         <table className="text-13.5 w-full min-w-[940px] text-left">
           <thead>
-            <tr className="border-rule text-caption text-muted border-b uppercase">
+            <tr className="border-rule-strong text-caption text-muted border-b uppercase">
               <th className="px-4 py-3 font-medium">Order</th>
               <th className="px-4 py-3 font-medium">Customer</th>
               <th className="px-4 py-3 font-medium">Placed</th>
@@ -126,7 +126,7 @@ export default function AdminOrdersPage() {
           </thead>
           <tbody>
             {items.map((order) => (
-              <tr key={order.orderNumber} className="border-rule/60 border-b">
+              <tr key={order.orderNumber} className="border-rule border-b last:border-0">
                 <td className="text-ink px-4 py-3 font-mono">{order.orderNumber}</td>
                 <td className="px-4 py-3">
                   <span className="text-ink block">{order.customerName}</span>

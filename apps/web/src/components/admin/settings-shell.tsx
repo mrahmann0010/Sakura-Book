@@ -16,6 +16,11 @@ const TABS = [
   { href: "/settings/notify-books", label: "Notify Page Books" },
   { href: "/settings/sms", label: "SMS" },
   { href: "/settings/waitlist-invite", label: "Waitlist Invites" },
+  // Last, and set apart from the five above it: those configure the shop for
+  // customers, this one configures the panel for whoever is standing in front
+  // of it. It is here because it is where a setting gets looked for, not
+  // because it belongs to the same category.
+  { href: "/settings/appearance", label: "Appearance" },
 ] as const;
 
 /**

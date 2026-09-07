@@ -19,7 +19,8 @@ import { cn } from "@/lib/utils";
    word, so the colour is never the only signal.
    -------------------------------------------------------------------------- */
 
-const INDICATOR = "inline-flex items-center rounded-md px-2 py-1 font-mono text-10 tracking-eyebrow uppercase whitespace-nowrap";
+const INDICATOR =
+  "inline-flex items-center rounded-md px-2 py-1 font-mono text-10 tracking-eyebrow uppercase whitespace-nowrap";
 
 const RECEIPT_TONES: Record<ReceiptUniqueness["state"], { label: string; className: string }> = {
   /** Ink, not green — the design system has no green, and this is the good case. */

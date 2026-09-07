@@ -188,7 +188,7 @@ export default function AdminDashboardPage() {
                 <div className="mt-6 max-h-64 overflow-y-auto">
                   <table className="text-13.5 w-full text-left">
                     <thead>
-                      <tr className="border-rule text-caption text-muted border-b uppercase">
+                      <tr className="border-rule-strong text-caption text-muted border-b uppercase">
                         <th className="py-2 pr-4 font-medium">Date</th>
                         <th className="py-2 pr-4 font-medium">Orders</th>
                         <th className="py-2 font-medium">Revenue</th>
@@ -196,7 +196,7 @@ export default function AdminDashboardPage() {
                     </thead>
                     <tbody>
                       {report.daily.map((day) => (
-                        <tr key={day.date} className="border-rule/60 border-b">
+                        <tr key={day.date} className="border-rule border-b last:border-0">
                           <td className="text-secondary py-2 pr-4">{day.date}</td>
                           <td className="text-ink py-2 pr-4">{day.orderCount}</td>
                           <td className="text-ink py-2">
@@ -218,7 +218,7 @@ export default function AdminDashboardPage() {
                 {dashboard.statusBuckets.map((bucket) => (
                   <li
                     key={bucket.status}
-                    className="border-rule/60 text-13.5 flex items-center justify-between border-b py-2"
+                    className="border-rule text-13.5 flex items-center justify-between border-b py-2"
                   >
                     <span className="text-secondary">{bucket.status}</span>
                     <span className="text-ink">{bucket.count}</span>
@@ -236,7 +236,7 @@ export default function AdminDashboardPage() {
                 {dashboard.lowStock.map((book) => (
                   <li
                     key={book.slug}
-                    className="border-rule/60 text-13.5 flex items-center justify-between border-b py-2"
+                    className="border-rule text-13.5 flex items-center justify-between border-b py-2"
                   >
                     <span className="text-secondary">{book.title}</span>
                     <span className="text-ink">
@@ -257,7 +257,7 @@ export default function AdminDashboardPage() {
               {dashboard.topSellers.map((book) => (
                 <li
                   key={book.slug}
-                  className="border-rule/60 text-13.5 flex items-center justify-between border-b py-2"
+                  className="border-rule text-13.5 flex items-center justify-between border-b py-2"
                 >
                   <span className="text-secondary">{book.title}</span>
                   <span className="text-ink">{book.unitsSold} sold</span>

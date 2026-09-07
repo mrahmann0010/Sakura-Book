@@ -93,7 +93,7 @@ export default function AdminBooksPage() {
         <div className="rounded-container border-rule bg-surface overflow-x-auto border">
           <table className="text-13.5 w-full min-w-[720px] text-left">
             <thead>
-              <tr className="border-rule text-caption text-muted border-b uppercase">
+              <tr className="border-rule-strong text-caption text-muted border-b uppercase">
                 <th className="px-4 py-3 font-medium">Title</th>
                 <th className="px-4 py-3 font-medium">Authors</th>
                 <th className="px-4 py-3 font-medium">Price</th>
@@ -104,7 +104,7 @@ export default function AdminBooksPage() {
             </thead>
             <tbody>
               {items.map((book) => (
-                <tr key={book.id} className="border-rule/60 border-b">
+                <tr key={book.id} className="border-rule border-b last:border-0">
                   <td className="flex items-center gap-3 px-4 py-3">
                     {/* eslint-disable-next-line @next/next/no-img-element -- admin-supplied/external URL */}
                     <img

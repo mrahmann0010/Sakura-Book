@@ -376,7 +376,7 @@ export default function AdminOrderDetailPage() {
       <section className="rounded-container border-rule bg-surface overflow-x-auto border">
         <table className="text-13.5 w-full min-w-[560px] text-left">
           <thead>
-            <tr className="border-rule text-caption text-muted border-b uppercase">
+            <tr className="border-rule-strong text-caption text-muted border-b uppercase">
               <th className="px-4 py-3 font-medium">Title</th>
               <th className="px-4 py-3 font-medium">Qty</th>
               <th className="px-4 py-3 font-medium">Unit price</th>
@@ -385,7 +385,7 @@ export default function AdminOrderDetailPage() {
           </thead>
           <tbody>
             {order.lines.map((line, index) => (
-              <tr key={index} className="border-rule/60 border-b">
+              <tr key={index} className="border-rule border-b last:border-0">
                 <td className="text-ink px-4 py-3">{line.title}</td>
                 <td className="text-secondary px-4 py-3">{line.quantity}</td>
                 <td className="text-secondary px-4 py-3">
@@ -578,7 +578,7 @@ export default function AdminOrderDetailPage() {
         <h2 className="text-h4 text-ink font-serif">Timeline</h2>
         <ul className="mt-4 flex flex-col gap-3">
           {order.timeline.map((event, index) => (
-            <li key={index} className="border-rule/60 text-13.5 border-b pb-3 last:border-0">
+            <li key={index} className="border-rule text-13.5 border-b pb-3 last:border-0">
               <span className="text-ink font-medium">{STATUS_LABELS[event.status]}</span>
               <span className="text-caption text-muted ml-2">
                 {new Date(event.occurredAt).toLocaleString()}

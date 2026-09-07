@@ -326,7 +326,7 @@ export default function AdminPaymentsPage() {
                 <div className="mt-4 overflow-x-auto">
                   <table className="text-13.5 w-full min-w-2xl text-left">
                     <thead>
-                      <tr className="border-rule text-caption text-muted border-b uppercase">
+                      <tr className="border-rule-strong text-caption text-muted border-b uppercase">
                         <th className="py-2 pr-4 font-medium">Platform</th>
                         <th className="py-2 pr-4 text-right font-medium">Orders</th>
                         <th className="py-2 pr-4 text-right font-medium">Books</th>
@@ -341,7 +341,7 @@ export default function AdminPaymentsPage() {
                           totals.totalCents > 0 ? row.totalCents / totals.totalCents : 0;
 
                         return (
-                          <tr key={row.platform} className="border-rule/60 border-b">
+                          <tr key={row.platform} className="border-rule border-b last:border-0">
                             <td className="text-ink py-2.5 pr-4">
                               {PLATFORM_LABELS[row.platform]}
                               {row.expectedCents > 0 ? (

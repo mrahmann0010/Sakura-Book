@@ -378,7 +378,7 @@ export default function AdminWaitlistPage() {
       <div className="rounded-container border-rule bg-surface overflow-x-auto border">
         <table className="text-13.5 w-full min-w-[1040px] text-left">
           <thead>
-            <tr className="border-rule text-caption text-muted border-b uppercase">
+            <tr className="border-rule-strong text-caption text-muted border-b uppercase">
               <th className="px-4 py-3">
                 <input
                   type="checkbox"
@@ -399,7 +399,7 @@ export default function AdminWaitlistPage() {
           </thead>
           <tbody>
             {items.map((entry) => (
-              <tr key={entry.id} className="border-rule/60 border-b align-top">
+              <tr key={entry.id} className="border-rule border-b align-top last:border-0">
                 <td className="px-4 py-3">
                   <input
                     type="checkbox"

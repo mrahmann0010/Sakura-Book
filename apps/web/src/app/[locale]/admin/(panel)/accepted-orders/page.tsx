@@ -342,7 +342,7 @@ export default function AdminAcceptedOrdersPage() {
       <div className="rounded-container border-rule bg-surface overflow-x-auto border">
         <table className="text-13.5 w-full min-w-[880px] text-left">
           <thead>
-            <tr className="border-rule text-caption text-muted border-b uppercase">
+            <tr className="border-rule-strong text-caption text-muted border-b uppercase">
               {activeTab.shippable ? (
                 <th scope="col" className="w-12 px-4 py-3 font-medium">
                   {/* Visible header text rather than a select-all box. The
@@ -365,7 +365,7 @@ export default function AdminAcceptedOrdersPage() {
           </thead>
           <tbody>
             {items.map((order) => (
-              <tr key={order.orderNumber} className="border-rule/60 border-b">
+              <tr key={order.orderNumber} className="border-rule border-b last:border-0">
                 {activeTab.shippable ? (
                   <td className="px-4 py-3">
                     {/* A checkbox, because the action it stands for is a
