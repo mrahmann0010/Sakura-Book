@@ -355,7 +355,7 @@ export const stepper = cva(
 );
 
 export const stepperButton =
-  "px-3 py-2 text-body text-secondary transition-colors duration-150 hover:text-ink disabled:text-muted disabled:pointer-events-none";
+  "px-3 py-2 text-body text-secondary transition-colors duration-150 hover:text-ink disabled:text-muted disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-muted";
 
 /* --------------------------------------------------------------------------
    Spinner — Foundations · "SPINNER"

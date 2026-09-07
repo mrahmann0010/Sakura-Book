@@ -295,27 +295,22 @@ export function InviteCheckoutView({
           })}
         </Notice>
 
-        {/* Only worth a control when there is something to choose. A one-copy
-            invite renders the notice above and nothing else — a stepper with
-            both arrows dead is a worse way to say "one". */}
-        {quantity > 1 ? (
-          <div className="border-rule mt-6 flex flex-wrap items-center justify-between gap-3 border-b pb-6">
-            <div>
-              <p className="text-13.5 text-ink">{t("waitlistInvite.quantityLabel")}</p>
-              <p className="text-caption text-secondary mt-1">
-                {t("waitlistInvite.quantityHint", { quantity })}
-              </p>
-            </div>
-            <Stepper
-              label={t("waitlistInvite.quantityLabel")}
-              value={orderQuantity}
-              min={1}
-              max={quantity}
-              onChange={setOrderQuantity}
-              engaged
-            />
+        <div className="border-rule mt-6 flex flex-wrap items-center justify-between gap-3 border-b pb-6">
+          <div>
+            <p className="text-13.5 text-ink">{t("waitlistInvite.quantityLabel")}</p>
+            <p className="text-caption text-secondary mt-1">
+              {t("waitlistInvite.quantityHint", { quantity })}
+            </p>
           </div>
-        ) : null}
+          <Stepper
+            label={t("waitlistInvite.quantityLabel")}
+            value={orderQuantity}
+            min={1}
+            max={quantity}
+            onChange={setOrderQuantity}
+            engaged
+          />
+        </div>
 
         <CollapsibleOrderRecap
           className="mt-6 lg:hidden"
