@@ -169,6 +169,8 @@
       "fullName": "Full name",
       "email": "Email",
       "phone": "Phone",
+      "secondaryPhone": "Secondary phone (optional)",
+      "secondaryPhoneHint": "A second number the courier can try.",
       "division": "Division",
       "divisionPlaceholder": "Select division",
       "district": "District",

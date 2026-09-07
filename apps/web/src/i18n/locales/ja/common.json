@@ -167,6 +167,8 @@
       "fullName": "お名前",
       "email": "メールアドレス",
       "phone": "電話番号",
+      "secondaryPhone": "予備の電話番号(任意)",
+      "secondaryPhoneHint": "配送業者が次に試す2番目の番号。",
       "division": "県(Division)",
       "divisionPlaceholder": "県を選択",
       "district": "郡(District)",

@@ -272,6 +272,9 @@ export default function AdminOrderDetailPage() {
               <Row label="Name" value={order.shipping.fullName} />
               <Row label="Email" value={order.customerEmail} />
               <Row label="Phone" value={order.shipping.phone} />
+              {order.shipping.secondaryPhone ? (
+                <Row label="Secondary phone" value={order.shipping.secondaryPhone} />
+              ) : null}
               <Row
                 label="Address"
                 value={`${order.shipping.address}, ${order.shipping.city}, ${order.shipping.region}`}

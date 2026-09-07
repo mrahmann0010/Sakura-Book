@@ -120,6 +120,8 @@ export const orderSchema = z.object({
     city: z.string(),
     region: z.string(),
     phone: z.string(),
+    /** The courier's second number. Null on every order placed without one. */
+    secondaryPhone: z.string().nullable(),
   }),
 
   /**

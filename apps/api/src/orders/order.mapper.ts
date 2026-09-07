@@ -66,6 +66,7 @@ export function toOrderResponse(row: OrderRow): Order {
       city: address.city,
       region: address.region,
       phone: row.customerPhone,
+      secondaryPhone: row.customerSecondaryPhone,
     },
 
     // Ascending: the timeline reads top-down as the order progressed, and the

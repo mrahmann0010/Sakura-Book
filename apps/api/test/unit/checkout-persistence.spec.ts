@@ -30,6 +30,7 @@ const DESTINATIONS: Record<string, keyof typeof orders.$inferInsert | null> = {
   fullName: "customerName",
   email: "customerEmail",
   phone: "customerPhone",
+  secondaryPhone: "customerSecondaryPhone",
   method: "paymentMethod",
   senderNumber: "senderNumber",
   transactionId: "transactionId",
@@ -106,6 +107,25 @@ describe("orderValuesFrom", () => {
     coupon: undefined,
     rejected: [],
   } as never;
+
+  it("carries the courier's second number onto the order row", () => {
+    const values = orderValuesFrom(request({ secondaryPhone: "01822222222" }), priced, "idem-0");
+
+    expect(values.customerSecondaryPhone).toBe("01822222222");
+  });
+
+  it("stores an absent second number as null, not an empty string", () => {
+    /* Optional in the form, so an untouched field posts "" — and "no second
+       number" must be one stored value, the way the receipt fields are. */
+    expect(orderValuesFrom(request({ secondaryPhone: "  " }), priced, "idem-0a")).toHaveProperty(
+      "customerSecondaryPhone",
+      null,
+    );
+    expect(orderValuesFrom(request({}), priced, "idem-0b")).toHaveProperty(
+      "customerSecondaryPhone",
+      null,
+    );
+  });
 
   it("carries the manual-transfer receipt onto the order row", () => {
     /* The regression this file exists for. Both fields are required by

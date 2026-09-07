@@ -31,6 +31,20 @@ export const shippingAddressSchema = z.object({
   fullName: required("Add the name the parcel should be addressed to."),
   email: z.string().trim().email("Use an address like you@example.com so we can send updates."),
   phone: required("Add a number the courier can reach you on."),
+  /**
+   * A second number for the courier, when the first one does not answer.
+   *
+   * The delivery service's own manifest carries two — primary and secondary —
+   * and this is the second one. Optional, because most orders have only one
+   * number and a required field here would be filled with a copy of `phone`,
+   * which is worse than an absent value: a courier reading the same number
+   * twice has no fallback and no way to know it.
+   *
+   * Free text like `phone`, and normalised to E.164 at the point of sending
+   * rather than here — see sms/phone.ts on why the stored form stays what the
+   * customer typed.
+   */
+  secondaryPhone: z.string().trim().max(32).optional(),
   address: required("Add the street, house and area so the courier can find you."),
   city: required("Add the town or city."),
   /**
@@ -144,6 +158,7 @@ export const checkoutDefaults: CheckoutValues = {
   fullName: "",
   email: "",
   phone: "",
+  secondaryPhone: "",
   address: "",
   city: "",
   region: "inside-dhaka",
