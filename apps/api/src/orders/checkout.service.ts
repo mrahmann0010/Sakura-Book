@@ -357,10 +357,20 @@ export class CheckoutService {
    * `consume` throws `WaitlistInviteInvalidError` itself when the token is
    * wrong, expired, or already spent — nothing to add here. What this adds is
    * the LOCKED-mode check `WaitlistInviteService.consume`'s own comment
-   * documents as the caller's job: a LOCKED invite reserved one book at one
-   * quantity, and an order for anything else is refused even though the token
-   * itself was genuine. An OPEN invite has nothing further to check — the
-   * token being spent is the whole requirement.
+   * documents as the caller's job: a LOCKED invite reserved one book, and an
+   * order for a different one — or for more copies than were held — is
+   * refused even though the token itself was genuine. An OPEN invite has
+   * nothing further to check: the token being spent is the whole requirement.
+   *
+   * The reserved quantity is a **ceiling, not an exact match**. Someone who
+   * asked for three and now wants two is still ordering the thing they were
+   * invited for, and refusing that costs the shop a sale to make a number
+   * agree — they would place the smaller order without the invite instead,
+   * and the entry would never close as converted. Going the other way is what
+   * the reservation exists to prevent: the invite is the shop's promise that
+   * this many copies are set aside, and a fourth copy was never part of it.
+   * One is the floor because an order for zero books is not an order; the
+   * cart schema refuses it before this runs.
    *
    * @returns the waitlist entry the token belonged to, so `writeOrder` can
    * stamp the order onto it once the order exists.
@@ -375,7 +385,8 @@ export class CheckoutService {
       const matches =
         request.items.length === 1 &&
         request.items[0].bookId === reservation.bookId &&
-        request.items[0].quantity === reservation.quantity;
+        request.items[0].quantity >= 1 &&
+        request.items[0].quantity <= reservation.quantity;
 
       if (!matches) {
         throw new WaitlistInviteMismatchError(reservation.bookId ?? "", reservation.quantity);

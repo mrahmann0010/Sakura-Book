@@ -16,6 +16,7 @@ import {
   Notice,
   OrderId,
   Skeleton,
+  Stepper,
   Toast,
 } from "@/components/ui";
 import type { Locale } from "@/i18n/settings";
@@ -41,17 +42,26 @@ import {
 import { ShippingFields } from "./shipping-fields";
 
 /* --------------------------------------------------------------------------
-   Checkout for a LOCKED waitlist invite — one reserved book, at a fixed
-   quantity, that cannot become a different order.
+   Checkout for a LOCKED waitlist invite — one reserved book, up to the
+   number of copies it held, that cannot become a different order.
 
    Deliberately its own component rather than CheckoutView plus branches: the
    two share the delivery/payment form (ShippingFields, PaymentSection) and
    the recap presentation, but not the thing underneath it. CheckoutView's
-   "cart" is Redux state a shopper edits; this one is a single `{ bookId,
-   quantity }` pair that came from the invite and never changes — no add,
-   remove, or quantity control anywhere on this page, and nothing here reads
-   or writes the cart slice. An OPEN invite doesn't need any of this: it
-   renders the ordinary CheckoutView with contact fields pre-filled instead.
+   "cart" is Redux state a shopper edits; this one is the single book the
+   invite reserved — no add, no remove, nothing here reads or writes the cart
+   slice. An OPEN invite doesn't need any of this: it renders the ordinary
+   CheckoutView with contact fields pre-filled instead.
+
+   The one thing that does move is quantity, and it only moves downwards.
+   `quantity` on the invite is a ceiling: someone who joined the waitlist for
+   three copies and now wants two is still ordering what they were invited
+   for, and refusing that sends them to place the smaller order without the
+   invite — a sale kept, an entry that never closes as converted. Upwards is
+   what the reservation exists to prevent, so the stepper's max is the
+   reserved figure and its min is one. The API enforces the same window
+   itself (CheckoutService.consumeInvite); this is the affordance, not the
+   rule.
 
    `token` travels with the order and is spent by
    WaitlistInviteService.consume() in the same transaction that creates it —
@@ -68,6 +78,7 @@ export function InviteCheckoutView({
   locale: Locale;
   token: string;
   bookId: string;
+  /** What the entry reserved — the most this order may contain, not the only figure. */
   quantity: number;
   prefill: Pick<CheckoutValues, "fullName" | "email" | "phone">;
 }) {
@@ -79,6 +90,9 @@ export function InviteCheckoutView({
   const [verification, setVerification] = useState<PaymentVerificationStatus | null>(null);
   const [pendingOrder, setPendingOrder] = useState<{ id: string; email: string } | null>(null);
   const [step, setStep] = useState<"delivery" | "payment">("delivery");
+  /* Starts at everything the invite held — the common case is ordering all of
+     it, so the shopper only touches this to take fewer. */
+  const [orderQuantity, setOrderQuantity] = useState(quantity);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -151,9 +165,11 @@ export function InviteCheckoutView({
      real quote endpoint, so this page never shows a price it made up itself.
      Keyed on the entry and region exactly like useCart's own quote query. */
   const { data: quote, isLoading } = useQuery({
-    queryKey: ["invite-quote", bookId, quantity, divisionChosen ? region : undefined],
+    queryKey: ["invite-quote", bookId, orderQuantity, divisionChosen ? region : undefined],
     queryFn: () =>
-      quoteCart([{ bookId, quantity }], { region: divisionChosen ? region : undefined }),
+      quoteCart([{ bookId, quantity: orderQuantity }], {
+        region: divisionChosen ? region : undefined,
+      }),
     placeholderData: keepPreviousData,
     staleTime: 0,
   });
@@ -166,7 +182,7 @@ export function InviteCheckoutView({
 
     try {
       const order = await placeOrderRequest(
-        { items: [{ bookId, quantity }], customer: values, inviteToken: token },
+        { items: [{ bookId, quantity: orderQuantity }], customer: values, inviteToken: token },
         crypto.randomUUID(),
       );
 
@@ -273,11 +289,33 @@ export function InviteCheckoutView({
         />
 
         <Notice tone="info" className="mt-6">
-          {t("waitlistInvite.lockedNotice", {
+          {t(quantity > 1 ? "waitlistInvite.lockedNoticeUpTo" : "waitlistInvite.lockedNotice", {
             bookTitle: recapLines[0]?.book.title ?? "",
             quantity,
           })}
         </Notice>
+
+        {/* Only worth a control when there is something to choose. A one-copy
+            invite renders the notice above and nothing else — a stepper with
+            both arrows dead is a worse way to say "one". */}
+        {quantity > 1 ? (
+          <div className="border-rule mt-6 flex flex-wrap items-center justify-between gap-3 border-b pb-6">
+            <div>
+              <p className="text-13.5 text-ink">{t("waitlistInvite.quantityLabel")}</p>
+              <p className="text-caption text-secondary mt-1">
+                {t("waitlistInvite.quantityHint", { quantity })}
+              </p>
+            </div>
+            <Stepper
+              label={t("waitlistInvite.quantityLabel")}
+              value={orderQuantity}
+              min={1}
+              max={quantity}
+              onChange={setOrderQuantity}
+              engaged
+            />
+          </div>
+        ) : null}
 
         <CollapsibleOrderRecap
           className="mt-6 lg:hidden"

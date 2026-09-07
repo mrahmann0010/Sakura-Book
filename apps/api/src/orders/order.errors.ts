@@ -86,10 +86,10 @@ export class TransactionIdAlreadyUsedError extends BusinessRuleError {
   readonly code = "TRANSACTION_ID_ALREADY_USED";
 
   constructor(transactionId: string, claimedBy: string) {
-    super(
-      `Transaction ID '${transactionId}' is already recorded against order ${claimedBy}`,
-      { transactionId, claimedBy },
-    );
+    super(`Transaction ID '${transactionId}' is already recorded against order ${claimedBy}`, {
+      transactionId,
+      claimedBy,
+    });
   }
 }
 
@@ -97,20 +97,27 @@ export class TransactionIdAlreadyUsedError extends BusinessRuleError {
  * A LOCKED waitlist invite was redeemed with a cart that isn't the one it
  * reserved.
  *
- * A BusinessRuleError (422): the invite names one book at one quantity, and
- * an order for anything else is not a race that a retry resolves — it is the
- * wrong request. `WaitlistInviteInvalidError` (404) covers the token itself
- * being wrong/expired/spent; this is the one case where the token is good but
- * what it was spent on isn't.
+ * A BusinessRuleError (422): the invite names one book and a number of copies
+ * held for it, and an order for anything else is not a race that a retry
+ * resolves — it is the wrong request. `WaitlistInviteInvalidError` (404)
+ * covers the token itself being wrong/expired/spent; this is the one case
+ * where the token is good but what it was spent on isn't.
+ *
+ * `quantity` is the most the invite allows, not the only figure it accepts —
+ * ordering fewer copies than were reserved is permitted, so this fires on
+ * more, on a different book, or on a cart of several. See
+ * CheckoutService.consumeInvite for why the reservation is a ceiling.
  */
 export class WaitlistInviteMismatchError extends BusinessRuleError {
   readonly code = "WAITLIST_INVITE_MISMATCH";
 
-  constructor(bookId: string, quantity: number) {
-    super(`This invite is reserved for one book (${bookId}) at quantity ${quantity}`, {
-      bookId,
-      quantity,
-    });
+  constructor(bookId: string, maxQuantity: number) {
+    super(
+      `This invite is reserved for one book (${bookId}), up to ${maxQuantity} ${
+        maxQuantity === 1 ? "copy" : "copies"
+      }`,
+      { bookId, maxQuantity },
+    );
   }
 }
 
