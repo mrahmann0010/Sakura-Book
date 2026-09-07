@@ -27,8 +27,8 @@ export type { FieldFrameProps, FieldProps } from "./field";
 export { IconButton } from "./icon-button";
 export type { IconButtonProps } from "./icon-button";
 
-export { Input, Textarea } from "./input";
-export type { InputProps, TextareaProps } from "./input";
+export { Input, PasswordInput, Textarea } from "./input";
+export type { InputProps, PasswordInputProps, TextareaProps } from "./input";
 
 export { Modal } from "./modal";
 export type { ModalProps } from "./modal";

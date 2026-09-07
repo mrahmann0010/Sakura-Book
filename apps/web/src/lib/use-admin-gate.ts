@@ -3,7 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-import { adminMe } from "@/lib/api/admin";
+import { AdminApiError, adminMe } from "@/lib/api/admin";
 import { ADMIN_AUTHED_KEY } from "@/lib/admin-auth";
 
 /**
@@ -87,8 +87,22 @@ export function useAdminGate(): AdminGateStatus {
 
     let cancelled = false;
 
-    adminMe().catch(() => {
+    adminMe().catch((error: unknown) => {
       if (cancelled) return;
+
+      /**
+       * Only an actual rejection signs anyone out.
+       *
+       * This used to treat every failure as a dead session, so a dropped
+       * connection, a sleeping laptop, or one 500 from the API threw away the
+       * local flag and bounced a working session to the login form — a session
+       * whose cookies were still perfectly good. `adminFetch` has already
+       * refreshed and retried once by the time a 401 reaches here, so a 401 is
+       * the one answer that means the cookies really are spent; anything else
+       * is the network's problem and the panel's own requests will report it.
+       */
+      if (!(error instanceof AdminApiError) || error.status !== 401) return;
+
       window.localStorage.removeItem(ADMIN_AUTHED_KEY);
       setRejected(true);
       router.replace(login);

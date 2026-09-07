@@ -40,7 +40,7 @@ export type IssuedSession = {
  * Two credentials with opposite trade-offs, paired so each covers the other's
  * weakness.
  *
- * The **access token** is a signed JWT with a fifteen-minute life. It is
+ * The **access token** is a signed JWT with a one-hour life. It is
  * verified with a signature check and no database round-trip, which is what
  * keeps a guard on every admin route from putting a SELECT in front of every
  * request. Its weakness is that a stateless credential cannot be taken back.
@@ -49,7 +49,7 @@ export type IssuedSession = {
  * `admin_sessions`. It has no meaning without that row, so deleting the row
  * revokes it instantly. Its weakness is that using it costs a query.
  *
- * The pairing: a stolen access token is useless in fifteen minutes, and a
+ * The pairing: a stolen access token is useless within the hour, and a
  * stolen refresh token is useless the moment anyone notices, because rotation
  * makes *using* it detectable.
  *
@@ -162,6 +162,10 @@ export class AdminAuthService {
    * victim and leave the thief with a live token. Revoking the family signs
    * out both, which is the correct outcome: the legitimate user logs in again
    * with a password the thief does not have.
+   *
+   * One exception, and it is the case that actually occurs: a presentation
+   * within `ADMIN_REFRESH_REUSE_LEEWAY` of the rotation is two of the user's
+   * own tabs racing, not a copy. See the branch below.
    */
   async refresh(token: string | undefined, context: RequestContext = {}): Promise<IssuedSession> {
     if (!token) throw new SessionExpiredError();
@@ -177,19 +181,50 @@ export class AdminAuthService {
       if (!session) throw new SessionExpiredError();
 
       if (session.revokedAt) {
-        await this.revokeFamily(session.id, tx);
+        /**
+         * Not every second presentation is a replay.
+         *
+         * Two admin tabs each hold the same cookie and each refresh on their
+         * own timer; a tab reloading while another one's refresh is in flight
+         * does the same thing. Both requests are legitimate, and the one that
+         * loses the race arrives at a row the winner spent a moment ago. Under
+         * the old rule that ended the family and signed the user out mid-task,
+         * which is the "it logs out for no reason" this leeway exists to stop.
+         *
+         * A thief is not on this timescale: a token has to be exfiltrated and
+         * carried somewhere before it is used. So inside the window we issue a
+         * pair and let both holders continue, and outside it the reuse alarm is
+         * exactly as loud as it was.
+         */
+        const leeway = this.config.get("ADMIN_REFRESH_REUSE_LEEWAY", { infer: true });
 
-        this.logger.error(
-          `Refresh token reuse detected for admin ${session.adminUserId}; session family revoked`,
+        if (Date.now() - session.revokedAt.getTime() > leeway * 1000) {
+          await this.revokeFamily(session.id, tx);
+
+          this.logger.error(
+            `Refresh token reuse detected for admin ${session.adminUserId}; session family revoked`,
+          );
+
+          throw new SessionExpiredError();
+        }
+
+        this.logger.warn(
+          `Concurrent refresh for admin ${session.adminUserId} within the reuse leeway; issuing a sibling session`,
         );
 
-        throw new SessionExpiredError();
+        if (session.expiresAt <= new Date()) throw new SessionExpiredError();
+        if (session.user.disabledAt) throw new SessionExpiredError();
+
+        // The row is already revoked, so there is nothing to spend — the new
+        // session simply hangs off it, keeping the family chain intact for a
+        // later reuse check.
+        return this.issue(session.user, session.id, context, tx);
       }
 
       if (session.expiresAt <= new Date()) throw new SessionExpiredError();
 
       // Re-checked on every refresh rather than trusted from login, because a
-      // thirty-day token outlives most personnel changes. This is the point at
+      // ninety-day token outlives most personnel changes. This is the point at
       // which a disabled account actually stops working.
       if (session.user.disabledAt) throw new SessionExpiredError();
 
@@ -233,7 +268,7 @@ export class AdminAuthService {
    * the refresh tokens; moving `sessionsValidFrom` to now kills the access
    * tokens, because `verifyAccess` refuses any token issued before it. This is
    * the only mechanism in the design that revokes a JWT, and it is why the
-   * fifteen-minute window in the class comment is a bound on *unnoticed*
+   * one-hour window in the class comment is a bound on *unnoticed*
    * compromise rather than on response time.
    *
    * Called on password change, role change, and disable — the three events

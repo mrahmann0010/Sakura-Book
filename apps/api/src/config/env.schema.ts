@@ -242,7 +242,7 @@ export const envSchema = z.object({
   ADMIN_JWT_SECRET: z.string().min(32).optional(),
 
   /**
-   * Access-token lifetime in seconds. Fifteen minutes.
+   * Access-token lifetime in seconds. One hour.
    *
    * Short because the token is a bearer credential the server does not consult
    * a table for — its lifetime is the window in which a stolen one keeps
@@ -250,19 +250,44 @@ export const envSchema = z.object({
    * invalidates outstanding tokens immediately, and this bounds the damage
    * from a leak nobody has noticed yet.
    *
-   * Not shorter, because every expiry costs a refresh round-trip, and a value
-   * measured in seconds turns the refresh endpoint into the busiest route in
-   * the admin panel.
+   * Was fifteen minutes, which cost four refreshes an hour per open tab. Each
+   * refresh rotates the token, and a rotation is the only moment at which two
+   * tabs can collide, so the shorter value was buying a narrower leak window
+   * by making the one operation that can end a session run four times as
+   * often. An hour is still far inside `sessions_valid_from`'s reach.
    */
-  ADMIN_ACCESS_TOKEN_TTL: z.coerce.number().int().positive().default(900),
+  ADMIN_ACCESS_TOKEN_TTL: z.coerce.number().int().positive().default(3600),
 
   /**
-   * Refresh-token lifetime in seconds. Thirty days — how long a staff member
+   * Refresh-token lifetime in seconds. Ninety days — how long a staff member
    * stays signed in on a device they keep using. Enforced in the database
    * (`admin_sessions.expires_at`) as well as in the cookie, because a cookie
    * lifetime is a request the browser is free to ignore.
+   *
+   * The window is *rolling*: every refresh mints a successor with a fresh
+   * ninety days, so a device in daily use never reaches the end of it. This
+   * number is therefore how long a device may sit untouched before its owner
+   * has to type a password again — the shop counter after a holiday, a phone
+   * that was not the one being used — and not a cap on a working session.
    */
-  ADMIN_REFRESH_TOKEN_TTL: z.coerce.number().int().positive().default(2592000),
+  ADMIN_REFRESH_TOKEN_TTL: z.coerce.number().int().positive().default(7776000),
+
+  /**
+   * How long after a refresh token is spent a *second* presentation of it is
+   * still read as a race rather than as theft, in seconds.
+   *
+   * Rotation means a spent token presented again is evidence of a copy, and
+   * the response is to revoke the whole session family — see
+   * `AdminAuthService.refresh`. That is right for a replay hours later and
+   * wrong for the one that actually happens: two admin tabs, or a tab and a
+   * reload, reaching the refresh route within the same second. Both hold the
+   * same cookie legitimately, the second arrives just after the first spent
+   * it, and the session dies mid-task with nothing on screen to explain it.
+   *
+   * Thirty seconds covers the overlap a browser can produce and is far below
+   * the timescale of a stolen token being carried somewhere and used.
+   */
+  ADMIN_REFRESH_REUSE_LEEWAY: z.coerce.number().int().nonnegative().default(30),
 
   /**
    * Consecutive failed logins before an account is locked, and for how long.
