@@ -147,9 +147,14 @@ export class CheckoutService {
     // a rejected invite never touches stock either. The guarded UPDATE inside
     // consume() re-checks unused-and-unexpired itself — this does not trust
     // whatever the checkout page rendered a minute ago.
-    const invitedEntryId = request.inviteToken ? await this.consumeInvite(request, tx) : undefined;
+    const invite = request.inviteToken ? await this.consumeInvite(request, tx) : undefined;
 
-    const priced = await this.repriceForOrder(request, tx);
+    // A LOCKED invite's reserved book is allowed to price and decrement below
+    // zero stock — see PricingService.rejectionFor and InventoryService.decrement.
+    // Bounded to the exact book that reservation named, never the whole cart.
+    const lockedBookId = invite?.mode === "LOCKED" ? (invite.bookId ?? undefined) : undefined;
+
+    const priced = await this.repriceForOrder(request, tx, lockedBookId);
 
     // Sequential, not Promise.all. These are guarded UPDATEs against rows two
     // concurrent checkouts may share, and issuing them in parallel on one
@@ -158,7 +163,12 @@ export class CheckoutService {
     // scheduling — which is how deadlocks between two carts holding the same
     // two titles in different orders start.
     for (const line of priced.lines) {
-      await this.inventoryService.decrement(line.bookId, line.quantity, tx);
+      await this.inventoryService.decrement(
+        line.bookId,
+        line.quantity,
+        tx,
+        line.bookId === lockedBookId,
+      );
     }
 
     if (priced.coupon) {
@@ -193,8 +203,8 @@ export class CheckoutService {
        that order commits. Skipping it is what left every invited customer
        stranded in NOTIFIED, indistinguishable from the ones who ignored the
        SMS. */
-    if (invitedEntryId) {
-      await this.waitlistInviteService.markConverted(invitedEntryId, orderId, tx);
+    if (invite) {
+      await this.waitlistInviteService.markConverted(invite.entryId, orderId, tx);
     }
 
     return orderId;
@@ -211,7 +221,11 @@ export class CheckoutService {
    * an order refuses them, because by this point the customer has approved a
    * specific basket for a specific total.
    */
-  private async repriceForOrder(request: PlaceOrderRequest, tx: Transaction): Promise<PricedCart> {
+  private async repriceForOrder(
+    request: PlaceOrderRequest,
+    tx: Transaction,
+    allowOutOfStockBookId?: string,
+  ): Promise<PricedCart> {
     /* Strict region check, and it has to happen before pricing rather than
        alongside it. PricingService treats an unrecognised region as "not
        chosen yet" and quotes the flat rate, which is right for a cart page
@@ -223,7 +237,7 @@ export class CheckoutService {
 
     const priced = await this.pricingService.priceCart(
       request.items,
-      { couponCode: request.couponCode, region: request.customer.region },
+      { couponCode: request.couponCode, region: request.customer.region, allowOutOfStockBookId },
       tx,
     );
 
@@ -373,9 +387,14 @@ export class CheckoutService {
    * cart schema refuses it before this runs.
    *
    * @returns the waitlist entry the token belonged to, so `writeOrder` can
-   * stamp the order onto it once the order exists.
+   * stamp the order onto it once the order exists, and the reservation's
+   * mode/bookId so it can let the reserved book through pricing and stock
+   * even at zero stock.
    */
-  private async consumeInvite(request: PlaceOrderRequest, tx: Transaction): Promise<string> {
+  private async consumeInvite(
+    request: PlaceOrderRequest,
+    tx: Transaction,
+  ): Promise<{ entryId: string; mode: "LOCKED" | "OPEN"; bookId: string | null }> {
     // Non-null: only called when request.inviteToken is set.
     const reservation = await this.waitlistInviteService.consume(request.inviteToken!, tx);
 
@@ -393,7 +412,7 @@ export class CheckoutService {
       }
     }
 
-    return reservation.entryId;
+    return { entryId: reservation.entryId, mode: reservation.mode, bookId: reservation.bookId };
   }
 
   private async findByIdempotencyKey(key: string): Promise<OrderRow | undefined> {

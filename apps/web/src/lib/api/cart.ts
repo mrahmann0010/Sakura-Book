@@ -9,11 +9,11 @@ import { apiFetch } from "./client";
  */
 export function quoteCart(
   items: CartItem[],
-  opts: { couponCode?: string; region?: string } = {},
+  opts: { couponCode?: string; region?: string; inviteToken?: string } = {},
 ): Promise<CartQuote> {
   return apiFetch("/cart/quote", cartQuoteSchema, {
     method: "POST",
-    body: { items, couponCode: opts.couponCode, region: opts.region },
+    body: { items, couponCode: opts.couponCode, region: opts.region, inviteToken: opts.inviteToken },
     revalidate: false,
   });
 }

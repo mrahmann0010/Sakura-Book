@@ -39,12 +39,23 @@ export class InventoryService {
    * leave lines one and three decremented. On the root db each statement
    * auto-commits and the exception strands the earlier writes, so "call this
    * outside a transaction" is not a use case, and the type says so.
+   *
+   * `allowNegative` exists for exactly one caller: an order placed against a
+   * LOCKED waitlist invite, whose reserved copy was promised to this customer
+   * before print stock existed to back it. CheckoutService sets it only for
+   * the one line matching a genuine LOCKED reservation it just verified — it
+   * is never something a request body can set itself.
    */
-  async decrement(bookId: string, quantity: number, tx: Transaction): Promise<number> {
+  async decrement(
+    bookId: string,
+    quantity: number,
+    tx: Transaction,
+    allowNegative = false,
+  ): Promise<number> {
     const [updated] = await tx
       .update(books)
       .set({ stockQuantity: sql`${books.stockQuantity} - ${quantity}` })
-      .where(and(eq(books.id, bookId), gte(books.stockQuantity, quantity)))
+      .where(and(eq(books.id, bookId), allowNegative ? undefined : gte(books.stockQuantity, quantity)))
       .returning({ stockQuantity: books.stockQuantity });
 
     if (updated) return updated.stockQuantity;

@@ -169,6 +169,7 @@ export function InviteCheckoutView({
     queryFn: () =>
       quoteCart([{ bookId, quantity: orderQuantity }], {
         region: divisionChosen ? region : undefined,
+        inviteToken: token,
       }),
     placeholderData: keepPreviousData,
     staleTime: 0,

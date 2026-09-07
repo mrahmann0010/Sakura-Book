@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { CatalogModule } from "../catalog";
 import { CouponsModule } from "../coupons";
 import { ShippingModule } from "../shipping";
+import { WaitlistModule } from "../waitlist";
 import { CartController } from "./cart.controller";
 import { PricingService } from "./pricing.service";
 
@@ -15,7 +16,7 @@ import { PricingService } from "./pricing.service";
  * than trusting a quote the client hands back.
  */
 @Module({
-  imports: [CatalogModule, CouponsModule, ShippingModule],
+  imports: [CatalogModule, CouponsModule, ShippingModule, WaitlistModule],
   controllers: [CartController],
   providers: [PricingService],
   exports: [PricingService],

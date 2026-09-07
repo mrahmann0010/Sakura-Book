@@ -16,6 +16,7 @@
     "db:seed": "tsx src/db/seed/seed.ts",
     "db:receipt-duplicates": "tsx src/db/scripts/receipt-duplicates.ts",
     "db:waitlist-purge": "tsx src/db/scripts/waitlist-purge.ts",
+    "db:waitlist-set-book": "tsx src/db/scripts/waitlist-set-book.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
