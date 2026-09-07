@@ -15,7 +15,7 @@ flowchart LR
     AdminList["/admin/waitlist<br/>list · book filter · Invite"]
     AdminTtl["/admin/settings/waitlist-invite<br/>TTL hours"]
     Landing["/[locale]/waitlist/invite/[token]<br/>server component"]
-    LockedView["InviteCheckoutView<br/>(LOCKED: fixed book + qty)"]
+    LockedView["InviteCheckoutView<br/>(LOCKED: fixed book, qty ≤ reserved)"]
     OpenView["CheckoutView<br/>(OPEN: shopper's own cart)"]
   end
 
@@ -88,7 +88,7 @@ sequenceDiagram
   alt no match
     Page-->>Cust: 404
   else LOCKED
-    Page-->>Cust: InviteCheckoutView, book + qty fixed, contact prefilled
+    Page-->>Cust: InviteCheckoutView, book fixed, qty 1..reserved, contact prefilled
   else OPEN
     Page-->>Cust: CheckoutView, cart is the shopper's own, contact prefilled
   end
@@ -100,7 +100,7 @@ sequenceDiagram
   Co->>Db: consume(token) — guarded UPDATE sets used_at
   alt zero rows
     Co-->>Cust: 404 WAITLIST_INVITE_INVALID
-  else LOCKED and cart ≠ reservation
+  else LOCKED and cart outside the reservation
     Co-->>Cust: 422 WAITLIST_INVITE_MISMATCH (rolls back)
   else
     Co->>Db: reprice, decrement stock, redeem coupon, insert order
@@ -109,6 +109,16 @@ sequenceDiagram
   end
   deactivate Co
 ```
+
+**A LOCKED invite's quantity is a ceiling, not an exact match.** An entry that
+asked for three copies may be redeemed for three, two or one — never four, and
+never a different book. Ordering fewer is the customer changing their mind, and
+refusing it would only push them to place the same smaller order without the
+link, which costs the shop the sale's connection to the entry: it would never
+close as `CONVERTED`. Ordering more is the reservation being overrun, which is
+what `LOCKED` exists to prevent. The floor is one; `cartItemSchema` refuses zero
+before the invite check runs. The entry keeps the quantity it asked for — what
+was actually bought is on the order the entry now points at.
 
 The ordering inside the transaction is deliberate: the token is spent before pricing
 and before any stock moves, so a bad token costs nothing — and because it is one
@@ -146,7 +156,7 @@ Token state lives on the same row, independent of `status`:
 | Column              | Set by                | Meaning                                          |
 | ------------------- | --------------------- | ------------------------------------------------ |
 | `invite_token`      | `issue()`             | The magic-link credential; unique partial index  |
-| `invite_mode`       | `issue()`             | `LOCKED` (book + qty fixed) or `OPEN` (any cart) |
+| `invite_mode`       | `issue()`             | `LOCKED` (that book, up to that qty) or `OPEN`   |
 | `invite_expires_at` | `issue()`             | `now + ttlHours`, TTL from shop settings         |
 | `invite_used_at`    | `consume()`, in-order | Non-null = spent; re-issuing clears it           |
 | `invite_sms_status` | `recordSmsOutcome()`  | `SENT` / `FAILED` for the **last** attempt       |
@@ -161,7 +171,7 @@ exactly the failures rather than to everyone selected.
 
 They are deliberately distinct from `status` / `notified_at`, which answer "has this
 person ever been reached" and only move forward. These answer the retryable question:
-did *this* send get through. Overwritten per attempt — the audit log keeps history.
+did _this_ send get through. Overwritten per attempt — the audit log keeps history.
 
 `status` and `converted_order_id` are written by `markConverted()` in the same
 transaction, right after the order row exists.

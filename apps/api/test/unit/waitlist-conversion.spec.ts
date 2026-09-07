@@ -2,6 +2,7 @@ import type { PlaceOrderRequest } from "@sakura/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { waitlistEntries } from "../../src/db/schema";
 import { CheckoutService } from "../../src/orders/checkout.service";
+import { WaitlistInviteMismatchError } from "../../src/orders/order.errors";
 import { WaitlistInviteService } from "../../src/waitlist/waitlist-invite.service";
 
 /**
@@ -69,9 +70,9 @@ function fakeTx(consumed: unknown[]) {
 }
 
 /** COD deliberately: no receipt means `rejectReusedTransactionId` reads nothing. */
-function request(): PlaceOrderRequest {
+function request(items = [{ bookId: "book-1", quantity: 2 }]): PlaceOrderRequest {
   return {
-    items: [{ bookId: "book-1", quantity: 2 }],
+    items,
     customer: {
       fullName: "Mina",
       email: "mina@example.com",
@@ -172,6 +173,65 @@ describe("checkout with an invite token", () => {
     );
 
     expect(updates.filter((statement) => statement.table === waitlistEntries)).toHaveLength(0);
+  });
+});
+
+describe("a LOCKED invite's quantity is a ceiling", () => {
+  /* Three copies reserved. Fewer is the customer changing their mind, which
+     the shop would rather have than the order placed outside the invite;
+     more is the reservation being overrun, which is the whole point of
+     LOCKED. The floor is one, and the cart schema refuses zero before this
+     code runs. */
+  const reserved = (quantity: number) => [
+    { entryId: ENTRY_ID, bookId: "book-1", quantity, mode: "LOCKED" as const },
+  ];
+
+  const place = (items: { bookId: string; quantity: number }[], reservation: number) => {
+    const { tx, updates } = fakeTx(reserved(reservation));
+    const service = checkoutService(new WaitlistInviteService({} as never));
+
+    return {
+      updates,
+      run: () =>
+        (service as never as { writeOrder: (...args: unknown[]) => Promise<string> }).writeOrder(
+          request(items),
+          "idem-ceiling",
+          tx,
+        ),
+    };
+  };
+
+  it.each([1, 2, 3])("accepts %i of the 3 copies reserved", async (quantity) => {
+    const { run, updates } = place([{ bookId: "book-1", quantity }], 3);
+
+    await expect(run()).resolves.toBeDefined();
+    expect(updates.find((statement) => "convertedOrderId" in statement.values)).toBeDefined();
+  });
+
+  it("refuses more copies than were reserved", async () => {
+    const { run } = place([{ bookId: "book-1", quantity: 4 }], 3);
+
+    await expect(run()).rejects.toBeInstanceOf(WaitlistInviteMismatchError);
+  });
+
+  it("still refuses a different book, at any quantity", async () => {
+    const { run } = place([{ bookId: "book-2", quantity: 1 }], 3);
+
+    await expect(run()).rejects.toBeInstanceOf(WaitlistInviteMismatchError);
+  });
+
+  it("still refuses a cart of several titles", async () => {
+    /* Taking fewer copies is not licence to add a second book: the invite
+       reserved one title, and "one line only" is unchanged by the ceiling. */
+    const { run } = place(
+      [
+        { bookId: "book-1", quantity: 1 },
+        { bookId: "book-2", quantity: 1 },
+      ],
+      3,
+    );
+
+    await expect(run()).rejects.toBeInstanceOf(WaitlistInviteMismatchError);
   });
 });
 
