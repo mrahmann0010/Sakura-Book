@@ -432,6 +432,9 @@ export function orderValuesFrom(
     customerName: customer.fullName,
     customerEmail: customer.email,
     customerPhone: customer.phone,
+    /* Optional at checkout, so an untouched field arrives as "" — stored as
+       null, which is what "no second number" means everywhere else. */
+    customerSecondaryPhone: customer.secondaryPhone?.trim() || null,
     shippingAddress: {
       address: customer.address,
       city: customer.city,

@@ -149,7 +149,17 @@ export function ShippingFields({
           autoComplete="tel"
           error={errors.phone?.message}
           {...register("phone")}
-          fieldClassName="sm:col-span-2"
+        />
+        {/* The courier's fallback number. Optional, and labelled as such —
+            the manifest has a slot for it, most orders will leave it empty. */}
+        <Input
+          label={t("checkout.shipping.secondaryPhone")}
+          hint={t("checkout.shipping.secondaryPhoneHint")}
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          error={errors.secondaryPhone?.message}
+          {...register("secondaryPhone")}
         />
 
         <Select

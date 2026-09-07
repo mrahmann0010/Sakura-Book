@@ -169,6 +169,8 @@
       "fullName": "পুরো নাম",
       "email": "ইমেইল",
       "phone": "ফোন",
+      "secondaryPhone": "বিকল্প ফোন (ঐচ্ছিক)",
+      "secondaryPhoneHint": "কুরিয়ার চেষ্টা করতে পারে এমন দ্বিতীয় একটি নম্বর।",
       "division": "বিভাগ",
       "divisionPlaceholder": "বিভাগ নির্বাচন করুন",
       "district": "জেলা",

@@ -68,6 +68,25 @@ export const orders = pgTable(
     customerName: text("customer_name").notNull(),
     customerEmail: text("customer_email").notNull(),
     customerPhone: text("customer_phone").notNull(),
+
+    /**
+     * The courier's second number — the one they call when `customerPhone`
+     * does not answer. Bangladeshi delivery services take two on every
+     * manifest, and until this column existed the shop had only one to give.
+     *
+     * A column rather than a key in `shippingAddress`, alongside the primary
+     * number for the reason ShippingAddress documents: the jsonb blob holds
+     * the fields that are *not* columns, so a phone number has no second copy
+     * to disagree with. Not indexed — `orders_customer_phone_idx` backs the
+     * "find my order" lookup, and that is deliberately answered by the number
+     * the customer gave as theirs, not by a relative's.
+     *
+     * Nullable: optional at checkout, and absent on every order placed before
+     * this shipped. Empty string is normalised to null on the way in, so
+     * "there is no second number" has one representation.
+     */
+    customerSecondaryPhone: text("customer_secondary_phone"),
+
     shippingAddress: jsonb("shipping_address").$type<ShippingAddress>().notNull(),
 
     subtotalCents: integer("subtotal_cents").notNull(),
