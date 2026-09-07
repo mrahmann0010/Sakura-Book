@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 import { adminLogout, adminRefreshSession } from "@/lib/api/admin";
 import { ADMIN_AUTHED_KEY } from "@/lib/admin-auth";
+import { useAdminGate } from "@/lib/use-admin-gate";
 
 /**
  * Well under the 15-minute access token life (`ADMIN_ACCESS_TOKEN_TTL`), so a
@@ -43,16 +44,41 @@ const NAV = [
 ] as const;
 
 /**
+ * How the pages below the shell learn the gate's verdict.
+ *
+ * They each used to call `useAdminGate()` themselves and hand the answer back
+ * down as `AdminShell`'s `checking` prop. Now the `(panel)` layout owns the
+ * shell and the gate, and a page calling the hook again would mean a second
+ * `/admin/auth/me` per load for an answer it is already being handed.
+ */
+const CheckingContext = createContext(true);
+
+/**
+ * `true` while the session is still being verified. Pages read this and hold
+ * off fetching until it goes false — the same contract `useAdminGate` had with
+ * them before.
+ */
+export function useAdminChecking(): boolean {
+  return useContext(CheckingContext);
+}
+
+/**
  * The chrome every authenticated admin page renders inside: a persistent
  * sidebar, a sign-out control, and the dark-themed surface `theme-lock.tsx`
  * activates for the whole `/admin` segment.
  *
- * Takes `checking` as a prop rather than calling `useAdminGate()` itself —
- * every page already calls that hook to decide whether *it* is safe to fetch,
- * and calling it a second time here would mean two `/admin/auth/me` requests
- * per page load for no benefit. This component only owns the chrome.
+ * Rendered by the `(panel)` layout rather than by each page, which is what
+ * makes it *persistent*: in the App Router a layout stays mounted across
+ * navigations between its children, so a click swaps only the `<main>`
+ * content. The sidebar no longer unmounts and remounts, there is no blank
+ * "Checking session…" screen between admin pages, and the gate below runs once
+ * per full page load instead of once per page.
+ *
+ * Login sits outside the group on purpose — it is the one `/admin` route that
+ * must render without a session.
  */
-export function AdminShell({ children, checking }: { children: ReactNode; checking: boolean }) {
+export function AdminShell({ children }: { children: ReactNode }) {
+  const { checking } = useAdminGate();
   const { locale } = useParams<{ locale: string }>();
   const pathname = usePathname();
   const router = useRouter();
@@ -185,7 +211,9 @@ export function AdminShell({ children, checking }: { children: ReactNode; checki
         <div className="mt-auto px-3 py-6">{signOutButton}</div>
       </aside>
 
-      <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">{children}</main>
+      <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <CheckingContext value={checking}>{children}</CheckingContext>
+      </main>
     </div>
   );
 }
