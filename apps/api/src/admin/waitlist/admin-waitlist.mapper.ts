@@ -26,6 +26,9 @@ export type WaitlistRow = {
   inviteSmsStatus: "SENT" | "FAILED" | null;
   inviteSmsError: string | null;
   inviteSmsAt: Date | null;
+  inviteMode: "LOCKED" | "OPEN" | null;
+  inviteExpiresAt: Date | null;
+  inviteUsedAt: Date | null;
 };
 
 export function toAdminWaitlistEntry(row: WaitlistRow): AdminWaitlistEntry {
@@ -51,6 +54,21 @@ export function toAdminWaitlistEntry(row: WaitlistRow): AdminWaitlistEntry {
             status: row.inviteSmsStatus,
             error: row.inviteSmsError,
             at: row.inviteSmsAt.toISOString(),
+          }
+        : null,
+    /* Keyed off mode-and-expiry together for the same reason `inviteSms` is
+       keyed off status-and-at: `issue()` writes token, mode and expiry in one
+       statement, so either missing means this row was never invited rather
+       than half-invited. `inviteToken` itself is deliberately not in the
+       selection — nothing on an admin screen needs the bearer credential, and
+       the surest way to keep it out of a CSV, a log line or a browser devtools
+       payload is for it never to leave the database. */
+    invite:
+      row.inviteMode && row.inviteExpiresAt
+        ? {
+            mode: row.inviteMode,
+            expiresAt: row.inviteExpiresAt.toISOString(),
+            usedAt: row.inviteUsedAt?.toISOString() ?? null,
           }
         : null,
     signedUpAt: row.createdAt.toISOString(),
