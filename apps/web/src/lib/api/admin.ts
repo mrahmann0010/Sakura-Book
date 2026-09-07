@@ -242,9 +242,9 @@ async function adminFetch<T extends z.ZodTypeAny>(
   }
 
   if (!response.ok) {
-    /* The access token is a 15-minute JWT by design (AdminAuthService's class
+    /* The access token is a one-hour JWT by design (AdminAuthService's class
        comment) — a 401 partway through a session is the expected, common
-       case, not an error state. The 30-day refresh cookie sitting unused in
+       case, not an error state. The 90-day refresh cookie sitting unused in
        the browser is what this retries with, once, before falling through to
        the same failure handling as any other rejected request. */
     if (response.status === 401 && !retriedAfterRefresh && !NO_REFRESH_RETRY_PATHS.has(path)) {
@@ -329,7 +329,7 @@ async function adminUpload<T extends z.ZodTypeAny>(
   });
 
   if (!response.ok) {
-    // Same 15-minute-access-token story as `adminFetch` — see its comment.
+    // Same one-hour-access-token story as `adminFetch` — see its comment.
     if (response.status === 401 && !retriedAfterRefresh) {
       const refreshed = await refreshSession();
       if (refreshed) return adminUpload(path, schema, file, true);

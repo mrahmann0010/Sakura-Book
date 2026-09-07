@@ -12,12 +12,16 @@ import { ADMIN_AUTHED_KEY } from "@/lib/admin-auth";
 import { useAdminGate } from "@/lib/use-admin-gate";
 
 /**
- * Well under the 15-minute access token life (`ADMIN_ACCESS_TOKEN_TTL`), so a
+ * Well under the one-hour access token life (`ADMIN_ACCESS_TOKEN_TTL`), so a
  * click never has to eat a failed request first — `adminFetch`'s reactive
  * refresh-and-retry is the real safety net (it also covers a laptop that
  * slept through this timer); this just keeps the common case silent.
+ *
+ * Not much *further* under it: every tick rotates the refresh token, and two
+ * tabs ticking at once is the collision the server now forgives rather than
+ * one it should be asked to forgive four times an hour.
  */
-const SESSION_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+const SESSION_REFRESH_INTERVAL_MS = 45 * 60 * 1000;
 
 /**
  * The rail, in groups.
