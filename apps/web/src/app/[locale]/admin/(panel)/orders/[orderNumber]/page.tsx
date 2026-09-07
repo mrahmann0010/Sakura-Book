@@ -10,6 +10,7 @@ import type {
 } from "@sakura/contracts";
 
 import { ReceiptBadge, VerificationBadge } from "@/components/admin/payment-safety";
+import { AdminDetailSkeleton } from "@/components/admin/skeletons";
 import { Button, Notice, Textarea } from "@/components/ui";
 import {
   AdminApiError,
@@ -224,8 +225,10 @@ export default function AdminOrderDetailPage() {
     return <p className="text-13.5 text-clay-deep">{error}</p>;
   }
 
+  /* Not `null`: this is the whole content area, and an empty one for the
+     length of a round trip is the exact failure this replaces. */
   if (!order) {
-    return null;
+    return <AdminDetailSkeleton />;
   }
 
   const canRefund = order.allowedTransitions.includes("REFUNDED");

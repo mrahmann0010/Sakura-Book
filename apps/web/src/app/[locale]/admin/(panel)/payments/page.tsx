@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { PaymentBreakdown, PaymentBreakdownRange, PaymentPlatform } from "@sakura/contracts";
 
+import { AdminPanelsSkeleton } from "@/components/admin/skeletons";
 import { AdminApiError, getAdminPaymentBreakdown } from "@/lib/api/admin";
 import { formatCredit, formatMoney } from "@/lib/money";
 
@@ -409,7 +410,9 @@ export default function AdminPaymentsPage() {
             </>
           )}
         </div>
-      ) : null}
+      ) : (
+        !error && <AdminPanelsSkeleton tiles={3} panels={2} />
+      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import type {
   WaitlistStatus,
 } from "@sakura/contracts";
 
+import { AdminTableRows } from "@/components/admin/skeletons";
 import { Button } from "@/components/ui";
 import {
   AdminApiError,
@@ -74,6 +75,9 @@ export default function AdminWaitlistPage() {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Starts true: a load fires on mount, and the first thing this screen
+     shows should be the shape of a table, not an empty one. */
+  const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -92,6 +96,10 @@ export default function AdminWaitlistPage() {
 
   async function load(activeTab: WaitlistStatus, pageNumber: number) {
     setError(null);
+    setLoading(true);
+    /* Cleared so a refetch shows the skeleton rather than the previous tab's
+       rows with a spinner somewhere near them. */
+    setItems([]);
     try {
       const list = await listAdminWaitlist({
         status: [activeTab],
@@ -112,6 +120,8 @@ export default function AdminWaitlistPage() {
       setSelected(new Set());
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Could not load the waitlist.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -398,6 +408,7 @@ export default function AdminWaitlistPage() {
             </tr>
           </thead>
           <tbody>
+            {loading ? <AdminTableRows columns={9} /> : null}
             {items.map((entry) => (
               <tr key={entry.id} className="border-rule border-b align-top last:border-0">
                 <td className="px-4 py-3">
@@ -480,7 +491,7 @@ export default function AdminWaitlistPage() {
                 </td>
               </tr>
             ))}
-            {items.length === 0 ? (
+            {!loading && items.length === 0 ? (
               <tr>
                 <td colSpan={9} className="text-muted px-4 py-6 text-center">
                   Nobody in this view.

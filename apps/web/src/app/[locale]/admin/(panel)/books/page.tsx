@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AdminBookSummary } from "@sakura/contracts";
 
+import { AdminTableRows } from "@/components/admin/skeletons";
 import { Button, LinkButton, Modal } from "@/components/ui";
 import { AdminApiError, deleteAdminBook, listAdminBooks } from "@/lib/api/admin";
 import { formatMoney } from "@/lib/money";
@@ -17,6 +18,9 @@ export default function AdminBooksPage() {
   const [total, setTotal] = useState(0);
   const [q, setQ] = useState("");
   const [error, setError] = useState<string | null>(null);
+  /* Starts true: a load fires on mount, and the first thing this screen
+     shows should be the shape of a table, not an empty one. */
+  const [loading, setLoading] = useState(true);
 
   const [pendingDelete, setPendingDelete] = useState<AdminBookSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -29,12 +33,18 @@ export default function AdminBooksPage() {
 
   async function load(query = q) {
     setError(null);
+    setLoading(true);
+    /* Cleared so a refetch shows the skeleton rather than the previous tab's
+       rows with a spinner somewhere near them. */
+    setItems([]);
     try {
       const list = await listAdminBooks({ q: query || undefined });
       setItems(list.items);
       setTotal(list.total);
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Could not load the catalog.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -103,6 +113,7 @@ export default function AdminBooksPage() {
               </tr>
             </thead>
             <tbody>
+              {loading ? <AdminTableRows columns={6} /> : null}
               {items.map((book) => (
                 <tr key={book.id} className="border-rule border-b last:border-0">
                   <td className="flex items-center gap-3 px-4 py-3">
@@ -143,7 +154,7 @@ export default function AdminBooksPage() {
                   </td>
                 </tr>
               ))}
-              {items.length === 0 ? (
+              {!loading && items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-muted px-4 py-6 text-center">
                     No books found.

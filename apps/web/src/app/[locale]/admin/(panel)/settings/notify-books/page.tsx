@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { AdminWaitlistBook } from "@sakura/contracts";
 
+import { AdminFormSkeleton } from "@/components/admin/skeletons";
 import { Button, Checkbox, Input, Notice, Toast } from "@/components/ui";
 import { AdminApiError, getAdminWaitlistBooks, updateAdminWaitlistBooks } from "@/lib/api/admin";
 
@@ -142,7 +143,7 @@ export default function AdminNotifyBooksPage() {
       </p>
 
       {loading ? (
-        <p className="text-13.5 text-secondary">Loading…</p>
+        <AdminFormSkeleton fields={2} />
       ) : (
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
           <Input

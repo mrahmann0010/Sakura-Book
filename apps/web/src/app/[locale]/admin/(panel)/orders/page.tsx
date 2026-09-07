@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import type { AdminOrderSummary, OrderStatus } from "@sakura/contracts";
 
 import { PaymentSafetyBadges } from "@/components/admin/payment-safety";
+import { AdminTableRows } from "@/components/admin/skeletons";
 import { Button } from "@/components/ui";
 import { AdminApiError, listAdminOrders } from "@/lib/api/admin";
 import { formatMoney } from "@/lib/money";
@@ -39,6 +40,9 @@ export default function AdminOrdersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [q, setQ] = useState("");
   const [error, setError] = useState<string | null>(null);
+  /* Starts true: a load fires on mount, and the first thing this screen
+     shows should be the shape of a table, not an empty one. */
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     void load(tab, "", 1);
@@ -46,6 +50,10 @@ export default function AdminOrdersPage() {
 
   async function load(activeTab: TabKey, query: string, pageNumber: number) {
     setError(null);
+    setLoading(true);
+    /* Cleared so a refetch shows the skeleton rather than the previous tab's
+       rows with a spinner somewhere near them. */
+    setItems([]);
     try {
       const statuses = TABS.find((t) => t.key === activeTab)!.statuses;
       const list = await listAdminOrders({
@@ -59,6 +67,8 @@ export default function AdminOrdersPage() {
       setPage(list.page);
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Could not load orders.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -125,6 +135,7 @@ export default function AdminOrdersPage() {
             </tr>
           </thead>
           <tbody>
+            {loading ? <AdminTableRows columns={8} /> : null}
             {items.map((order) => (
               <tr key={order.orderNumber} className="border-rule border-b last:border-0">
                 <td className="text-ink px-4 py-3 font-mono">{order.orderNumber}</td>
@@ -155,7 +166,7 @@ export default function AdminOrdersPage() {
                 </td>
               </tr>
             ))}
-            {items.length === 0 ? (
+            {!loading && items.length === 0 ? (
               <tr>
                 <td colSpan={8} className="text-muted px-4 py-6 text-center">
                   No orders in this view.

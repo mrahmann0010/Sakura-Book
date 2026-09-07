@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { AdminRegion, AdminShippingTerms } from "@sakura/contracts";
 
+import { AdminFormSkeleton } from "@/components/admin/skeletons";
 import { Button, Input, Select } from "@/components/ui";
 import {
   AdminApiError,
@@ -143,7 +144,7 @@ export default function AdminShippingSettingsPage() {
       </p>
 
       {loading ? (
-        <p className="text-13.5 text-secondary">Loading…</p>
+        <AdminFormSkeleton fields={4} />
       ) : (
         <>
           <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">

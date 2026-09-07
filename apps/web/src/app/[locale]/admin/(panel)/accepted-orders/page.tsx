@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AdminOrderSummary, OrderStatus } from "@sakura/contracts";
 
+import { AdminTableRows } from "@/components/admin/skeletons";
 import { Button } from "@/components/ui";
 import { bdDivisions } from "@/lib/bd-geo";
 import {
@@ -83,6 +84,9 @@ export default function AdminAcceptedOrdersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [q, setQ] = useState("");
   const [error, setError] = useState<string | null>(null);
+  /* Starts true: a load fires on mount, and the first thing this screen
+     shows should be the shape of a table, not an empty one. */
+  const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
 
@@ -113,6 +117,10 @@ export default function AdminAcceptedOrdersPage() {
     setError(null);
     setExported(false);
     setJustShipped([]);
+    setLoading(true);
+    /* Cleared so a refetch shows the skeleton rather than the previous tab's
+       rows with a spinner somewhere near them. */
+    setItems([]);
     try {
       const list = await listAdminOrders({
         status: [...TABS.find((t) => t.key === activeKey)!.statuses],
@@ -126,6 +134,8 @@ export default function AdminAcceptedOrdersPage() {
       setPage(list.page);
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Could not load accepted orders.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -364,6 +374,7 @@ export default function AdminAcceptedOrdersPage() {
             </tr>
           </thead>
           <tbody>
+            {loading ? <AdminTableRows columns={9} /> : null}
             {items.map((order) => (
               <tr key={order.orderNumber} className="border-rule border-b last:border-0">
                 {activeTab.shippable ? (
@@ -411,7 +422,7 @@ export default function AdminAcceptedOrdersPage() {
                 </td>
               </tr>
             ))}
-            {items.length === 0 ? (
+            {!loading && items.length === 0 ? (
               <tr>
                 <td
                   colSpan={activeTab.shippable ? 9 : 8}

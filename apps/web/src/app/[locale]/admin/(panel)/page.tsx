@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Dashboard, MonthlyReport } from "@sakura/contracts";
 
 import { BarChart, type BarPoint } from "@/components/admin/bar-chart";
+import { AdminPanelsSkeleton } from "@/components/admin/skeletons";
 import { AdminApiError, getAdminDashboard, getAdminMonthlyReport } from "@/lib/api/admin";
 import { formatMoney } from "@/lib/money";
 
@@ -269,7 +270,11 @@ export default function AdminDashboardPage() {
             </ul>
           </section>
         </>
-      ) : null}
+      ) : (
+        /* Only when nothing has failed: an error already says what happened,
+           and a skeleton under it would promise data that is not coming. */
+        !error && <AdminPanelsSkeleton tiles={4} panels={3} />
+      )}
     </div>
   );
 }

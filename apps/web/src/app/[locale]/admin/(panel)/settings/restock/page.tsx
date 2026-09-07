@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { AdminRestockSchedule } from "@sakura/contracts";
 
+import { AdminFormSkeleton } from "@/components/admin/skeletons";
 import { Button, Input } from "@/components/ui";
 import {
   AdminApiError,
@@ -88,7 +89,7 @@ export default function AdminRestockSettingsPage() {
       </p>
 
       {loading ? (
-        <p className="text-13.5 text-secondary">Loading…</p>
+        <AdminFormSkeleton fields={1} />
       ) : (
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
           <Input

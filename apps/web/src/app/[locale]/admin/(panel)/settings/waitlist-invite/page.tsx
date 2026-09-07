@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { AdminWaitlistInviteSettings } from "@sakura/contracts";
 
+import { AdminFormSkeleton } from "@/components/admin/skeletons";
 import { Button, Input, Select } from "@/components/ui";
 import {
   AdminApiError,
@@ -94,7 +95,7 @@ export default function AdminWaitlistInviteSettingsPage() {
       </p>
 
       {loading ? (
-        <p className="text-13.5 text-secondary">Loading…</p>
+        <AdminFormSkeleton fields={2} />
       ) : (
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
           <Input

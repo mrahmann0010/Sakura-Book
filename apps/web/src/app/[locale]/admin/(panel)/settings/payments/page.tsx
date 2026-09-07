@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { AdminPaymentNumbers } from "@sakura/contracts";
 
+import { AdminFormSkeleton } from "@/components/admin/skeletons";
 import { Button, Input } from "@/components/ui";
 import { AdminApiError, getAdminPaymentNumbers, updateAdminPaymentNumbers } from "@/lib/api/admin";
 
@@ -98,7 +99,7 @@ export default function AdminPaymentSettingsPage() {
       </p>
 
       {loading ? (
-        <p className="text-13.5 text-secondary">Loading…</p>
+        <AdminFormSkeleton fields={3} />
       ) : (
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
           <Input

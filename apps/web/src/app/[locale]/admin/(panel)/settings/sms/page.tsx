@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { AdminSmsSettings } from "@sakura/contracts";
 
+import { AdminFormSkeleton } from "@/components/admin/skeletons";
 import { Notice, Radio, RadioGroup } from "@/components/ui";
 import { AdminApiError, getAdminSmsSettings, updateAdminSmsSettings } from "@/lib/api/admin";
 
@@ -82,7 +83,7 @@ export default function AdminSmsSettingsPage() {
       </p>
 
       {loading ? (
-        <p className="text-13.5 text-secondary">Loading…</p>
+        <AdminFormSkeleton fields={3} />
       ) : (
         <div className="flex flex-col gap-4">
           <RadioGroup name="sim" label="Send from">

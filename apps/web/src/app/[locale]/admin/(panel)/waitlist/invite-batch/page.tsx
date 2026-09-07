@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { MAX_PAGE_SIZE, type AdminWaitlistEntry, type AdminWaitlistQuery } from "@sakura/contracts";
 
+import { AdminTableRows } from "@/components/admin/skeletons";
 import { Button, Input } from "@/components/ui";
 import { AdminApiError, inviteAdminWaitlist, listAdminWaitlist } from "@/lib/api/admin";
 
@@ -342,6 +343,7 @@ export default function AdminWaitlistInviteBatchPage() {
                 </tr>
               </thead>
               <tbody>
+                {loading ? <AdminTableRows columns={10} /> : null}
                 {items.map((entry, index) => (
                   <tr key={entry.id} className="border-rule border-b align-top last:border-0">
                     <td className="px-4 py-3">
@@ -425,7 +427,7 @@ export default function AdminWaitlistInviteBatchPage() {
                     </td>
                   </tr>
                 ))}
-                {items.length === 0 ? (
+                {!loading && items.length === 0 ? (
                   <tr>
                     <td
                       colSpan={tab === "reinvite" ? 10 : 9}

@@ -5,6 +5,7 @@ import { useParams, usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { CloseIcon, MenuIcon } from "@/components/admin/icons";
+import { AdminScreenSkeleton } from "@/components/admin/skeletons";
 import { AdminRailThemeSwitch } from "@/components/admin/theme-control";
 import { adminLogout, adminRefreshSession } from "@/lib/api/admin";
 import { ADMIN_AUTHED_KEY } from "@/lib/admin-auth";
@@ -134,15 +135,21 @@ export function AdminShell({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, [status]);
 
-  // `denied` covers both the hydration render, before localStorage can be
-  // read, and a real rejection with a redirect already in flight.
-  if (status !== "allowed") {
-    return (
-      <div className="bg-page text-secondary flex min-h-screen items-center justify-center">
-        Checking session…
-      </div>
-    );
-  }
+  /**
+   * `denied` covers both the hydration render, before localStorage can be
+   * read, and a real rejection with a redirect already in flight.
+   *
+   * It swaps the main content for a skeleton rather than replacing the whole
+   * screen with a sentence. The rail is chrome — it depends on nothing that is
+   * still loading, so there is no reason for it to leave, and a panel that
+   * keeps its frame and fills in its content reads as arriving. A page that
+   * goes blank and says "Checking session…" in the middle reads as a fault,
+   * even when it lasts exactly as long.
+   *
+   * `children` are still withheld: they must not mount and fetch until the
+   * session is established.
+   */
+  const gated = status !== "allowed";
 
   const base = `/${locale}/admin`;
 
@@ -268,7 +275,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
         {rail}
       </aside>
 
-      <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">{children}</main>
+      <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        {gated ? <AdminScreenSkeleton /> : children}
+      </main>
     </div>
   );
 }
