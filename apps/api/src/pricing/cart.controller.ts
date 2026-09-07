@@ -2,6 +2,7 @@ import { Body, Controller, HttpCode, HttpStatus, Post } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { cartQuoteRequestSchema, type CartQuote } from "@sakura/contracts";
 import { createZodDto } from "nestjs-zod";
+import { WaitlistInviteService } from "../waitlist";
 import { toCartQuote } from "./priced-cart";
 import { PricingService } from "./pricing.service";
 
@@ -16,7 +17,10 @@ class CartQuoteDto extends createZodDto(cartQuoteRequestSchema) {}
 @ApiTags("cart")
 @Controller("cart")
 export class CartController {
-  constructor(private readonly pricingService: PricingService) {}
+  constructor(
+    private readonly pricingService: PricingService,
+    private readonly waitlistInviteService: WaitlistInviteService,
+  ) {}
 
   /**
    * Price a cart. Replaces `buildCart()`/`priceCart()` in the browser bundle,
@@ -41,10 +45,25 @@ export class CartController {
     const priced = await this.pricingService.priceCart(body.items, {
       couponCode: body.couponCode,
       region: body.region,
+      allowOutOfStockBookId: await this.lockedInviteBookId(body.inviteToken),
     });
 
     // Narrowed rather than returned whole: PricedCart carries the coupon's
     // internal id for checkout's benefit, and that must not cross the wire.
     return toCartQuote(priced);
+  }
+
+  /**
+   * Resolve `inviteToken` to the one book it may bypass stock for, or
+   * undefined if it names no live LOCKED invite. Never trusts a bookId sent
+   * by the client — only what a genuine, unexpired, unused invite token
+   * itself reserved, the same source of truth checkout's own bypass reads
+   * from (CheckoutService.consumeInvite).
+   */
+  private async lockedInviteBookId(inviteToken?: string): Promise<string | undefined> {
+    if (!inviteToken) return undefined;
+
+    const invite = await this.waitlistInviteService.redeem(inviteToken).catch(() => undefined);
+    return invite?.mode === "LOCKED" ? (invite.bookId ?? undefined) : undefined;
   }
 }

@@ -27,6 +27,15 @@ export const cartQuoteRequestSchema = z.object({
   couponCode: z.string().trim().min(1).max(64).optional(),
   /** Region slug, from GET /shipping/regions. Postage may vary by region. */
   region: z.string().trim().min(1).optional(),
+  /**
+   * Sent only by the waitlist invite checkout page, never the ordinary cart.
+   * Lets the quote match what checkout will actually charge: a LOCKED
+   * invite's reserved book prices even at zero stock, the same way
+   * CheckoutService.repriceForOrder treats it. The server resolves this
+   * token itself and only ever bypasses the exact book it reserved — the
+   * value here carries no pricing authority on its own.
+   */
+  inviteToken: z.string().trim().min(1).optional(),
 });
 
 /**

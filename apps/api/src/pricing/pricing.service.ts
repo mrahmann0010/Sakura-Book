@@ -51,7 +51,7 @@ export class PricingService {
    */
   async priceCart(
     items: CartItem[],
-    options: { couponCode?: string; region?: string } = {},
+    options: { couponCode?: string; region?: string; allowOutOfStockBookId?: string } = {},
     executor: Executor = this.dbService.db,
   ): Promise<PricedCart> {
     const merged = mergeItems(items);
@@ -62,7 +62,7 @@ export class PricingService {
 
     for (const [bookId, quantity] of merged) {
       const book = books.get(bookId);
-      const rejection = rejectionFor(bookId, book);
+      const rejection = rejectionFor(bookId, book, options.allowOutOfStockBookId);
 
       if (rejection) {
         rejected.push(rejection);
@@ -172,10 +172,21 @@ function mergeItems(items: CartItem[]): Map<string, number> {
   return merged;
 }
 
-/** Why this line cannot be priced, or undefined if it can. */
+/**
+ * Why this line cannot be priced, or undefined if it can.
+ *
+ * `allowOutOfStockBookId` exists for exactly one caller: a LOCKED waitlist
+ * invite, whose whole premise is that this one customer may buy this one
+ * book despite it showing zero stock everywhere else. It is resolved and
+ * verified by the caller (CartController / CheckoutService) from a genuine
+ * LOCKED invite reservation before it ever reaches here — this function only
+ * ever sees a bookId, never a token, so it cannot itself be tricked into
+ * granting the bypass to the wrong book.
+ */
 function rejectionFor(
   bookId: string,
   book: PriceableBook | undefined,
+  allowOutOfStockBookId?: string,
 ): CartQuoteRejection | undefined {
   if (!book) return { bookId, reason: "NOT_FOUND" };
   if (!book.isActive) return { bookId, reason: "UNAVAILABLE" };
@@ -186,7 +197,9 @@ function rejectionFor(
   // better recovery than the server silently reducing an order. What the
   // customer actually gets is decided by the guarded decrement at checkout,
   // and nothing before that point is a promise.
-  if (book.stockQuantity <= 0) return { bookId, reason: "OUT_OF_STOCK", available: 0 };
+  if (book.stockQuantity <= 0 && bookId !== allowOutOfStockBookId) {
+    return { bookId, reason: "OUT_OF_STOCK", available: 0 };
+  }
 
   return undefined;
 }
