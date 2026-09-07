@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "../styles/theme.css";
+/* After theme.css: the admin layer overrides the same layer-1 variables under
+   `[data-admin]`, and adds the rail tokens only the panel uses. */
+@import "../styles/admin-theme.css";
 
 /* ==========================================================================
    Base styles

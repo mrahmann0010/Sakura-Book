@@ -1,0 +1,174 @@
+/* ==========================================================================
+   Admin panel — palette
+
+   The panel is the same design world as the shop, tuned for a different job.
+   The shop is read; the panel is worked. That difference is what every value
+   below answers to:
+
+   - The content ground is a shade deeper than the storefront's (#f5f2ea vs
+     #faf9f5) so a white card reads as a card. On the shop a page is mostly one
+     surface; here a screen is a dozen of them.
+   - Rules carry more weight (#d8cfba vs #e6e2d7). The system has no shadows —
+     a 1px rule *is* the structure — and a rule that disappears on a
+     nine-column table is not quiet, it is missing.
+   - Clay is deepened to #ab5030. The shop's #c96442 is 3.9:1 on white, which
+     is fine for a large accent and not fine for the row of "View" links this
+     panel is made of. At #ab5030 the same clay clears 4.5:1 as text on white,
+     on the page ground, and as the white label on a filled button.
+   - The text ramp is warmed and darkened until every step clears 4.5:1 on all
+     three grounds — including `muted`, which the shop uses for atmosphere and
+     the panel uses for column headers and customer emails.
+
+   The sidebar is the one structural departure: a deep ink rail. In a panel
+   that is nothing but chrome and content, the chrome should be visibly the
+   frame — the rail recedes, the work area is the page. It carries its own
+   small token set (`--rail-*`) rather than bending `--surface`, because it is
+   deliberately not on the page's ramp.
+
+   Scoping: `[data-admin]` on <html>, set by `theme-lock.tsx` and the no-flash
+   script in admin/layout.tsx. Nothing here can reach the storefront.
+   `[data-theme]` selects light or dark within it, following the same
+   explicit-choice-beats-OS pattern theme.css established.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Light — the default the panel is designed for
+   -------------------------------------------------------------------------- */
+
+:root[data-admin] {
+  --clay: #ab5030;
+  --clay-deep: #8d3d26;
+
+  --page: #f5f2ea;
+  --surface: #ffffff;
+  --tint: #efebe0;
+  --rule: #d8cfba;
+  /* Table heads and the divider between a card's sections — the places where
+     a rule is doing structural work rather than drawing an edge. */
+  --rule-strong: #c4b9a0;
+  --node: #b8b0a0;
+
+  --ink: #1c1b18;
+  --body: #3a3730;
+  --secondary: #5f5a50;
+  --muted: #6f6a5f;
+
+  --overlay: rgb(28 27 24 / 0.38);
+  --clay-ring: rgb(171 80 48 / 0.2);
+  --frost: rgb(245 242 234 / 0.78);
+  --hatch: #e8e3d7;
+
+  /* The rail. Warm ink, not black — the same paper world with the lights off. */
+  --rail: #211f1c;
+  --rail-hover: #2b2825;
+  --rail-active: #423d35;
+  --rail-rule: #38342d;
+  --rail-ink: #f7f5ef;
+  --rail-secondary: #b3ada1;
+  --rail-muted: #948e81;
+}
+
+/* --------------------------------------------------------------------------
+   Dark — the navy from theme.css, with the panel's own corrections
+
+   Two blocks so an explicit choice always beats the OS, matching theme.css.
+   `muted` is lifted off the shop's #6b7396, which is 3.7:1 on the card ground
+   — under the panel's own column headers that is not atmosphere, it is a
+   column header nobody can read.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-color-scheme: dark) {
+  :root[data-admin]:not([data-theme="light"]) {
+    --clay: #e08260;
+    --clay-deep: #c96442;
+
+    --page: #0b1220;
+    --surface: #121a2e;
+    --tint: #1a2440;
+    --rule: #2c3860;
+    --rule-strong: #3a4877;
+    --node: #38456b;
+
+    --ink: #f2f4fa;
+    --body: #d7dced;
+    --secondary: #9aa3c0;
+    --muted: #7d85a8;
+
+    --overlay: rgb(0 0 0 / 0.6);
+    --clay-ring: rgb(224 130 96 / 0.22);
+    --frost: rgb(11 18 32 / 0.72);
+    --hatch: #182036;
+
+    --rail: #080f1c;
+    --rail-hover: #131d33;
+    --rail-active: #26345a;
+    --rail-rule: #223052;
+    --rail-ink: #f2f4fa;
+    --rail-secondary: #a3abc7;
+    --rail-muted: #8189a8;
+  }
+}
+
+:root[data-admin][data-theme="dark"] {
+  --clay: #e08260;
+  --clay-deep: #c96442;
+
+  --page: #0b1220;
+  --surface: #121a2e;
+  --tint: #1a2440;
+  --rule: #2c3860;
+  --rule-strong: #3a4877;
+  --node: #38456b;
+
+  --ink: #f2f4fa;
+  --body: #d7dced;
+  --secondary: #9aa3c0;
+  --muted: #7d85a8;
+
+  --overlay: rgb(0 0 0 / 0.6);
+  --clay-ring: rgb(224 130 96 / 0.22);
+  --frost: rgb(11 18 32 / 0.72);
+  --hatch: #182036;
+
+  --rail: #080f1c;
+  --rail-hover: #131d33;
+  --rail-active: #26345a;
+  --rail-rule: #223052;
+  --rail-ink: #f2f4fa;
+  --rail-secondary: #a3abc7;
+  --rail-muted: #8189a8;
+}
+
+/* globals.css draws the focus ring in `--ink`, which is correct everywhere the
+   ground is the page and invisible on the rail — in light mode that is a
+   near-black outline on a near-black column, i.e. no focus indicator at all
+   for anyone navigating the nav by keyboard. */
+:root[data-admin] [data-rail] :focus-visible {
+  outline-color: var(--rail-ink);
+}
+
+/* The storefront paints a navy gradient on `body` in dark mode. The panel's
+   ground is a rail beside a work area, and a gradient running under both
+   makes the rail's own colour drift down the screen. */
+:root[data-admin] body {
+  background-image: none;
+}
+
+/* --------------------------------------------------------------------------
+   Tailwind tokens for the rail and the structural rule.
+
+   Fallbacks are the storefront's own values so these utilities degrade to
+   something sane if one is ever used outside `[data-admin]`.
+   -------------------------------------------------------------------------- */
+
+@theme {
+  --color-rule-strong: var(--rule-strong, #c4b9a0);
+
+  --color-rail: var(--rail, #211f1c);
+  --color-rail-hover: var(--rail-hover, #2b2825);
+  --color-rail-active: var(--rail-active, #423d35);
+  --color-rail-rule: var(--rail-rule, #38342d);
+  --color-rail-ink: var(--rail-ink, #f7f5ef);
+  --color-rail-secondary: var(--rail-secondary, #b3ada1);
+  --color-rail-muted: var(--rail-muted, #948e81);
+}

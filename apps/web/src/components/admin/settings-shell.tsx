@@ -2,10 +2,7 @@
 
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { createContext, useContext, type ReactNode } from "react";
-
-import { AdminShell } from "@/components/admin/admin-shell";
-import { useAdminGate } from "@/lib/use-admin-gate";
+import type { ReactNode } from "react";
 
 /**
  * The tabs, in the order staff reach for them: money first, then fulfilment,
@@ -19,26 +16,12 @@ const TABS = [
   { href: "/settings/notify-books", label: "Notify Page Books" },
   { href: "/settings/sms", label: "SMS" },
   { href: "/settings/waitlist-invite", label: "Waitlist Invites" },
+  // Last, and set apart from the five above it: those configure the shop for
+  // customers, this one configures the panel for whoever is standing in front
+  // of it. It is here because it is where a setting gets looked for, not
+  // because it belongs to the same category.
+  { href: "/settings/appearance", label: "Appearance" },
 ] as const;
-
-/**
- * How the four settings pages learn the gate's verdict.
- *
- * They each used to call `useAdminGate()` themselves, which was right when
- * each was its own top-level screen. Now the layout above them owns the gate,
- * and a page calling the hook again would mean a second `/admin/auth/me` per
- * load for an answer it is already being handed.
- */
-const CheckingContext = createContext(true);
-
-/**
- * `true` while the session is still being verified. Every settings page reads
- * this and holds off fetching until it goes false, the same contract
- * `useAdminGate` had with them before.
- */
-export function useSettingsChecking(): boolean {
-  return useContext(CheckingContext);
-}
 
 /**
  * One home for everything that configures the shop.
@@ -51,54 +34,50 @@ export function useSettingsChecking(): boolean {
  *
  * The routes are unchanged, so anything bookmarked at /admin/settings/payments
  * still lands where it did.
+ *
+ * Only the tab strip: the sidebar and the session gate belong to the `(panel)`
+ * layout above, which stays mounted across these tabs.
  */
 export function AdminSettingsShell({ children }: { children: ReactNode }) {
-  const { checking } = useAdminGate();
   const { locale } = useParams<{ locale: string }>();
   const pathname = usePathname();
 
   const base = `/${locale}/admin`;
 
   return (
-    <AdminShell checking={checking}>
-      <CheckingContext value={checking}>
-        <div className="flex flex-col gap-6">
-          <div>
-            <h1 className="text-h2 text-ink font-serif">Shop Settings</h1>
-            <p className="text-13.5 text-secondary mt-1">
-              What checkout, delivery, and the notify page are configured to do. Each tab saves on
-              its own.
-            </p>
-          </div>
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-h2 text-ink font-serif">Shop Settings</h1>
+        <p className="text-13.5 text-secondary mt-1">
+          What checkout, delivery, and the notify page are configured to do. Each tab saves on its
+          own.
+        </p>
+      </div>
 
-          {/* Same tab treatment as the two order screens, so the panel reads as
-              one design rather than a per-screen one. Links, not buttons: each
-              tab is a real route, and staff bookmark and share them. */}
-          <div className="border-rule flex gap-1 overflow-x-auto border-b">
-            {TABS.map((tab) => {
-              const href = `${base}${tab.href}`;
-              const active = pathname.startsWith(href);
+      {/* Same tab treatment as the two order screens, so the panel reads as
+          one design rather than a per-screen one. Links, not buttons: each
+          tab is a real route, and staff bookmark and share them. */}
+      <div className="border-rule flex gap-1 overflow-x-auto border-b">
+        {TABS.map((tab) => {
+          const href = `${base}${tab.href}`;
+          const active = pathname.startsWith(href);
 
-              return (
-                <Link
-                  key={tab.href}
-                  href={href}
-                  aria-current={active ? "page" : undefined}
-                  className={`text-13.5 -mb-px shrink-0 border-b-2 px-4 py-2.5 transition-colors ${
-                    active
-                      ? "border-clay text-ink"
-                      : "text-secondary hover:text-ink border-transparent"
-                  }`}
-                >
-                  {tab.label}
-                </Link>
-              );
-            })}
-          </div>
+          return (
+            <Link
+              key={tab.href}
+              href={href}
+              aria-current={active ? "page" : undefined}
+              className={`text-13.5 -mb-px shrink-0 border-b-2 px-4 py-2.5 transition-colors ${
+                active ? "border-clay text-ink" : "text-secondary hover:text-ink border-transparent"
+              }`}
+            >
+              {tab.label}
+            </Link>
+          );
+        })}
+      </div>
 
-          {children}
-        </div>
-      </CheckingContext>
-    </AdminShell>
+      {children}
+    </div>
   );
 }
