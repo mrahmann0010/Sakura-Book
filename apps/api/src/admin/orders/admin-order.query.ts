@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import { districtsFor, type AdminOrderQuery } from "@sakura/contracts";
-import { orders } from "../../db/schema";
+import { orderStatusHistory, orders } from "../../db/schema";
 import { ORDER_NUMBER_PREFIX } from "../../orders/order-number";
 
 /**
@@ -94,6 +94,39 @@ function divisionMatch(division: string): SQL {
   return inArray(sql`lower(${orders.shippingAddress} ->> 'city')`, districts);
 }
 
+/**
+ * Orders handed to the courier inside a window of days.
+ *
+ * An order carries the status it is in, never the date it reached one, so the
+ * only record of when a parcel went out is the SHIPPED row written to
+ * `order_status_history` by the transition. This asks that table whether such
+ * a row exists in range.
+ *
+ * `exists` rather than a join, because every caller of `adminOrderFilters`
+ * selects from `orders` alone and counts the rows it gets back — see `list()`,
+ * where the page and its total are two statements over the same `where`. A
+ * join would multiply an order by its history rows and quietly inflate both;
+ * a correlated subquery cannot, however many rows it matches.
+ *
+ * DELIVERED orders match too, which is what the dispatch list's Shipped tab
+ * wants: they were shipped on that day and then delivered later, and the
+ * history is append-only so the SHIPPED row is still there to be found.
+ *
+ * The bounds mirror the placed-date ones — start of the first day, end of the
+ * last — so "shipped on Tuesday" is `from` and `to` both set to Tuesday.
+ */
+function shippedBetween(from: string | undefined, to: string | undefined): SQL {
+  const bounds: SQL[] = [eq(orderStatusHistory.status, "SHIPPED")];
+
+  if (from) bounds.push(gte(orderStatusHistory.createdAt, new Date(`${from}T00:00:00.000Z`)));
+  if (to) bounds.push(lte(orderStatusHistory.createdAt, new Date(`${to}T23:59:59.999Z`)));
+
+  return sql`exists (select 1 from ${orderStatusHistory} where ${and(
+    eq(orderStatusHistory.orderId, orders.id),
+    ...bounds,
+  )})`;
+}
+
 export function adminOrderFilters(query: AdminOrderQuery): SQL | undefined {
   const conditions: SQL[] = [];
 
@@ -116,6 +149,13 @@ export function adminOrderFilters(query: AdminOrderQuery): SQL | undefined {
    */
   if (query.placedTo) {
     conditions.push(lte(orders.createdAt, new Date(`${query.placedTo}T23:59:59.999Z`)));
+  }
+
+  // One condition for both ends, not two: an order is matched by whether a
+  // single SHIPPED row falls in the window, and asking twice would also accept
+  // an order shipped before the window and re-shipped after it.
+  if (query.shippedFrom || query.shippedTo) {
+    conditions.push(shippedBetween(query.shippedFrom, query.shippedTo));
   }
 
   return conditions.length ? and(...conditions) : undefined;
