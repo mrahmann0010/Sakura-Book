@@ -1,6 +1,5 @@
-import { notInArray, sql, type SQL } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
-import { waitlistEntries } from "../db/schema";
 
 /* --------------------------------------------------------------------------
    What a copy being "spoken for" means, defined once.
@@ -37,11 +36,24 @@ import { waitlistEntries } from "../db/schema";
  * different question from whether a copy is still owed.
  */
 function liveInviteConditions(bookId: PgColumn | SQL): SQL {
+  /* The inner table is written as raw `we.` text rather than through
+     `waitlistEntries`' column objects, and that is load-bearing.
+
+     Inside a relational query — `db.query.books.findMany({ extras })`, which is
+     how the catalog and pricing both read this — drizzle rewrites every column
+     reference in the fragment to the *outer* query's alias. Passing
+     `waitlistEntries.quantity` here produced `"books"."quantity"`, and the
+     whole catalog answered 500 with `column books.quantity does not exist`.
+     Raw identifiers are left alone, so they survive the rewrite.
+
+     `${bookId}` stays a real column reference on purpose: it is the outer
+     correlation, and being re-aliased to the enclosing query is exactly what it
+     is for. */
   return sql`
-    ${waitlistEntries.bookId} = ${bookId}
-    and ${waitlistEntries.inviteToken} is not null
-    and ${waitlistEntries.inviteUsedAt} is null
-    and ${waitlistEntries.inviteExpiresAt} > now()
+    we.book_id = ${bookId}
+    and we.invite_token is not null
+    and we.invite_used_at is null
+    and we.invite_expires_at > now()
   `;
 }
 
@@ -72,14 +84,25 @@ export function reservedQuantitySql(
      row, so counting their old reservation and then charging them for a new
      one would bill the same person's copies twice and refuse a batch that
      fits. */
+  /* Raw `we.id`, for the aliasing reason above: `notInArray(waitlistEntries.id,
+     ...)` would be rewritten to the outer table the moment this is used inside
+     a relational query.
+
+     One bound parameter per id rather than a single array parameter. Drizzle
+     binds a JS array into `sql` as a record, so `= any(${ids}::uuid[])` fails
+     with "cannot cast type record to uuid[]" — the ids still travel as
+     parameters here, just individually. */
   const exclusion =
     excludeEntryIds && excludeEntryIds.length > 0
-      ? sql` and ${notInArray(waitlistEntries.id, excludeEntryIds)}`
+      ? sql` and we.id not in (${sql.join(
+          excludeEntryIds.map((id) => sql`${id}::uuid`),
+          sql`, `,
+        )})`
       : sql``;
 
   return sql<number>`coalesce((
-    select sum(${waitlistEntries.quantity})
-    from ${waitlistEntries}
+    select sum(we.quantity)
+    from waitlist_entries we
     where ${liveInviteConditions(bookId)}${exclusion}
   ), 0)::int`;
 }
