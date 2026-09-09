@@ -13,6 +13,7 @@ import { AuditService } from "../../audit";
 import { ResourceNotFoundError } from "../../common/errors";
 import { DbService } from "../../db/db.service";
 import { orders, waitlistEntries } from "../../db/schema";
+import { WaitlistInviteService } from "../../waitlist";
 import type { AdminContext } from "../orders";
 import { toAdminWaitlistEntry, toWaitlistCsv, type WaitlistRow } from "./admin-waitlist.mapper";
 import { adminWaitlistFilters, adminWaitlistOrder } from "./admin-waitlist.query";
@@ -50,6 +51,7 @@ export class AdminWaitlistService {
   constructor(
     private readonly dbService: DbService,
     private readonly auditService: AuditService,
+    private readonly waitlistInviteService: WaitlistInviteService,
   ) {}
 
   /** The columns a row needs, joined to the order it converted into. */
@@ -224,6 +226,11 @@ export class AdminWaitlistService {
    * taken off the list becomes. A delete would lose the fact that they asked,
    * and the partial unique index on phone would then happily let a
    * re-subscribe slip through as if nothing had happened.
+   *
+   * Cancelling also takes back any unspent invite, in the same transaction —
+   * see below. That is the one place this service touches the token
+   * lifecycle, and it does it through `WaitlistInviteService` rather than by
+   * writing the columns itself.
    */
   async update(
     id: string,
@@ -237,18 +244,34 @@ export class AdminWaitlistService {
 
     if (!existing) throw new ResourceNotFoundError("Waitlist entry");
 
-    await this.dbService.db
-      .update(waitlistEntries)
-      .set({
-        ...(request.status === undefined ? {} : { status: request.status }),
-        ...(request.internalNote === undefined
-          ? {}
-          : // Empty string clears it: a note trimmed to nothing is not a note,
-            // and storing "" would make `hasNote`-style checks lie.
-            { internalNote: request.internalNote.trim() || null }),
-        updatedAt: new Date(),
-      })
-      .where(eq(waitlistEntries.id, id));
+    /* One transaction because cancelling is two writes that mean one thing.
+       Moving an entry to CANCELLED without taking its invite back leaves the
+       shop holding copies for someone it has just removed from the list — and
+       leaves that person a link that still works, since `consume` reads the
+       token, never the status. Committing the status change alone would be
+       the same bug with a smaller window. */
+    await this.dbService.db.transaction(async (tx) => {
+      await tx
+        .update(waitlistEntries)
+        .set({
+          ...(request.status === undefined ? {} : { status: request.status }),
+          ...(request.internalNote === undefined
+            ? {}
+            : // Empty string clears it: a note trimmed to nothing is not a note,
+              // and storing "" would make `hasNote`-style checks lie.
+              { internalNote: request.internalNote.trim() || null }),
+          updatedAt: new Date(),
+        })
+        .where(eq(waitlistEntries.id, id));
+
+      /* Unconditional on the *previous* status: an entry can be cancelled
+         from PENDING (never invited, nothing to revoke — `revoke` is a no-op
+         there) or from NOTIFIED (invited, and this is the whole point). Asking
+         which it was would only add a branch that has to stay right. */
+      if (request.status === "CANCELLED") {
+        await this.waitlistInviteService.revoke(id, tx);
+      }
+    });
 
     await this.auditService.recordDetached({
       actor: { sub: context.actor.sub, email: context.actor.email },
