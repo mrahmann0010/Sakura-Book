@@ -30,7 +30,7 @@ import {
   type AcceptedPaymentMethod,
   type CheckoutValues,
 } from "@/lib/checkout";
-import { cartFromQuote, priceCart, summaryLines, FREE_DELIVERY_THRESHOLD } from "@/lib/cart";
+import { cartFromQuote, emptyCart, summaryLines } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 
@@ -175,7 +175,7 @@ export function InviteCheckoutView({
     staleTime: 0,
   });
 
-  const cart = quote ? cartFromQuote(quote) : { lines: [], isEmpty: true, ...priceCart([]) };
+  const cart = quote ? cartFromQuote(quote) : emptyCart;
 
   async function placeOrder(values: CheckoutValues) {
     setSubmitError(null);
@@ -245,9 +245,12 @@ export function InviteCheckoutView({
     {
       subtotal: (count) => t("cart.summary.subtotal", { count }),
       delivery: t("cart.summary.delivery"),
-      deliveryFree: t("cart.summary.deliveryFree", {
-        threshold: formatMoney(FREE_DELIVERY_THRESHOLD, money),
-      }),
+      deliveryFree:
+        cart.freeDeliveryThreshold === null
+          ? null
+          : t("cart.summary.deliveryFree", {
+              threshold: formatMoney(cart.freeDeliveryThreshold, money),
+            }),
       deliveryUnknown: deliveryKnown ? undefined : t("cart.summary.deliveryPending"),
     },
     money,

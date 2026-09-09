@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CartItem, CartItemList, EmptyState, SummaryCard, SummaryRow } from "@/components/domain";
@@ -11,7 +10,7 @@ import { useCart } from "@/hooks/use-cart";
 import { useCartStepEvent } from "@/hooks/use-cart-step-event";
 import type { Locale } from "@/i18n/settings";
 import { titlesInStock } from "@/lib/books";
-import { FREE_DELIVERY_THRESHOLD, priceCart, summaryLines } from "@/lib/cart";
+import { summaryLines } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 
@@ -27,8 +26,31 @@ import { routes } from "@/lib/routes";
    rendered by the server component that mounts this.
    -------------------------------------------------------------------------- */
 
-/** How long a removed line stays undoable. */
-const UNDO_WINDOW_MS = 5000;
+/* --------------------------------------------------------------------------
+   Removal is immediate.
+
+   It used to be staged behind a five-second undo window: Remove dimmed the row
+   and set a timer, and only when that timer fired did `cart.remove` reach Redux
+   and localStorage. The unmount cleanup then cleared every pending timer
+   *without committing it*, so navigating away — or reloading — inside those
+   five seconds silently cancelled the removal. The row and the subtotal had
+   already dropped, so the cart looked emptied; the entry was still persisted,
+   and came back on the next visit, forever, because the only code path that
+   could delete it needed five uninterrupted seconds on this page.
+
+   The undo affordance is not worth a removal that does not remove. Remove now
+   dispatches straight through, and the requote that follows is the confirmation.
+   `CartItem` keeps its `removing` / `onUndoRemove` props — nothing here passes
+   them any more, but the component still supports an undo window if one is
+   ever reintroduced, as a *committed* removal that can be re-added.
+
+   The old rule, for reference:
+
+     const UNDO_WINDOW_MS = 5000;
+     // stageRemoval: dim the row, setTimeout(() => cart.remove(bookId), 5000)
+     // undoRemoval:  clearTimeout, un-dim
+     // unmount:      clearTimeout on all pending — the bug
+   -------------------------------------------------------------------------- */
 
 export function CartView({ locale }: { locale: Locale }) {
   const { t } = useTranslation();
@@ -36,60 +58,6 @@ export function CartView({ locale }: { locale: Locale }) {
   const cart = useCart();
 
   useCartStepEvent("view_cart", cart);
-
-  /* A removal is staged, not immediate: the row sinks to the bottom of the
-     list, dims, and offers an Add back button, only leaving the cart for good
-     when the window closes. The totals drop the moment the row is staged,
-     though — the customer clicked Remove, so the price they see should say
-     so right away, even while the row is still reachable via Add back.
-
-     Every row tracks its own timer, keyed by book id, so removing a second
-     book while the first is still pending cannot cancel the first. */
-  const [pendingRemovals, setPendingRemovals] = useState<Set<string>>(new Set());
-  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-
-  const clearTimer = useCallback((bookId: string) => {
-    const existing = timers.current.get(bookId);
-    if (existing) clearTimeout(existing);
-    timers.current.delete(bookId);
-  }, []);
-
-  useEffect(() => {
-    const timersAtMount = timers.current;
-    return () => timersAtMount.forEach((t) => clearTimeout(t));
-  }, []);
-
-  const stageRemoval = useCallback(
-    (bookId: string) => {
-      clearTimer(bookId);
-      setPendingRemovals((prev) => new Set(prev).add(bookId));
-      timers.current.set(
-        bookId,
-        setTimeout(() => {
-          cart.remove(bookId);
-          timers.current.delete(bookId);
-          setPendingRemovals((prev) => {
-            const next = new Set(prev);
-            next.delete(bookId);
-            return next;
-          });
-        }, UNDO_WINDOW_MS),
-      );
-    },
-    [cart, clearTimer],
-  );
-
-  const undoRemoval = useCallback(
-    (bookId: string) => {
-      clearTimer(bookId);
-      setPendingRemovals((prev) => {
-        const next = new Set(prev);
-        next.delete(bookId);
-        return next;
-      });
-    },
-    [clearTimer],
-  );
 
   /* Hydration is one wait, quoting is another: localStorage can hand back
      entries before the server has priced them, and showing the empty state
@@ -126,33 +94,33 @@ export function CartView({ locale }: { locale: Locale }) {
      removal commits, the requote for the shortened cart is briefly in flight
      and `keepPreviousData` keeps handing back the quote that still contains
      the removed book — so without this filter the row would reappear at full
-     opacity, and the subtotal jump back up, for exactly one round-trip. That
-     is the flash. `cart.entries` changes in the same tick as the dispatch, so
-     a line the cart no longer holds is hidden immediately; a line still
-     staged for removal stays visible so Add back has something to undo. */
+     opacity for exactly one round-trip. That is the flash. `cart.entries`
+     changes in the same tick as the dispatch, so a line the cart no longer
+     holds is hidden immediately. */
   const entryIds = new Set(cart.entries.map((entry) => entry.bookId));
-  const visibleLines = cart.lines.filter(
-    (line) => entryIds.has(line.book.id) || pendingRemovals.has(line.book.id),
-  );
-  /* Totals are priced off the lines that are not staged for removal, so the
-     subtotal drops the instant Remove is clicked — not five seconds later
-     when the removal actually commits to Redux. */
-  const activeLines = visibleLines.filter((line) => !pendingRemovals.has(line.book.id));
-  const totals = priceCart(activeLines);
+  const visibleLines = cart.lines.filter((line) => entryIds.has(line.book.id));
 
+  /* The totals are the server's, not a client recomputation of them: the page
+     renders the same quote checkout will charge against, so the two cannot
+     disagree about postage. The rail lags a removal by one round-trip, which
+     is the honest thing to show — the customer is quoted a total only once the
+     shop has actually quoted it. */
   const rows = summaryLines(
-    totals,
+    cart,
     {
       subtotal: (count) => t("cart.summary.subtotal", { count }),
       delivery: t("cart.summary.delivery"),
-      deliveryFree: t("cart.summary.deliveryFree", {
-        threshold: formatMoney(FREE_DELIVERY_THRESHOLD, money),
-      }),
+      deliveryFree:
+        cart.freeDeliveryThreshold === null
+          ? null
+          : t("cart.summary.deliveryFree", {
+              threshold: formatMoney(cart.freeDeliveryThreshold, money),
+            }),
     },
     money,
   );
 
-  const total = formatMoney(totals.total, money);
+  const total = formatMoney(cart.total, money);
 
   /* One node, rendered into the rail on desktop and the docked bar on mobile —
      the same button, never two that can drift apart. */
@@ -167,7 +135,7 @@ export function CartView({ locale }: { locale: Locale }) {
       <Shell className="py-14 lg:py-20">
         <PageHeader
           size="lg"
-          eyebrow={t("cart.eyebrow", { count: totals.itemCount })}
+          eyebrow={t("cart.eyebrow", { count: cart.itemCount })}
           title={t("cart.title")}
         />
 
@@ -201,26 +169,16 @@ export function CartView({ locale }: { locale: Locale }) {
           ) : null}
 
           <CartItemList>
-            {/* Pending removals sink to the bottom rather than disappearing
-                or collapsing in place — a stable sort keeps every other row's
-                relative order untouched. */}
-            {[...visibleLines]
-              .sort(
-                (a, b) =>
-                  Number(pendingRemovals.has(a.book.id)) - Number(pendingRemovals.has(b.book.id)),
-              )
-              .map((line) => (
-                <CartItem
-                  key={line.book.id}
-                  book={line.book}
-                  quantity={line.quantity}
-                  lineTotal={formatMoney(line.lineTotal, money)}
-                  removing={pendingRemovals.has(line.book.id)}
-                  onQuantityChange={(quantity) => cart.setQuantity(line.book.id, quantity)}
-                  onRemove={() => stageRemoval(line.book.id)}
-                  onUndoRemove={() => undoRemoval(line.book.id)}
-                />
-              ))}
+            {visibleLines.map((line) => (
+              <CartItem
+                key={line.book.id}
+                book={line.book}
+                quantity={line.quantity}
+                lineTotal={formatMoney(line.lineTotal, money)}
+                onQuantityChange={(quantity) => cart.setQuantity(line.book.id, quantity)}
+                onRemove={() => cart.remove(line.book.id)}
+              />
+            ))}
           </CartItemList>
 
           <Link

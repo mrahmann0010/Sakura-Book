@@ -20,28 +20,27 @@ import { formatCredit, formatMoney } from "./money";
    -------------------------------------------------------------------------- */
 
 /* --------------------------------------------------------------------------
-   Delivery policy — no longer authoritative.
+   Delivery policy — server-owned, with no client copy.
 
-   These two numbers decide what a customer is charged, which makes them shop
+   These numbers decide what a customer is charged, which makes them shop
    policy, which makes a browser bundle the wrong place for them: anyone can
-   edit a constant in devtools and send us back the total it produced. They now
-   live server-side, in DELIVERY_FLAT_CENTS / FREE_DELIVERY_THRESHOLD_CENTS,
-   behind POST /v1/cart/quote, and checkout re-prices from them regardless of
-   what arrives in the request.
+   edit a constant in devtools and send us back the total it produced. They
+   live server-side, in DELIVERY_FLAT_CENTS / FREE_DELIVERY_THRESHOLD_CENTS
+   (overridden by the shop settings row), and reach the client two ways:
+   `POST /v1/cart/quote`, which prices a cart and carries
+   `freeDeliveryThresholdCents` back with the totals, and
+   `GET /v1/shipping/regions`, for a page with no cart to price — the book
+   detail page's "free delivery over X" line.
 
-   What is left here is a *presentation* fallback: the figures the cart page
-   renders before the first quote comes back, and the threshold the "spend X
-   more for free delivery" line quotes. The quote response carries
-   `freeDeliveryThresholdCents` and overrides them. When the cart page is wired
-   to the endpoint (it still reads the placeholder catalogue), these become the
-   loading state and nothing else.
+   There used to be a FREE_DELIVERY_THRESHOLD / DELIVERY_FLAT pair here,
+   described as a presentation fallback for the pre-quote paint. They were not
+   one: the cart page priced its whole summary off them, and they were written
+   as taka against a formatter that reads minor units, so a ৳60 postage rate on
+   a ৳1,500 threshold rendered as "৳3.50, free over ৳30" — a total the shopper
+   was then not charged. A fallback that can be shown as if it were the answer
+   is just a second, wrong policy. There is now no client-side default: a page
+   that needs these numbers asks for them, and shows nothing until they land.
    -------------------------------------------------------------------------- */
-
-/** Presentation fallback. Authority: FREE_DELIVERY_THRESHOLD_CENTS on the API. */
-export const FREE_DELIVERY_THRESHOLD = 3000;
-
-/** Presentation fallback. Authority: DELIVERY_FLAT_CENTS on the API. */
-export const DELIVERY_FLAT = 350;
 
 export type CartEntry = {
   bookId: string;
@@ -74,10 +73,24 @@ export type CartTotals = {
 export type Cart = CartTotals & {
   lines: CartLine[];
   isEmpty: boolean;
+  /**
+   * Spend at or above this and postage is waived — the figure the "free over
+   * X" line quotes. Minor units, straight off the quote.
+   *
+   * Null until a quote has come back, because there is no client-side default
+   * to fall back to (see the delivery policy note above). A caller renders the
+   * promise only once it has a number, rather than guessing at one.
+   */
+  freeDeliveryThreshold: number | null;
 };
 
 /** Before the first quote lands, and for a cart with nothing in it. */
-export const emptyCart: Cart = { lines: [], isEmpty: true, ...priceCart([]) };
+export const emptyCart: Cart = {
+  lines: [],
+  isEmpty: true,
+  freeDeliveryThreshold: null,
+  ...zeroTotals(),
+};
 
 /**
  * Turns a priced `POST /cart/quote` response into the shape the cart and
@@ -117,27 +130,29 @@ export function cartFromQuote(quote: CartQuote): Cart {
     delivery: quote.deliveryCents,
     deliveryCredit: quote.deliveryCreditCents,
     total: quote.totalCents,
+    freeDeliveryThreshold: quote.freeDeliveryThresholdCents,
   };
 }
 
-/** The totals block. Split out so a server-priced cart can reuse the policy. */
-export function priceCart(lines: CartLine[]): CartTotals {
-  const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
-  const itemCount = lines.reduce((count, line) => count + line.quantity, 0);
-
-  /* An empty cart is charged nothing — otherwise the empty page would quote
-     postage on nothing at all. */
-  const deliveryBase = lines.length === 0 ? 0 : DELIVERY_FLAT;
-  const waived = subtotal >= FREE_DELIVERY_THRESHOLD;
-
+/**
+ * An all-zero totals block — a cart with nothing in it, and the shape a page
+ * renders before its first quote arrives.
+ *
+ * This replaces `priceCart(lines)`, which applied the deleted client-side
+ * delivery constants to a list of lines. Nothing prices a cart in the browser
+ * any more: the only totals on screen are the ones the server quoted, so the
+ * cart page and checkout cannot show two different answers, and neither can
+ * show an answer the customer will not be charged.
+ */
+export function zeroTotals(): CartTotals {
   return {
-    lineCount: lines.length,
-    itemCount,
-    subtotal,
-    deliveryBase,
-    delivery: waived ? 0 : deliveryBase,
-    deliveryCredit: waived ? deliveryBase : 0,
-    total: subtotal + (waived ? 0 : deliveryBase),
+    lineCount: 0,
+    itemCount: 0,
+    subtotal: 0,
+    deliveryBase: 0,
+    delivery: 0,
+    deliveryCredit: 0,
+    total: 0,
   };
 }
 
@@ -163,7 +178,12 @@ export function summaryLines(
   labels: {
     subtotal: (count: number) => string;
     delivery: string;
-    deliveryFree: string;
+    /**
+     * "Free over X". Null when the caller has no threshold to name yet — no
+     * quote has come back — in which case the waiver row is left off rather
+     * than worded around a figure nobody knows.
+     */
+    deliveryFree: string | null;
     /** Shown in place of a figure while the address is still unknown. */
     deliveryUnknown?: string;
   },
@@ -184,7 +204,7 @@ export function summaryLines(
     },
   ];
 
-  if (totals.deliveryCredit > 0 && !labels.deliveryUnknown) {
+  if (totals.deliveryCredit > 0 && !labels.deliveryUnknown && labels.deliveryFree) {
     lines.push({
       key: "delivery-credit",
       label: labels.deliveryFree,

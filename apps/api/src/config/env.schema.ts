@@ -107,20 +107,20 @@ export const envSchema = z.object({
 
   /**
    * Flat postage in minor units, charged below the free-delivery threshold.
-   * ৳60 — a typical inside-Dhaka courier rate. ASSUMPTION, not a quoted price:
-   * confirm against whatever courier the shop actually uses, and note that a
-   * single flat rate cannot express the usual inside/outside-Dhaka split. If
-   * that split is needed, it becomes a per-region rate on the regions table
-   * (Phase 1) rather than a bigger number here.
+   * ৳100 — the shop's rate, no longer the ৳60 courier estimate this defaulted
+   * to. Note that a single flat rate cannot express the usual inside/outside-
+   * Dhaka split; if that split is needed it becomes a per-region rate on the
+   * regions table rather than a bigger number here.
    */
-  DELIVERY_FLAT_CENTS: z.coerce.number().int().nonnegative().default(6000),
+  DELIVERY_FLAT_CENTS: z.coerce.number().int().nonnegative().default(10000),
 
   /**
-   * Subtotal in minor units at or above which postage is waived. ৳1,500 —
-   * roughly two to three books, so the threshold is reachable but not
-   * automatic. A marketing lever; expect it to move.
+   * Subtotal in minor units at or above which postage is waived. ৳4,000 — a
+   * marketing lever, and the one figure here most likely to move, which is why
+   * Settings → Shipping exists: an operator moves it there without a deploy,
+   * and this default stops applying to that field the moment they do.
    */
-  FREE_DELIVERY_THRESHOLD_CENTS: z.coerce.number().int().nonnegative().default(150000),
+  FREE_DELIVERY_THRESHOLD_CENTS: z.coerce.number().int().nonnegative().default(400000),
 
   /**
    * The division the shop currently ships from. The fallback for
