@@ -4,11 +4,19 @@
 #   docker compose up                      web only  (npm run docker:up)
 #   docker compose --profile backend up    web + api
 #
-# There is no postgres service. The database is Supabase in every environment,
-# including local development — so a container here would be a second database
-# that drifts from the real one and quietly answers queries nobody meant to
-# send it. Point DATABASE_URL at the project's Supavisor pooler; see
+# There is no postgres service. The database is the self-hosted Postgres on the
+# Coolify VPS in every environment, including local development — so a container
+# here would be a second database that drifts from the real one and quietly
+# answers queries nobody meant to send it. Point DATABASE_URL at the VPS; see
 # apps/api/.env.example.
+#
+# That database does not terminate TLS on its public port, so DATABASE_SSL is
+# `disable` rather than `require` — see db.service.ts, which passes the value
+# straight to postgres.js and fails the connection outright if it asks for SSL
+# the server will not offer.
+#
+# Supabase is still in the picture for Storage only (cover images, PDFs), which
+# is why SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY remain in apps/api/.env.
 #
 # Each app owns its own .env (apps/web/.env, apps/api/.env) — passed through
 # verbatim via env_file rather than restated key by key under `environment:`.

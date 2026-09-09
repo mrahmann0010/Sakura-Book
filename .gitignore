@@ -9,6 +9,10 @@ build/
 .env
 .env.local
 .env.*.local
+# `.env` above does not cover a suffixed copy, and the migration off Supabase
+# leaves exactly that behind: .env.supabase-backup, a verbatim copy of the old
+# credentials kept so the switch can be reversed. Same secrets, same treatment.
+.env.*-backup
 
 .turbo/
 *.tsbuildinfo

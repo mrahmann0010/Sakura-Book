@@ -57,6 +57,12 @@ export const envSchema = z.object({
    * Defaulted to `require` rather than `disable`, so the insecure setting is
    * one somebody has to type. A managed database reached over the public
    * internet without TLS is a credential and a customer's address in plaintext.
+   *
+   * `disable` is correct for container-to-container traffic on a private Docker
+   * network, which never leaves the host — that is what production uses now.
+   * The thing to keep true is the premise: if the database is ever reachable on
+   * a published port, or the API and Postgres stop sharing a host, this has to
+   * go back to `require` and the certificates become a real problem to solve.
    */
   DATABASE_SSL: z.enum(["disable", "require", "verify-full"]).default("require"),
 
@@ -68,6 +74,11 @@ export const envSchema = z.object({
    * not there on the next — producing `prepared statement "s1" does not exist`
    * under concurrency, i.e. exactly when it is least welcome. Turn it on only
    * for a session-mode or direct connection, where it is a genuine saving.
+   *
+   * A self-hosted Postgres reached directly is exactly that case, so production
+   * sets this to `true`. The default stays `false` because it is the setting
+   * that is merely slower when wrong, rather than the one that fails
+   * intermittently under load.
    */
   DATABASE_PREPARE: z
     .union([z.boolean(), z.enum(["true", "false"])])
@@ -198,9 +209,17 @@ export const envSchema = z.object({
    * Maximum Postgres connections held by one API instance.
    *
    * postgres-js defaults to 10. Explicit because the number that matters is
-   * per-instance × instances, and on Supabase that product is measured against
-   * the pooler's client limit rather than against `max_connections` — a small
-   * project's pooler allows far fewer clients than the database would.
+   * per-instance × instances, and that product has to fit inside the database's
+   * own budget with room to spare.
+   *
+   * Against a self-hosted Postgres in the same Docker network, the budget is
+   * `max_connections` (100 by default on the official image) minus the
+   * `superuser_reserved_connections` held back for an operator to get in with,
+   * minus whatever else connects — a backup job, drizzle-kit during a deploy,
+   * a psql session. 20 per instance is comfortable there; it was 10 on
+   * Supabase because the limit was the pooler's client slots rather than the
+   * database's connections, and a small project's pooler allowed far fewer
+   * clients than the database would.
    */
   DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
 
