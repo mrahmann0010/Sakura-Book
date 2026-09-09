@@ -37,7 +37,7 @@ import {
   type CheckoutValues,
   type AcceptedPaymentMethod,
 } from "@/lib/checkout";
-import { FREE_DELIVERY_THRESHOLD, summaryLines } from "@/lib/cart";
+import { summaryLines } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 
@@ -317,9 +317,12 @@ export function CheckoutView({
     {
       subtotal: (count) => t("cart.summary.subtotal", { count }),
       delivery: t("cart.summary.delivery"),
-      deliveryFree: t("cart.summary.deliveryFree", {
-        threshold: formatMoney(FREE_DELIVERY_THRESHOLD, money),
-      }),
+      deliveryFree:
+        cart.freeDeliveryThreshold === null
+          ? null
+          : t("cart.summary.deliveryFree", {
+              threshold: formatMoney(cart.freeDeliveryThreshold, money),
+            }),
       deliveryUnknown: deliveryKnown ? undefined : t("cart.summary.deliveryPending"),
     },
     money,

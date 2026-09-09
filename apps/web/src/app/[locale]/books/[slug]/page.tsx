@@ -18,10 +18,10 @@ import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
 import { getBook } from "@/lib/api/catalog";
 import { ApiError } from "@/lib/api/client";
+import { getShippingTerms } from "@/lib/api/shipping";
 import { footerColumns } from "@/lib/books";
 import { toBookSummary } from "@/lib/book-view";
 import { toSearchParams } from "@/lib/catalog";
-import { FREE_DELIVERY_THRESHOLD } from "@/lib/cart";
 import { CURRENCY, formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 import { localeAlternates, siteUrl } from "@/lib/site";
@@ -51,6 +51,22 @@ async function loadBook(slug: string) {
        because those are not "no such book" and must not be dressed up as one. */
     if (error instanceof ApiError && error.isNotFound) notFound();
     throw error;
+  }
+}
+
+/**
+ * The postage terms behind the buy card's free-delivery line.
+ *
+ * Soft-fails: a shipping endpoint that is down should cost the reader one line
+ * of reassurance, not the book page. The caller renders nothing when this
+ * returns null, which is the only honest alternative — the figure it would
+ * otherwise print is a promise about money.
+ */
+async function loadShippingTerms() {
+  try {
+    return await getShippingTerms();
+  } catch {
+    return null;
   }
 }
 
@@ -85,8 +101,17 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
   const { locale, slug } = (await params) as { locale: Locale; slug: string };
 
   /* The book fetch is deduped with generateMetadata's (see loadBook above),
-     but translations don't depend on it either way — load both at once. */
-  const [{ t }, book] = await Promise.all([getTranslation(locale), loadBook(slug)]);
+     but translations don't depend on it either way — load both at once.
+
+     The postage terms join them because the buy card states the free-delivery
+     promise, and that figure is shop policy: it comes from the API, which is
+     the only thing that knows what the shop currently charges. There is no
+     client constant to fall back on any more — see lib/cart.ts. */
+  const [{ t }, book, shipping] = await Promise.all([
+    getTranslation(locale),
+    loadBook(slug),
+    loadShippingTerms(),
+  ]);
   const view = toBookSummary(book, locale);
   const money = (cents: number) => formatMoney(cents, intlLocale(locale));
 
@@ -181,10 +206,12 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
       {/* Reassurance at the decision moment — the same delivery facts the
           cart and checkout summaries already state, not a new claim. */}
       <p className="text-11.5 text-muted mt-4">
-        {t("cart.summary.deliveryFree", {
-          threshold: money(FREE_DELIVERY_THRESHOLD),
-        })}{" "}
-        · {t("cart.summary.note")}
+        {shipping
+          ? `${t("cart.summary.deliveryFree", {
+              threshold: money(shipping.freeDeliveryThresholdCents),
+            })} · `
+          : null}
+        {t("cart.summary.note")}
       </p>
     </Card>
   );
