@@ -392,6 +392,8 @@ function orderSearch(query: Partial<AdminOrderQuery>): string {
   if (query.q) search.set("q", query.q);
   if (query.placedFrom) search.set("placedFrom", query.placedFrom);
   if (query.placedTo) search.set("placedTo", query.placedTo);
+  if (query.shippedFrom) search.set("shippedFrom", query.shippedFrom);
+  if (query.shippedTo) search.set("shippedTo", query.shippedTo);
   if (query.sort) search.set("sort", query.sort);
   if (query.page) search.set("page", String(query.page));
   if (query.pageSize) search.set("pageSize", String(query.pageSize));

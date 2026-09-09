@@ -58,8 +58,7 @@ function render(fragment: SQL | undefined): { sql: string; params: unknown[] } {
 }
 
 describe("adminOrderFilters", () => {
-  const query = (overrides: Record<string, unknown> = {}) =>
-    adminOrderQuerySchema.parse(overrides);
+  const query = (overrides: Record<string, unknown> = {}) => adminOrderQuerySchema.parse(overrides);
 
   it("applies no constraint when nothing is filtered", () => {
     // An unfiltered queue must return every order — including cancelled and
@@ -123,6 +122,56 @@ describe("adminOrderFilters", () => {
     expect(render(adminOrderFilters(query({ placedFrom: "2026-08-20" }))).params).toContain(
       "2026-08-20T00:00:00.000Z",
     );
+  });
+
+  it("finds a shipping date in the status history, since no column holds one", () => {
+    // An order records the status it is in, never when it got there. The only
+    // record of the day a parcel went out is the SHIPPED row written by the
+    // transition, so a filter that looked at `orders` alone could only be
+    // guessing.
+    const { sql, params } = render(adminOrderFilters(query({ shippedFrom: "2026-08-20" })));
+
+    expect(sql).toContain("exists");
+    expect(sql).toContain("order_status_history");
+    expect(params).toContain("SHIPPED");
+    expect(params).toContain("2026-08-20T00:00:00.000Z");
+  });
+
+  it("matches shipping dates with a subquery, never a join", () => {
+    // `list()` runs the page and its count as two statements over this one
+    // fragment. A join against an append-only history table would multiply an
+    // order by its rows — inflating the total in the heading and repeating
+    // parcels on the manifest — and a correlated subquery cannot, however many
+    // history rows match.
+    const { sql } = render(adminOrderFilters(query({ shippedFrom: "2026-08-20" })));
+
+    expect(sql).not.toContain("join");
+  });
+
+  it("bounds a shipping range by whole days, like the placed one", () => {
+    const { params } = render(
+      adminOrderFilters(query({ shippedFrom: "2026-08-20", shippedTo: "2026-08-22" })),
+    );
+
+    expect(params).toContain("2026-08-20T00:00:00.000Z");
+    expect(params).toContain("2026-08-22T23:59:59.999Z");
+  });
+
+  it("asks one question of the history, not two", () => {
+    // Both ends belong to the *same* SHIPPED row. Two separate conditions
+    // would also match an order shipped before the window that has a later
+    // history row inside it — a parcel that did not go out that day.
+    const { sql } = render(
+      adminOrderFilters(query({ shippedFrom: "2026-08-20", shippedTo: "2026-08-22" })),
+    );
+
+    expect(sql.match(/exists/g)).toHaveLength(1);
+  });
+
+  it("leaves the history alone when no shipping date was asked for", () => {
+    const { sql } = render(adminOrderFilters(query({ placedFrom: "2026-08-20" })));
+
+    expect(sql).not.toContain("order_status_history");
   });
 
   it("expands a division into the districts orders are actually stored with", () => {

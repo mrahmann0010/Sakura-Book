@@ -80,6 +80,27 @@ export const adminOrderQuerySchema = pageQuerySchema({ defaultPageSize: 25 }).ex
   placedFrom: z.iso.date().optional(),
   placedTo: z.iso.date().optional(),
 
+  /**
+   * Inclusive date bounds on when the order was handed to the courier.
+   *
+   * Separate from `placedFrom`/`placedTo` rather than one pair of dates
+   * reinterpreted per status, because the two answer different questions and
+   * the same screen asks both: the dispatch list's "Accepted" tab wants orders
+   * *placed* in a window ("what came in this week that still has to go out"),
+   * and its "Shipped" tab wants orders *shipped* in one ("what went on the van
+   * on Tuesday"). An order placed on the 1st and shipped on the 9th belongs to
+   * a different day under each question, so a single pair could only ever be
+   * right for one of the tabs.
+   *
+   * There is no `shippedAt` column to compare against — an order records the
+   * status it is in, not when it got there — so this matches against the
+   * SHIPPED row in `order_status_history`, which is the only place that date
+   * exists. DELIVERED orders still match: they passed through SHIPPED on the
+   * way, and the history is append-only, so the row is still there.
+   */
+  shippedFrom: z.iso.date().optional(),
+  shippedTo: z.iso.date().optional(),
+
   sort: z.enum(adminOrderSorts).default("recent"),
 });
 
