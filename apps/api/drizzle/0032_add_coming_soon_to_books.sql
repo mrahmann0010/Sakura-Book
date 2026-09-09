@@ -1,1 +1,15 @@
-ALTER TABLE "books" ADD COLUMN "coming_soon" boolean DEFAULT false NOT NULL;
+-- IF NOT EXISTS because on the live database this column is already there, and
+-- did not get there through this migration.
+--
+-- `coming_soon` was added straight to Supabase years ago and never written
+-- down. The move to the VPS restored it along with the rest of the dump, so the
+-- column arrived in the new database as data rather than as a migration — while
+-- `__drizzle_migrations` stopped at 0031. This file was written afterwards to
+-- record a column that already existed, which is fine for a database built from
+-- the migrations alone and a collision for the one that has it.
+--
+-- Unguarded, this aborts the whole run with "column already exists", and since
+-- migrations now run as the first half of the container's start command, that
+-- takes the deploy with it — which is exactly what happened on the first
+-- attempt. Guarding it lets the migrator record 0032 and move on to the rest.
+ALTER TABLE "books" ADD COLUMN IF NOT EXISTS "coming_soon" boolean DEFAULT false NOT NULL;
