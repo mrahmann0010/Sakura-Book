@@ -81,6 +81,11 @@ export const books = pgTable(
     // the preview — pdfUrl alone is a generated storage key, not a readable label.
     pdfFileName: text("pdf_file_name"),
 
+    // Legacy flag from before `availability` existed; superseded by it but
+    // still present in the database and kept here so the schema matches
+    // production exactly. Not read anywhere in the app.
+    comingSoon: boolean("coming_soon").notNull().default(false),
+
     isActive: boolean("is_active").notNull().default(true),
     isFeatured: boolean("is_featured").notNull().default(false),
 

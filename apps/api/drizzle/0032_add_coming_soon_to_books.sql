@@ -1,0 +1,1 @@
+ALTER TABLE "books" ADD COLUMN "coming_soon" boolean DEFAULT false NOT NULL;
