@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { AppNav, PageShell, Shell, SiteFooter } from "@/components/layout";
 import { NotifyWaitlistForm } from "@/components/domain";
-import { Badge } from "@/components/ui";
+import { Badge, Notice } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
 import { getRestockSchedule, getWaitlistBooks } from "@/lib/api/waitlist";
@@ -73,9 +73,10 @@ export async function generateMetadata({
  * shop with five titles can collect names for two of them.
  *
  * Same swallowed-failure policy as reopenDate(): an empty list is a real state
- * — the form then writes general-list signups, which is what the shop-wide
- * pause always meant, and is strictly better than an error page on the one
- * screen whose entire job is catching people the shop has already disappointed.
+ * — there is no general waitlist to fall back to any more, so the page shows
+ * a short notice instead of the form, and that is strictly better than an
+ * error page on the one screen whose entire job is catching people the shop
+ * has already disappointed.
  */
 async function offeredBooks(): Promise<{ id: string; title: string }[]> {
   try {
@@ -134,7 +135,13 @@ export default async function NotifyPage({ params }: PageProps<"/[locale]/notify
         </div>
 
         <div className="max-w-measure-lede mx-auto mt-10">
-          <NotifyWaitlistForm locale={locale} books={books} fixedBook={fixedBook} />
+          {/* No book is on offer: there's no "any title" option to fall back
+              to any more, so the form has nothing to submit against. */}
+          {books.length > 0 ? (
+            <NotifyWaitlistForm locale={locale} books={books} fixedBook={fixedBook} />
+          ) : (
+            <Notice tone="info">{t("notify.form.nothingOffered")}</Notice>
+          )}
         </div>
       </Shell>
     </PageShell>

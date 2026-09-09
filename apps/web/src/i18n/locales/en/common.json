@@ -506,9 +506,11 @@
       "submitError": "Something went wrong on our end. Please try again in a moment.",
       "alreadyListedBody": "Good news — you're already on the list. We'll message you the moment it's back.",
       "book": "Which book?",
-      "bookHint": "Pick the title you're waiting for, or leave it as any.",
-      "bookAny": "Any title — tell me when anything is back",
-      "listedFor": "Waiting for: {{book}}"
+      "bookHint": "Pick the title you're waiting for.",
+      "bookPlaceholder": "Choose a book",
+      "bookError": "Please choose a book.",
+      "listedFor": "Waiting for: {{book}}",
+      "nothingOffered": "There's nothing to join a waitlist for right now — check back soon."
     }
   },
   "reviews": {

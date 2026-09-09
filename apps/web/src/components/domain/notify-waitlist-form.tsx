@@ -17,26 +17,21 @@ import { cn } from "@/lib/utils";
    Pre-orders are paused (see memory: preorder_stream_retired) but the inbox
    keeps filling with the same three questions. This form is the answer: name,
    phone, email and how many copies — just enough to reach the customer the
-   moment stock lands, and nothing that looks like taking an order (no book
-   selection, no address, no payment details).
+   moment stock lands.
+
+   Every signup names a book — staff need to know what they're waiting on to
+   act on the queue, so there is no "notify me about anything" option. The
+   page decides which title(s) can be picked and never renders this form at
+   all when nothing is currently offered.
 
    Posts straight to POST /waitlist. `source` names the entry point rather
-   than being hardcoded into the request — the table (and the contract) are
-   already shaped for a future per-book "notify me" button reusing this same
-   form with a different source and a bookId, so that seam lives here rather
-   than being invented later.
+   than being hardcoded into the request, so a future per-book "notify me"
+   button can reuse this same form with a different source and a fixed
+   `bookId` without a contract change.
    -------------------------------------------------------------------------- */
 
 const waitlistSchema = z.object({
-  /**
-   * The chosen book, or "" for the general list.
-   *
-   * Empty string rather than undefined because that is what a `<select>` with
-   * no selection actually submits — modelling it as optional here would mean
-   * the resolver and the DOM disagreeing about the same field. It is
-   * translated back to an absent `bookId` at the call.
-   */
-  bookId: z.string(),
+  bookId: z.string().uuid(),
   fullName: z.string().trim().min(2),
   phone: z
     .string()
@@ -61,10 +56,9 @@ export type NotifyWaitlistFormProps = {
    *  alert goes out in the language the customer actually reads. */
   locale: string;
   /**
-   * Titles a customer can wait on — everything currently out of stock, chosen
-   * by the page. Empty means no picker is drawn at all and every signup joins
-   * the general list, which is both the honest thing to show when nothing is
-   * out of stock and the safe fallback when the catalog could not be read.
+   * Titles a customer can wait on, chosen by the page. The caller is expected
+   * not to render this form at all when this is empty and there is no
+   * `fixedBook` either — there is no "any book" fallback to fall back to.
    */
   books?: { id: string; title: string }[];
   /**
@@ -73,9 +67,8 @@ export type NotifyWaitlistFormProps = {
    * `bookId` is submitted as this book.
    *
    * Distinct from a one-element `books`, which would still be a control asking
-   * a question with one answer. Null (the API being unreadable, or the book
-   * being back in stock) falls back to the general list, exactly as an empty
-   * `books` does. Takes precedence over `books` when both are given.
+   * a question with one answer. Takes precedence over `books` when both are
+   * given.
    */
   fixedBook?: { id: string; title: string } | null;
   /** Which entry point this form instance is — free text, stored as-is.
@@ -118,12 +111,9 @@ export function NotifyWaitlistForm({
     setSubmitError(null);
 
     try {
-      /* `bookId` is omitted rather than sent empty: the contract marks it
-         optional, and "" is not a UUID — sending it would fail validation for
-         the most common case on the page, which is picking nothing. */
       const entry = await subscribeToWaitlist({
         ...values,
-        ...(bookId ? { bookId } : {}),
+        bookId,
         locale,
         source,
       });
@@ -191,12 +181,15 @@ export function NotifyWaitlistForm({
           <Select
             label={t("notify.form.book")}
             hint={t("notify.form.bookHint")}
+            error={errors.bookId ? t("notify.form.bookError") : undefined}
             {...register("bookId")}
           >
-            {/* The general list, kept as the default per the shop-wide pause.
-                Its value is "" so an untouched form submits exactly what the
-                schema treats as "no book". */}
-            <option value="">{t("notify.form.bookAny")}</option>
+            {/* No pre-selected value: an untouched form submits "", which
+                fails the schema's uuid check and is caught by validation
+                rather than silently joining a list nobody chose. */}
+            <option value="" disabled>
+              {t("notify.form.bookPlaceholder")}
+            </option>
             {choosable.map((book) => (
               <option key={book.id} value={book.id}>
                 {book.title}
