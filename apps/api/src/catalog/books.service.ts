@@ -4,6 +4,7 @@ import { inArray, sql } from "drizzle-orm";
 import { DbService } from "../db/db.service";
 import type { Executor } from "../db/db.types";
 import { books, bookReviews } from "../db/schema";
+import { publicAvailableSql, reservedQuantitySql } from "../inventory";
 import { BookNotFoundError } from "./book.errors";
 import { toBookDetail, toBookSummary } from "./book.mapper";
 import { bookFilters, bookOrder, orderByIds } from "./book.query";
@@ -62,6 +63,13 @@ export class BooksService {
         availability: true,
         publishedDate: true,
       },
+      extras: (book) => ({
+        // Correlated per row rather than joined and grouped: a join to
+        // waitlist_entries would multiply the author rows this query already
+        // fetches one-to-many, and the sum would count each invite once per
+        // author credited on the book.
+        reservedQuantity: reservedQuantitySql(book.id).as("reserved_quantity"),
+      }),
       with: {
         authors: {
           columns: { sortOrder: true },
@@ -86,6 +94,7 @@ export class BooksService {
           coverImageUrl: row.coverImageUrl,
           priceCents: row.priceCents,
           stockQuantity: row.stockQuantity,
+          reservedQuantity: row.reservedQuantity,
           isActive: row.isActive,
           availability: row.availability,
           publishedDate: row.publishedDate,
@@ -153,6 +162,9 @@ export class BooksService {
     const row = await executor.query.books.findFirst({
       where: (book, { and, eq: equals }) =>
         and(equals(book.slug, slug), equals(book.isActive, true)),
+      extras: (book) => ({
+        availableQuantity: publicAvailableSql(book.stockQuantity, book.id).as("available_quantity"),
+      }),
       with: {
         authors: { columns: { sortOrder: true }, with: { author: { columns: { name: true } } } },
         categories: {
@@ -199,6 +211,11 @@ export class BooksService {
           stockQuantity: true,
           availability: true,
         },
+        extras: (book) => ({
+          availableQuantity: publicAvailableSql(book.stockQuantity, book.id).as(
+            "available_quantity",
+          ),
+        }),
         with: {
           authors: { columns: { sortOrder: true }, with: { author: { columns: { name: true } } } },
         },

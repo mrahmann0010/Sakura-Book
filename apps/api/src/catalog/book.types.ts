@@ -23,6 +23,16 @@ export type PriceableBook = {
   coverImageUrl: string;
   priceCents: number;
   stockQuantity: number;
+  /**
+   * Copies already promised to live waitlist invites for this title.
+   *
+   * Travels beside `stockQuantity` rather than being fetched separately for
+   * the reason the two fields above are here at all: the caller has to decide
+   * whether a line is orderable, and orderable means `stockQuantity` less this
+   * — a second round trip for the second half of one decision is a window in
+   * which the two halves disagree. See `inventory/reservations.ts`.
+   */
+  reservedQuantity: number;
   isActive: boolean;
   availability: BookAvailability;
   /** Source for `pre_order` lines' "ships around" note. */
@@ -60,6 +70,16 @@ export type BookSummaryRow = {
   coverImageAlt: string | null;
   isFeatured: boolean;
   stockQuantity: number;
+  /**
+   * Copies an ordinary shopper may buy: `stockQuantity` less the copies held
+   * by live waitlist invites, floored at zero.
+   *
+   * This, not `stockQuantity`, is what the public `stockQuantity` field is
+   * built from — see `toBookSummary`. Both are on the row because the mapper
+   * should be the thing that decides which one the world sees, rather than the
+   * query quietly substituting one for the other.
+   */
+  availableQuantity: number;
   availability: BookAvailability;
   authors: { sortOrder: number; author: { name: string } }[];
 };

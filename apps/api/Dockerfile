@@ -74,6 +74,12 @@ COPY --from=prune --chown=nestjs:nodejs /app ./
 COPY --from=build --chown=nestjs:nodejs /app/packages/contracts/dist ./packages/contracts/dist
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/dist ./apps/api/dist
 
+# The migrations themselves, which are data rather than compiled output and so
+# are not in dist. Without them the container starts against whatever schema it
+# finds; with them, a deploy is the thing that migrates — see src/db/migrate.ts
+# for why that is the only route this database has.
+COPY --from=build --chown=nestjs:nodejs /app/apps/api/drizzle ./apps/api/drizzle
+
 USER nestjs
 
 # Coolify injects PORT; main.ts reads it through ConfigService, so it is
@@ -88,4 +94,8 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||4000)+'/api/v1/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "apps/api/dist/main"]
+# Migrate, then serve. `&&` so a failed migration stops here rather than booting
+# against a schema the code does not match, and `exec` so the server replaces
+# the shell — otherwise SIGTERM reaches sh, which does not forward it, and every
+# deploy kills connections that enableShutdownHooks() was meant to drain.
+CMD ["sh", "-c", "node apps/api/dist/db/migrate.js && exec node apps/api/dist/main"]

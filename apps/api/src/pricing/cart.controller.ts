@@ -45,7 +45,7 @@ export class CartController {
     const priced = await this.pricingService.priceCart(body.items, {
       couponCode: body.couponCode,
       region: body.region,
-      allowOutOfStockBookId: await this.lockedInviteBookId(body.inviteToken),
+      holding: await this.inviteHolding(body.inviteToken),
     });
 
     // Narrowed rather than returned whole: PricedCart carries the coupon's
@@ -54,16 +54,27 @@ export class CartController {
   }
 
   /**
-   * Resolve `inviteToken` to the one book it may bypass stock for, or
-   * undefined if it names no live LOCKED invite. Never trusts a bookId sent
-   * by the client — only what a genuine, unexpired, unused invite token
-   * itself reserved, the same source of truth checkout's own bypass reads
-   * from (CheckoutService.consumeInvite).
+   * Resolve `inviteToken` to the copies being held for this shopper, or
+   * undefined if it names no live LOCKED invite.
+   *
+   * Never trusts a bookId or a quantity sent by the client — only what a
+   * genuine, unexpired, unused invite token itself reserved. That matters more
+   * here than it did when this returned a bare bookId: the quantity is now
+   * subtracted from what the shop considers spoken for, so a client-supplied
+   * one would let a cart quote hand itself other people's copies.
+   *
+   * Quoting does not spend the token. The invite stays live and its copies
+   * stay reserved against everyone else; this only stops the holder being
+   * refused by their own reservation while they are still deciding.
    */
-  private async lockedInviteBookId(inviteToken?: string): Promise<string | undefined> {
+  private async inviteHolding(
+    inviteToken?: string,
+  ): Promise<{ bookId: string; quantity: number } | undefined> {
     if (!inviteToken) return undefined;
 
     const invite = await this.waitlistInviteService.redeem(inviteToken).catch(() => undefined);
-    return invite?.mode === "LOCKED" ? (invite.bookId ?? undefined) : undefined;
+    if (invite?.mode !== "LOCKED" || !invite.bookId) return undefined;
+
+    return { bookId: invite.bookId, quantity: invite.quantity };
   }
 }

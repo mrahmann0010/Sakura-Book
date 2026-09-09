@@ -51,7 +51,12 @@ export class PricingService {
    */
   async priceCart(
     items: CartItem[],
-    options: { couponCode?: string; region?: string; allowOutOfStockBookId?: string } = {},
+    options: {
+      couponCode?: string;
+      region?: string;
+      /** The shopper's own live invite reservation — see `rejectionFor`. */
+      holding?: { bookId: string; quantity: number };
+    } = {},
     executor: Executor = this.dbService.db,
   ): Promise<PricedCart> {
     const merged = mergeItems(items);
@@ -62,14 +67,21 @@ export class PricingService {
 
     for (const [bookId, quantity] of merged) {
       const book = books.get(bookId);
-      const rejection = rejectionFor(bookId, book, options.allowOutOfStockBookId);
+      const rejection = rejectionFor(bookId, book, options.holding);
 
       if (rejection) {
         rejected.push(rejection);
         continue;
       }
 
-      lines.push(toLine(book as PriceableBook, quantity));
+      const priceable = book as PriceableBook;
+      lines.push(
+        toLine(
+          priceable,
+          quantity,
+          options.holding?.bookId === bookId ? options.holding.quantity : 0,
+        ),
+      );
     }
 
     const subtotalCents = lines.reduce((sum, line) => sum + line.lineTotalCents, 0);
@@ -175,36 +187,50 @@ function mergeItems(items: CartItem[]): Map<string, number> {
 /**
  * Why this line cannot be priced, or undefined if it can.
  *
- * `allowOutOfStockBookId` exists for exactly one caller: a LOCKED waitlist
- * invite, whose whole premise is that this one customer may buy this one
- * book despite it showing zero stock everywhere else. It is resolved and
- * verified by the caller (CartController / CheckoutService) from a genuine
- * LOCKED invite reservation before it ever reaches here — this function only
- * ever sees a bookId, never a token, so it cannot itself be tricked into
- * granting the bypass to the wrong book.
+ * `holding` is the reservation the shopper themselves is carrying, when they
+ * arrived on a waitlist invite link. Their own promised copies are part of
+ * `reservedQuantity` — the subquery counts every live invite, and theirs is
+ * live right up until checkout spends it — so without this they would be
+ * refused their own reservation, which is the one thing an invite is for.
+ *
+ * It is a quantity to discount, not a permission to ignore the check. The
+ * caller resolves it from a token it has already verified (CartController via
+ * `redeem`), and it can only ever hand back copies that were being held for
+ * this shopper in the first place. Checkout does not pass it at all: by the
+ * time it prices, `consume` has spent the token and the subquery no longer
+ * counts those copies, so discounting them a second time would let one invite
+ * buy twice.
  */
 function rejectionFor(
   bookId: string,
   book: PriceableBook | undefined,
-  allowOutOfStockBookId?: string,
+  holding?: { bookId: string; quantity: number },
 ): CartQuoteRejection | undefined {
   if (!book) return { bookId, reason: "NOT_FOUND" };
   if (!book.isActive) return { bookId, reason: "UNAVAILABLE" };
 
-  // Only a *zero* stock rejects the line. A line short of the requested
-  // quantity is still priced at what was asked for, with `stockQuantity`
+  const mine = holding?.bookId === bookId ? holding.quantity : 0;
+  const available = book.stockQuantity - (book.reservedQuantity - mine);
+
+  // Only a *zero* allowance rejects the line. A line short of the requested
+  // quantity is still priced at what was asked for, with the availability
   // alongside it: the cart clamps its stepper and flags the row, which is a
   // better recovery than the server silently reducing an order. What the
   // customer actually gets is decided by the guarded decrement at checkout,
   // and nothing before that point is a promise.
-  if (book.stockQuantity <= 0 && bookId !== allowOutOfStockBookId) {
+  //
+  // Note what this rejects that the old `stockQuantity <= 0` did not: a title
+  // with copies on the shelf, every one of them already promised. That is the
+  // whole point — those copies belong to people who have been waiting, and a
+  // stranger browsing the catalog is not allowed to take one.
+  if (available <= 0) {
     return { bookId, reason: "OUT_OF_STOCK", available: 0 };
   }
 
   return undefined;
 }
 
-function toLine(book: PriceableBook, quantity: number): PricedLine {
+function toLine(book: PriceableBook, quantity: number, mine = 0): PricedLine {
   return {
     bookId: book.id,
     slug: book.slug,
@@ -216,7 +242,14 @@ function toLine(book: PriceableBook, quantity: number): PricedLine {
     // Integer cents times an integer quantity — exact, and the reason money
     // never becomes a float anywhere in this codebase (§3.7).
     lineTotalCents: book.priceCents * quantity,
-    stockQuantity: book.stockQuantity,
+    /* The stepper's maximum, so it has to be what this shopper can actually
+       have — stock less everyone else's reservations, plus their own if they
+       hold one. Sending the shelf count would let the cart offer sixty copies
+       of a title with sixty people already promised one, and the refusal would
+       land at checkout instead of on the control that could have prevented it.
+       Floored at zero: a line can be quoted while over-issued, and a negative
+       maximum is not something a stepper can render. */
+    stockQuantity: Math.max(0, book.stockQuantity - (book.reservedQuantity - mine)),
     availability: book.availability,
     expectedShipDate:
       book.availability === "pre_order" ? (book.publishedDate?.toISOString() ?? null) : null,

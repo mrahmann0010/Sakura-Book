@@ -53,7 +53,15 @@ export const cartQuoteLineSchema = z.object({
   quantity: z.number().int().positive(),
   unitPriceCents: z.number().int().nonnegative(),
   lineTotalCents: z.number().int().nonnegative(),
-  /** So the cart can clamp the stepper and flag a line that has run short. */
+  /**
+   * So the cart can clamp the stepper and flag a line that has run short.
+   *
+   * Copies available *to this shopper*: stock, less the copies held by other
+   * people's live waitlist invites, plus the ones held by their own if they
+   * arrived on an invite link. Two shoppers can therefore be told different
+   * numbers for the same title at the same moment, and both are correct —
+   * which is the point, and why this is not the shelf count.
+   */
   stockQuantity: z.number().int().nonnegative(),
   availability: z.enum(bookAvailabilityValues),
   /** ISO date, present on `pre_order` lines — cart/checkout's "ships around" note. */

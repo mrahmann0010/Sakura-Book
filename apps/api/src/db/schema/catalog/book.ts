@@ -1,5 +1,6 @@
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -113,6 +114,24 @@ export const books = pgTable(
     ...timestamps,
   },
   (table) => [
+    /**
+     * The floor under stock, enforced where nothing can route around it.
+     *
+     * `bookSummarySchema` has always claimed this column is nonnegative, and
+     * for a long time that claim was enforced by nobody: a checkout path that
+     * skipped the guarded decrement's WHERE clause wrote -1, the API served it,
+     * and the web app's contract parse then failed the entire book list — one
+     * bad row taking down the catalog, the homepage and every book page,
+     * surfacing in the browser as a minified React error with the actual cause
+     * stripped out.
+     *
+     * Application-level guards keep being the right first answer and keep being
+     * bypassable by the next caller who has a good reason. This one is not: it
+     * turns that whole class of outage into a failed statement at the exact
+     * line that tried it, with a stack pointing at the culprit.
+     */
+    check("books_stock_quantity_nonnegative", sql`${table.stockQuantity} >= 0`),
+
     /**
      * Trigram index for the catalog's free-text `q`, matched with ILIKE.
      *

@@ -149,12 +149,12 @@ export class CheckoutService {
     // whatever the checkout page rendered a minute ago.
     const invite = request.inviteToken ? await this.consumeInvite(request, tx) : undefined;
 
-    // A LOCKED invite's reserved book is allowed to price and decrement below
-    // zero stock — see PricingService.rejectionFor and InventoryService.decrement.
-    // Bounded to the exact book that reservation named, never the whole cart.
-    const lockedBookId = invite?.mode === "LOCKED" ? (invite.bookId ?? undefined) : undefined;
-
-    const priced = await this.repriceForOrder(request, tx, lockedBookId);
+    /* Spending the token above is what makes this customer's copies buyable by
+       them: it drops their reservation out of the "spoken for" subquery that
+       pricing and the decrement below both read, freeing exactly the copies it
+       was holding, for exactly this transaction. Nothing here grants an
+       exemption from the stock rules — see InventoryService.decrement. */
+    const priced = await this.repriceForOrder(request, tx);
 
     // Sequential, not Promise.all. These are guarded UPDATEs against rows two
     // concurrent checkouts may share, and issuing them in parallel on one
@@ -163,12 +163,7 @@ export class CheckoutService {
     // scheduling — which is how deadlocks between two carts holding the same
     // two titles in different orders start.
     for (const line of priced.lines) {
-      await this.inventoryService.decrement(
-        line.bookId,
-        line.quantity,
-        tx,
-        line.bookId === lockedBookId,
-      );
+      await this.inventoryService.decrement(line.bookId, line.quantity, tx);
     }
 
     if (priced.coupon) {
@@ -221,11 +216,7 @@ export class CheckoutService {
    * an order refuses them, because by this point the customer has approved a
    * specific basket for a specific total.
    */
-  private async repriceForOrder(
-    request: PlaceOrderRequest,
-    tx: Transaction,
-    allowOutOfStockBookId?: string,
-  ): Promise<PricedCart> {
+  private async repriceForOrder(request: PlaceOrderRequest, tx: Transaction): Promise<PricedCart> {
     /* Strict region check, and it has to happen before pricing rather than
        alongside it. PricingService treats an unrecognised region as "not
        chosen yet" and quotes the flat rate, which is right for a cart page
@@ -235,9 +226,14 @@ export class CheckoutService {
        The throw rolls the transaction back like any other refusal. */
     await this.regionsService.require(request.customer.region, tx);
 
+    /* No `holding` here, unlike the cart quote. `consumeInvite` has already
+       spent this customer's token earlier in the transaction, so the copies it
+       was reserving are no longer counted against them by the availability
+       subquery — discounting them a second time would let one invite buy two
+       books' worth of stock. */
     const priced = await this.pricingService.priceCart(
       request.items,
-      { couponCode: request.couponCode, region: request.customer.region, allowOutOfStockBookId },
+      { couponCode: request.couponCode, region: request.customer.region },
       tx,
     );
 

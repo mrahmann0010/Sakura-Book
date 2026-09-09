@@ -45,7 +45,25 @@ export function toBookSummary(row: BookSummaryRow, aggregate?: RatingAggregate):
     coverImageAlt: row.coverImageAlt,
 
     isFeatured: row.isFeatured,
-    stockQuantity: row.stockQuantity,
+    /* What the public may buy, not what is on the shelf.
+       The storefront reads this field to draw "sold out", "last copy" and the
+       schema.org availability tag, and to decide whether to offer a Buy
+       button at all. Handing it the raw count would advertise as purchasable
+       the sixty copies that are already promised to sixty people on the
+       waitlist — the shopper would click through, fill in the form, and be
+       refused by the guarded decrement, which is the worst place to find out.
+       What a shopper means by "in stock" is "can I have one", and for a title
+       whose copies are all spoken for the answer is no. The true shelf count
+       is still exactly one query away for anyone who needs it, on the admin
+       contract, which keeps its own field.
+       Clamped as well, though `publicAvailableSql` already floors at zero and
+       the check constraint now refuses a negative stock outright. It stays
+       because of what this particular field failing looks like:
+       `bookSummarySchema` declares it nonnegative, so a single bad row fails
+       the whole list parse in the web app — which is how one title at -1 took
+       down the catalog, the homepage and every book page at once. A corrupt
+       row should cost a wrong badge on one card, not the storefront. */
+    stockQuantity: Math.max(0, row.availableQuantity),
     availability: row.availability,
 
     ...rating(aggregate),
