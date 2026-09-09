@@ -15,8 +15,15 @@
 # straight to postgres.js and fails the connection outright if it asks for SSL
 # the server will not offer.
 #
-# Supabase is still in the picture for Storage only (cover images, PDFs), which
-# is why SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY remain in apps/api/.env.
+# Uploads (cover images, sample PDFs) go to the self-hosted Garage cluster over
+# its S3 API — the same cluster and the same bucket the academy app writes its
+# lesson media into, which is why the S3_* keys in apps/api/.env are that app's
+# values verbatim. Reads never come back through here: the browser fetches from
+# the Cloudflare domain in front of the bucket, so the web container needs no
+# storage setting and the write credential never leaves the API.
+#
+# Supabase is now only a legacy read: rows written before the move still carry
+# Supabase Storage URLs, so apps/web/.env keeps SUPABASE_URL until they don't.
 #
 # Each app owns its own .env (apps/web/.env, apps/api/.env) — passed through
 # verbatim via env_file rather than restated key by key under `environment:`.
@@ -108,7 +115,12 @@ services:
       # Liveness, not readiness — a Postgres blip must not mark the API
       # unhealthy. See apps/api/src/health/health.controller.ts.
       test:
-        ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/v1/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/api/v1/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 3s
       start_period: 40s

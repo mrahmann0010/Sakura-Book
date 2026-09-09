@@ -94,9 +94,10 @@ export function cartFromQuote(quote: CartQuote): Cart {
       author: line.authors.join(", "),
       priceCents: line.unitPriceCents,
       href: `/books/${line.slug}`,
-      /* Through `fileUrl` for the same reason book-view.ts does it: the quote
-         carries the storage provider's public URL and the cart line renders
-         it in an <img>. See lib/storage-url.ts. */
+      /* Through `fileUrl` for the same reason book-view.ts does it: the
+         quote carries whatever URL is stored on the book, which for an older
+         title is a Supabase one needing the legacy proxy. See
+         lib/storage-url.ts. */
       coverUrl: fileUrl(line.coverImageUrl) ?? undefined,
       flag: line.availability === "pre_order" ? "pre-order" : undefined,
       expectedShipDate: line.expectedShipDate ?? undefined,

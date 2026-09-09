@@ -78,12 +78,12 @@ The visual language is documented in [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) and en
 
 **Four principles, and everything follows from them:**
 
-| # | Rule | Consequence in code |
-|---|------|---------------------|
-| 01 | **The book leads** | Covers, titles and prices come first; chrome stays quiet. Covers are the only place the palette opens up. |
-| 02 | **One accent, used sparingly** | A single clay `#C96442` marks the primary action and live status. *If two things on a screen are clay, one of them is wrong.* |
-| 03 | **State is stated, not implied** | Every status carries a **word** as well as a colour — survives touch screens and colour-blind readers. |
-| 04 | **Motion only as confirmation** | Navigation is instant. One 150ms press state, one 1400ms loading shimmer. Nothing else moves. |
+| #   | Rule                             | Consequence in code                                                                                                           |
+| --- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 01  | **The book leads**               | Covers, titles and prices come first; chrome stays quiet. Covers are the only place the palette opens up.                     |
+| 02  | **One accent, used sparingly**   | A single clay `#C96442` marks the primary action and live status. _If two things on a screen are clay, one of them is wrong._ |
+| 03  | **State is stated, not implied** | Every status carries a **word** as well as a colour — survives touch screens and colour-blind readers.                        |
+| 04  | **Motion only as confirmation**  | Navigation is instant. One 150ms press state, one 1400ms loading shimmer. Nothing else moves.                                 |
 
 <table>
 <tr><th align="left">Layer</th><th align="left">How it works</th></tr>
@@ -99,12 +99,12 @@ The visual language is documented in [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) and en
 
 State is assigned by **where it lives and how long it lasts** ([docs/state-management.md](docs/state-management.md)) — one tool per category, no overlap:
 
-| State | Owner | Why |
-|-------|-------|-----|
-| Books, orders, order status | **TanStack React Query** | Server-owned and can go stale — cached and revalidated, never mirrored into a client store |
-| Cart | **Redux Toolkit + redux-persist** | Client-owned, must survive a refresh or tab close → localStorage |
-| Shipping, payment, search forms | **React Hook Form + Zod** | Field wiring plus schema validation, resolver shared with the API contract |
-| Modals, drawers | **local `useState`** | Never needs to be global |
+| State                           | Owner                             | Why                                                                                        |
+| ------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------ |
+| Books, orders, order status     | **TanStack React Query**          | Server-owned and can go stale — cached and revalidated, never mirrored into a client store |
+| Cart                            | **Redux Toolkit + redux-persist** | Client-owned, must survive a refresh or tab close → localStorage                           |
+| Shipping, payment, search forms | **React Hook Form + Zod**         | Field wiring plus schema validation, resolver shared with the API contract                 |
+| Modals, drawers                 | **local `useState`**              | Never needs to be global                                                                   |
 
 ## Routing & rendering
 
@@ -129,16 +129,16 @@ State is assigned by **where it lives and how long it lasts** ([docs/state-manag
 
 A full operations console at `/admin` — the surface that actually moved 500 orders.
 
-| Area | What it does |
-|------|--------------|
-| **Dashboard** | Revenue and order metrics, rendered with a hand-built SVG `bar-chart` — no charting dependency |
-| **Orders** | Queue, per-order detail, status transitions through the server-side state machine, accepted-orders view |
+| Area                     | What it does                                                                                                                                                |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dashboard**            | Revenue and order metrics, rendered with a hand-built SVG `bar-chart` — no charting dependency                                                              |
+| **Orders**               | Queue, per-order detail, status transitions through the server-side state machine, accepted-orders view                                                     |
 | **Payment verification** | Operator confirms a mobile-money transaction against the payment ledger before an order advances; a `payment-safety` component guards the irreversible step |
-| **Catalog** | Create/edit books with validated forms and direct **cover and PDF upload** through the storage service |
-| **Waitlist** | Restock demand per title, counts per book, purge tooling |
-| **Settings** | Payment numbers, shipping regions and postage overrides, restock schedule, notify-books selection |
-| **Auth** | Login gate with an `use-admin-gate` client guard over server-side session auth |
-| **Theme lock** | The admin surface pins its own theme — an operator's dark-mode preference never changes how a receipt or payment screenshot reads |
+| **Catalog**              | Create/edit books with validated forms and direct **cover and PDF upload** through the storage service                                                      |
+| **Waitlist**             | Restock demand per title, counts per book, purge tooling                                                                                                    |
+| **Settings**             | Payment numbers, shipping regions and postage overrides, restock schedule, notify-books selection                                                           |
+| **Auth**                 | Login gate with an `use-admin-gate` client guard over server-side session auth                                                                              |
+| **Theme lock**           | The admin surface pins its own theme — an operator's dark-mode preference never changes how a receipt or payment screenshot reads                           |
 
 ---
 
@@ -152,27 +152,27 @@ A full operations console at `/admin` — the surface that actually moved 500 or
 
 ### The parts worth reading
 
-| Concern | Approach |
-|---------|----------|
-| **Validation** | `nestjs-zod` registered as a global `APP_PIPE`, rethrowing the raw `ZodError` so field paths survive to the client. Schemas come from `@sakura/contracts` — the same objects the frontend forms validate against. |
-| **Errors** | A `DomainError` hierarchy with one dispatching global filter. Services throw domain errors, **never** `HttpException`; the filter owns all transport mapping, plus a Postgres constraint-code mapper. 4xx logs at debug, 5xx logs with a stack. |
-| **Database** | Postgres via **Drizzle + postgres-js** over a pooler, in a `@Global()` module. Every service takes `executor: Executor = this.dbService.db`, so the same method runs standalone or composed inside someone else's transaction. |
-| **Concurrency** | Guarded updates as the house idiom: `UPDATE … WHERE still_available` — zero rows means you lost the race. Used for coupon redemption, stock decrement and order transitions. Checkout is **idempotent and single-transaction**. |
-| **Order lifecycle** | A status machine where `transition()` is the single write path; every change is appended to `order_status_history`. |
-| **Payments** | A `PaymentProvider` port with a registry and two adapters — **cash on delivery** and **manual mobile-money transfer** — plus a webhook route leaning on a unique index (`provider`, `provider_reference_id`) so a replay is a 23505, not a check-then-insert race. Transaction records are reconciled against a **MongoDB** payment ledger. |
-| **Events** | `@nestjs/event-emitter` decouples the side effects — order confirmation email and the `units_sold` rollup both listen for `PAYMENT_CONFIRMED` rather than blocking checkout. |
-| **Security** | `helmet`, CORS pinned to `WEB_ORIGIN`, JWT admin auth with a roles guard, `public` schema revoked from anon roles, an `audit` module recording privileged actions. |
-| **Rate limiting** | Global `ThrottlerGuard` — 300/min default, 10/min on enumerable endpoints, Redis-backed in production. |
-| **Config** | A Zod env schema validated at boot: the process refuses to start misconfigured rather than failing on first request. |
-| **Observability** | `nestjs-pino` with a `genReqId` that reuses an inbound `x-request-id`; `/health`, `/health/live`, `/health/ready`. |
-| **Tests** | Vitest over the money and lifecycle logic — the pure code where a bug costs real taka. |
+| Concern             | Approach                                                                                                                                                                                                                                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Validation**      | `nestjs-zod` registered as a global `APP_PIPE`, rethrowing the raw `ZodError` so field paths survive to the client. Schemas come from `@sakura/contracts` — the same objects the frontend forms validate against.                                                                                                                           |
+| **Errors**          | A `DomainError` hierarchy with one dispatching global filter. Services throw domain errors, **never** `HttpException`; the filter owns all transport mapping, plus a Postgres constraint-code mapper. 4xx logs at debug, 5xx logs with a stack.                                                                                             |
+| **Database**        | Postgres via **Drizzle + postgres-js** over a pooler, in a `@Global()` module. Every service takes `executor: Executor = this.dbService.db`, so the same method runs standalone or composed inside someone else's transaction.                                                                                                              |
+| **Concurrency**     | Guarded updates as the house idiom: `UPDATE … WHERE still_available` — zero rows means you lost the race. Used for coupon redemption, stock decrement and order transitions. Checkout is **idempotent and single-transaction**.                                                                                                             |
+| **Order lifecycle** | A status machine where `transition()` is the single write path; every change is appended to `order_status_history`.                                                                                                                                                                                                                         |
+| **Payments**        | A `PaymentProvider` port with a registry and two adapters — **cash on delivery** and **manual mobile-money transfer** — plus a webhook route leaning on a unique index (`provider`, `provider_reference_id`) so a replay is a 23505, not a check-then-insert race. Transaction records are reconciled against a **MongoDB** payment ledger. |
+| **Events**          | `@nestjs/event-emitter` decouples the side effects — order confirmation email and the `units_sold` rollup both listen for `PAYMENT_CONFIRMED` rather than blocking checkout.                                                                                                                                                                |
+| **Security**        | `helmet`, CORS pinned to `WEB_ORIGIN`, JWT admin auth with a roles guard, `public` schema revoked from anon roles, an `audit` module recording privileged actions.                                                                                                                                                                          |
+| **Rate limiting**   | Global `ThrottlerGuard` — 300/min default, 10/min on enumerable endpoints, Redis-backed in production.                                                                                                                                                                                                                                      |
+| **Config**          | A Zod env schema validated at boot: the process refuses to start misconfigured rather than failing on first request.                                                                                                                                                                                                                        |
+| **Observability**   | `nestjs-pino` with a `genReqId` that reuses an inbound `x-request-id`; `/health`, `/health/live`, `/health/ready`.                                                                                                                                                                                                                          |
+| **Tests**           | Vitest over the money and lifecycle logic — the pure code where a bug costs real taka.                                                                                                                                                                                                                                                      |
 
 ---
 
 ## Infrastructure
 
 - **Deployed on a self-managed VPS via [Coolify](https://coolify.io)** — Docker images built from multi-stage Dockerfiles, `docker-compose.yml` with a `backend` profile for local parity.
-- **Postgres** (managed) · **Redis** (throttling + cache) · **MongoDB** (payment ledger) · **Supabase Storage** for covers and PDF samples, driven by plain `fetch` rather than pulling the whole client SDK in for two operations.
+- **Postgres** (managed) · **Redis** (throttling + cache) · **MongoDB** (payment ledger) · **Garage** (self-hosted, S3-compatible) for covers and PDF samples — the same bucket the academy app writes its lesson media into, this shop's files namespaced under a `sakura-book/` key prefix. Written through plain `fetch` and a small SigV4 signer rather than pulling the AWS SDK in for one PUT (the signer is pinned by a test against botocore's signature for the same request), and read by the browser straight from the Cloudflare domain in front of the bucket, so the origin is touched only on a cache MISS.
 - **GitHub Actions** on every push: lint → typecheck → test → migration-drift.
 
 ## Running it
@@ -184,11 +184,11 @@ npm run dev:all      # web + api
 npm run docker:up:all
 ```
 
-| Script | Does |
-|--------|------|
-| `npm run build` / `lint` / `typecheck` / `test` | Turborepo, all workspaces |
-| `npm run db:generate` / `db:migrate` / `db:seed` / `db:studio` | Drizzle Kit (in `apps/api`) |
-| `npm run format` | Prettier + `prettier-plugin-tailwindcss` |
+| Script                                                         | Does                                     |
+| -------------------------------------------------------------- | ---------------------------------------- |
+| `npm run build` / `lint` / `typecheck` / `test`                | Turborepo, all workspaces                |
+| `npm run db:generate` / `db:migrate` / `db:seed` / `db:studio` | Drizzle Kit (in `apps/api`)              |
+| `npm run format`                                               | Prettier + `prettier-plugin-tailwindcss` |
 
 **Requires** Node ≥ 20.19 · npm 10.8.
 

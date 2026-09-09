@@ -51,11 +51,10 @@ export function FileUpload({
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Upload failed.");
       /* An unconfigured bucket is not something the operator can retry their
-         way out of, and the message alone ("set SUPABASE_URL and
-         SUPABASE_SERVICE_ROLE_KEY") reads as someone else's problem while the
-         book they were filling in stays unsaveable. The URL field below takes
-         a pasted link and is the way through, so say so here rather than
-         leaving them to notice its hint. */
+         way out of, and the message alone ("set S3_ENDPOINT_URL, …") reads as
+         someone else's problem while the book they were filling in stays
+         unsaveable. The URL field below takes a pasted link and is the way
+         through, so say so here rather than leaving them to notice its hint. */
       setBlocked(err instanceof AdminApiError && err.code === "STORAGE_NOT_CONFIGURED");
     } finally {
       setUploading(false);

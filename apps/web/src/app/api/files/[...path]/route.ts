@@ -1,14 +1,18 @@
 import type { NextRequest } from "next/server";
 
 /* --------------------------------------------------------------------------
-   Covers and sample PDFs, served from this app's origin.
+   Legacy covers and sample PDFs, served from this app's origin.
 
-   The other half of lib/storage-url.ts: that file rewrites a stored Supabase
-   public URL to `/api/files/<bucket>/<key>`, and this streams the object back
-   so the browser never learns where it actually lives. See storage-url.ts for
-   why that is worth a hop — in short: the provider stays out of the page
-   source, the sample reader stops depending on the bucket's CORS header, and
-   changing storage later is an edit to this file rather than a data migration.
+   Legacy, and only that: current uploads live in the shop's Garage bucket and
+   are fetched straight from the Cloudflare domain in front of it, so that the
+   bytes come off an edge rather than out of this container — see the header of
+   lib/storage-url.ts. What still arrives here is a book whose cover or sample
+   was uploaded before that move and whose row therefore still holds a Supabase
+   Storage URL.
+
+   The claim this route was built on held, which is why it can shrink to this
+   rather than being ripped out: storage moved, this file and storage-url.ts
+   changed, and not one stored row did.
 
    Streamed, not buffered. `response.body` is piped straight through, so a 40MB
    sample PDF is never held in this process's memory — which matters more here
@@ -31,11 +35,10 @@ export const dynamic = "force-dynamic";
  * Object-key prefixes this route will serve.
  *
  * An allowlist, not a traversal check, because the traversal check is the
- * weaker statement. These are the only two prefixes admin-uploads.controller.ts
- * ever writes (`covers/<uuid>.<ext>` and `pdfs/<uuid>.pdf`), so anything else
- * is either a mistake or somebody probing — and without this the route is a
- * general-purpose reader for every object in every public bucket on the
- * project, including whatever a later feature happens to put there.
+ * weaker statement. These are the only two prefixes the admin uploads ever
+ * wrote, so anything else is either a mistake or somebody probing — and
+ * without this the route is a general-purpose reader for every object in every
+ * public bucket on the project.
  */
 const SERVED_PREFIXES = ["covers/", "pdfs/"];
 
@@ -101,8 +104,11 @@ async function serve(request: NextRequest, object: string, method: "GET" | "HEAD
     /* No SUPABASE_URL on this container. A 404 rather than a 500: from the
        browser's side the file genuinely is not here, and an <img> or the
        reader will show its own missing-asset state, which is a better page
-       than a server error. The misconfiguration belongs in the log. */
-    console.error("SUPABASE_URL is not set — /api/files cannot serve stored files.");
+       than a server error. The misconfiguration belongs in the log.
+
+       Once no row points at Supabase any more, this is the whole route's
+       obituary: unset the variable, watch for these lines, delete the file. */
+    console.error("SUPABASE_URL is not set — /api/files cannot serve legacy files.");
     return new Response("Not found", { status: 404 });
   }
 

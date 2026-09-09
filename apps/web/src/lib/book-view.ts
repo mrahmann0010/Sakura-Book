@@ -91,11 +91,12 @@ export function toBookSummary(
     author: credit(book.authors),
     priceCents: book.priceCents,
     href: routes(locale).book(book.slug),
-    /* Through `fileUrl`, so what reaches the <img> is this shop's own
-       `/api/files/…` path rather than the storage provider's public URL — see
-       lib/storage-url.ts. Rewritten here rather than in BookCover because a
-       cover URL is also read as a string (og:image, JSON-LD) where no
-       component is involved, and one rewrite per source beats one per render.
+    /* Through `fileUrl`, which passes a current CDN URL straight through and
+       rewrites only the legacy Supabase ones onto this app's own
+       `/api/files/…` path — see lib/storage-url.ts. Applied here rather than
+       in BookCover because a cover URL is also read as a string (og:image,
+       JSON-LD) where no component is involved, and one call per source beats
+       one per render.
 
        An empty string is a missing cover, not a cover at "". BookCover draws
        its fallback panel off `undefined` and would render a broken image off

@@ -6,6 +6,16 @@ import type { AdminUploadResult } from "@sakura/contracts";
 import { InvalidInputError } from "../../common/errors";
 import { StorageService } from "../../storage";
 
+/**
+ * Also the size every visitor downloads.
+ *
+ * Nothing resizes or re-encodes a cover on the way in, and nothing can on the
+ * way out either: the files are served straight from the CDN, so `next/image`
+ * is deliberately not in the path (see book-cover.tsx). Eight megabytes is
+ * therefore a ceiling on a real page weight, not just on a request body —
+ * worth lowering, or worth an upload-time WebP re-encode of the kind the
+ * academy app's storage.py does, if staff start uploading phone photos.
+ */
 const COVER_MAX_BYTES = 8 * 1024 * 1024;
 const PDF_MAX_BYTES = 40 * 1024 * 1024;
 
@@ -20,8 +30,12 @@ const COVER_MIME_EXTENSIONS: Record<string, string> = {
  *
  * No `FileInterceptor` `storage` option, so multer keeps the upload in memory
  * (`file.buffer`) rather than writing it to the container's disk — the file
- * exists only long enough to be forwarded to Supabase Storage, and this
+ * exists only long enough to be forwarded to the object store, and this
  * process may not have a writable or persistent filesystem at all.
+ *
+ * The keys built here are app-relative (`covers/<uuid>.<ext>`). StorageService
+ * puts them under the shared media prefix, because the bucket belongs to both
+ * this shop and the academy app — see the note there.
  *
  * Neither route is restricted by `@Roles` — same reasoning as
  * AdminBooksController, which is what these exist to serve.

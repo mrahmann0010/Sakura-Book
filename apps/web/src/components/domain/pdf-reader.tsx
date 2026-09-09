@@ -105,15 +105,22 @@ export function PdfReader({ url, className }: { url: string; className?: string 
         const pdfjs = await loadPdfjs();
         const task = pdfjs.getDocument({
           url,
-          /* A same-origin `/api/files/…` path, not the storage URL: callers
-             route it through lib/storage-url.ts. That started out as a way to
-             keep the storage provider out of the page source, and it also
-             removed the one fragile thing about this fetch — it used to be
-             cross-origin and to work only because the bucket answered with
-             `Access-Control-Allow-Origin: *`, so turning the bucket private or
-             moving it anywhere that omits the header broke the reader while
-             leaving the "open in a new tab" link working. Nothing to depend on
-             now; the route handler is on this app's own origin. */
+          /* Usually the sample's URL on the CDN, so this fetch is
+             cross-origin and works only while the bucket answers with
+             `Access-Control-Allow-Origin` — and, because pdf.js range-reads
+             rather than downloading the whole file, only while
+             `Access-Control-Expose-Headers` lets it see `content-range` and
+             `accept-ranges`. That is a bucket setting somebody has to keep
+             set, and the failure it causes is worth recognising: the reader
+             stays blank while the "open in a new tab" link beside it works
+             perfectly, because a top-level navigation is not subject to CORS.
+             Covers fail the same way and are much louder about it.
+
+             The alternative was serving samples from this app's own origin,
+             which is what the legacy `/api/files/…` path (still handled, for
+             rows predating the CDN) does — it removes the CORS dependency and
+             pays for it by pulling every 40MB sample through the web
+             container. See lib/storage-url.ts for why the CDN won. */
           cMapUrl: "/pdfjs/cmaps/",
           cMapPacked: true,
           standardFontDataUrl: "/pdfjs/standard_fonts/",

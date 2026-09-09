@@ -4,12 +4,22 @@ import Image from "next/image";
 import { cn, type Variants } from "@/lib/utils";
 
 /**
- * Covers uploaded through the admin form are rewritten by `fileUrl` to
- * `/api/files/covers/<uuid>.<ext>` — same-origin, so `next/image` can
- * optimize them without any `remotePatterns` entry. The admin form's cover
- * field also accepts a pasted publisher URL verbatim, which stays absolute
- * and external; those are left on a plain `<img>` rather than erroring at
- * request time for a host nobody configured.
+ * Only same-origin sources go through `next/image`, and after the move to the
+ * CDN that is almost none of them — which is the intended outcome, not a
+ * regression to fix with a `remotePatterns` entry.
+ *
+ * `next/image` optimizes by fetching the source *server-side* and re-serving
+ * it from `/_next/image`, so allowing the CDN host here would route every
+ * cover back through this container and undo the edge delivery the storage
+ * move was for. The bytes are better fetched from Cloudflare unoptimized than
+ * from a single Next instance optimized. What that gives up is the automatic
+ * resize and WebP re-encode, so the size a cover is uploaded at is the size
+ * every visitor downloads — see the note on the upload limit in
+ * admin-uploads.controller.ts.
+ *
+ * Left in place for the legacy `/api/files/…` covers uploaded before the move,
+ * which are same-origin and do get optimized, and for a pasted publisher URL,
+ * which stays absolute and external.
  */
 function isOptimizable(src: string): boolean {
   return src.startsWith("/");

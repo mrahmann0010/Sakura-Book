@@ -347,23 +347,80 @@ export const envSchema = z.object({
   ADMIN_COOKIE_DOMAIN: z.string().optional(),
 
   /**
-   * Supabase project URL and service-role key, for the admin panel's cover
-   * image / PDF uploads (StorageService, apps/api/src/storage).
+   * The self-hosted Garage cluster the admin panel's cover images and sample
+   * PDFs are uploaded to — S3-compatible, and reached over its S3 API.
    *
-   * Optional, and its absence is a closed door rather than an open one:
-   * StorageService throws StorageNotConfiguredError rather than silently
-   * writing nowhere. Everything else — login, the dashboard, book CRUD with a
-   * manually-typed cover URL — works without these; only the upload buttons
-   * need them.
+   * These names, and the three switches below them, are deliberately the same
+   * ones the Nihonova academy app's backend reads, because both apps write
+   * into the *same bucket* and the values are therefore identical. One
+   * configuration copied verbatim between two `.env` files, rather than two
+   * spellings of it that drift apart.
    *
-   * The service-role key bypasses row-level security, which is why it lives
-   * only in this API process and is never sent to the browser.
+   * All optional, and their absence is a closed door rather than an open one:
+   * StorageService throws StorageNotConfiguredError naming whichever are
+   * missing, rather than silently writing nowhere. Everything else — login,
+   * the dashboard, book CRUD with a manually-typed cover URL — works without
+   * them; only the upload buttons need them.
+   *
+   * The secret key is a write credential for a bucket shared with another
+   * application, which is why it lives only in this API process and is never
+   * sent to the browser. The web app is given S3_PUBLIC_BASE_URL and nothing
+   * else, that one being public by definition.
    */
-  SUPABASE_URL: z.string().url().optional(),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(20).optional(),
+  S3_ENDPOINT_URL: z.string().url().optional(),
+  S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+  S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  S3_BUCKET: z.string().min(1).optional(),
 
-  /** Bucket the uploads above are written to. Must be public — see StorageService. */
-  SUPABASE_STORAGE_BUCKET: z.string().min(1).default("book-assets"),
+  /**
+   * The Cloudflare-fronted domain published in front of the bucket: where
+   * visitors read objects from, and the base of every URL stored in
+   * `books.cover_image_url` and `books.pdf_url`.
+   *
+   * Never the S3 endpoint above. That one expects a signature on every
+   * request, has no edge cache in front of it, and naming it in a page hands
+   * every visitor the origin's address.
+   */
+  S3_PUBLIC_BASE_URL: z.string().url().optional(),
+
+  /**
+   * The region named in the signature's credential scope.
+   *
+   * Not the formality it is on R2, where any value is accepted: Garage
+   * compares it against its own `s3_region` setting and rejects a mismatch, so
+   * this has to be whatever that cluster was configured with — the same value
+   * the other app sends. `garage` is that project's own default.
+   */
+  S3_REGION: z.string().min(1).default("garage"),
+
+  /**
+   * Path-style addressing (`<endpoint>/<bucket>/<key>`) rather than
+   * virtual-hosted (`<bucket>.<endpoint>/<key>`).
+   *
+   * On by default, because it is the style that always works against a
+   * self-hosted cluster: virtual-hosted addressing needs Garage's
+   * `root_domain` set and a wildcard DNS record to match it. Turn it off for
+   * R2 or AWS.
+   */
+  S3_USE_PATH_STYLE: z
+    .union([z.boolean(), z.enum(["true", "false"])])
+    .default(true)
+    .transform((value) => value === true || value === "true"),
+
+  /**
+   * Whether the bucket name appears in the *public* URL.
+   *
+   * Independent of the addressing style above, and the pair that is easiest to
+   * get wrong together: Garage's web endpoint resolves the bucket from the
+   * Host header via a domain alias, so its public URLs are `<base>/<key>` and
+   * this is false — while that same deployment still uses path-style
+   * addressing for the S3 API. Set it true for MinIO or R2 path-style public
+   * reads, where the bucket is part of the path.
+   */
+  S3_PUBLIC_INCLUDE_BUCKET: z
+    .union([z.boolean(), z.enum(["true", "false"])])
+    .default(false)
+    .transform((value) => value === true || value === "true"),
 
   /**
    * Brevo (formerly Sendinblue) transactional API key.
