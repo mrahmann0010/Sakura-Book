@@ -244,3 +244,116 @@ describe("AdminWaitlistInviteService.invite — durable outcomes", () => {
     expect(result.results.every((row) => row.error === "Not eligible.")).toBe(true);
   });
 });
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Promises are capped by copies.
+ *
+ * A print run smaller than its waitlist is the normal case here, not an edge
+ * one — sixty copies against three hundred people waiting — so "who gets a
+ * link" is a rationing decision, and it has to be made before the texts go out
+ * rather than discovered by the two hundred and fortieth person at checkout.
+ *
+ * `spare` in these fakes is what the real query computes: stock, less the
+ * copies held by live invites belonging to entries outside this batch.
+ */
+function makeCappedService(entries: Entry[], spare: Record<string, number>) {
+  const { dbService } = fakeDeps(entries);
+  const sendInviteLink = vi.fn().mockResolvedValue(undefined);
+
+  Object.assign(dbService.db, {
+    select: () => ({
+      from: () => ({
+        where: () =>
+          Promise.resolve(Object.entries(spare).map(([id, value]) => ({ id, spare: value }))),
+      }),
+    }),
+  });
+
+  const service = new AdminWaitlistInviteService(
+    dbService as never,
+    {
+      issue: vi.fn().mockImplementation(async (id: string) => ({
+        token: `tok_${id}`,
+        expiresAt: new Date(Date.now() + 3_600_000),
+      })),
+    } as never,
+    { ttlHours: async () => 48, language: async () => "customer" } as never,
+    { sendInviteLink } as never,
+    { recordDetached: vi.fn().mockResolvedValue(undefined) } as never,
+    { get: () => "https://shop.example" } as never,
+  );
+
+  return { service, sendInviteLink };
+}
+
+describe("AdminWaitlistInviteService.invite — never promises more copies than exist", () => {
+  it("refuses the entries past the last unreserved copy, and texts nobody about them", async () => {
+    const { service, sendInviteLink } = makeCappedService(
+      ["1", "2", "3"].map((id) => entry(id, { bookId: "book-a" })),
+      { "book-a": 2 },
+    );
+
+    const result = await service.invite({ ids: ["1", "2", "3"] }, context);
+
+    expect(result.results[0]!.error).toBeUndefined();
+    expect(result.results[1]!.error).toBeUndefined();
+    expect(result.results[2]!.error).toMatch(/No unreserved copies left/);
+
+    // The refusal is worth nothing if the SMS still went — that is the cost
+    // this cap exists to avoid, on top of the false promise.
+    expect(sendInviteLink).toHaveBeenCalledTimes(2);
+  });
+
+  it("spends the copies in the order staff selected, so the longest wait is served first", async () => {
+    const { service } = makeCappedService(
+      ["first", "second"].map((id) => entry(id, { bookId: "book-a" })),
+      { "book-a": 1 },
+    );
+
+    const result = await service.invite({ ids: ["first", "second"] }, context);
+
+    expect(result.results[0]!.error).toBeUndefined();
+    expect(result.results[1]!.error).toBeDefined();
+  });
+
+  it("counts an entry's whole quantity, not one copy per person", async () => {
+    // Two people asking for two copies each is four copies off a three-copy
+    // run — the second must not fit just because it is only the second person.
+    const { service } = makeCappedService(
+      ["1", "2"].map((id) => entry(id, { bookId: "book-a", quantity: 2 })),
+      { "book-a": 3 },
+    );
+
+    const result = await service.invite({ ids: ["1", "2"] }, context);
+
+    expect(result.results[0]!.error).toBeUndefined();
+    expect(result.results[1]!.error).toMatch(/Only 1 unreserved copy left/);
+  });
+
+  it("caps each title separately rather than sharing one budget", async () => {
+    const { service } = makeCappedService(
+      [entry("1", { bookId: "book-a" }), entry("2", { bookId: "book-b" })],
+      { "book-a": 0, "book-b": 5 },
+    );
+
+    const result = await service.invite({ ids: ["1", "2"] }, context);
+
+    expect(result.results[0]!.error).toBeDefined();
+    expect(result.results[1]!.error).toBeUndefined();
+  });
+
+  it("leaves OPEN invites uncapped, since they reserve no particular book", async () => {
+    // bookId null — the general restock list. There is nothing to run out of.
+    const { service, sendInviteLink } = makeCappedService(
+      ["1", "2", "3"].map((id) => entry(id)),
+      {},
+    );
+
+    const result = await service.invite({ ids: ["1", "2", "3"] }, context);
+
+    expect(result.results.every((row) => row.error === undefined)).toBe(true);
+    expect(sendInviteLink).toHaveBeenCalledTimes(3);
+  });
+});

@@ -80,7 +80,21 @@ export const bookSummarySchema = z.object({
   coverImageAlt: z.string().nullable(),
 
   isFeatured: z.boolean(),
-  /** Remaining stock, so the client can draw "last copy" and clamp steppers. */
+  /**
+   * Copies this shopper may buy — remaining stock less the copies already
+   * promised to live waitlist invites. What the client draws "last copy" and
+   * "sold out" from, and clamps steppers to.
+   *
+   * Deliberately not the shelf count. The shop sells print runs smaller than
+   * the queue waiting for them, so a title can hold sixty copies and owe every
+   * one of them; "in stock" would then be true of the warehouse and false of
+   * the only question a shopper is asking. Checkout enforces exactly this
+   * number, so anything larger here is an offer the server will refuse.
+   *
+   * The true count is not secret, it is just a different question, and it is
+   * answered on the admin contract — see `adminBookSummarySchema`, which keeps
+   * both this and `unitsSold` for the people who run the shop.
+   */
   stockQuantity: z.number().int().nonnegative(),
   availability: z.enum(bookAvailabilityValues),
 

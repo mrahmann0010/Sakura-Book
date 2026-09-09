@@ -1,11 +1,12 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { AdminWaitlistInviteOutcome, AdminWaitlistInviteRequest, AdminWaitlistInviteResult } from "@sakura/contracts";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import type { Env } from "../../config/env.schema";
 import { AuditService } from "../../audit";
 import { DbService } from "../../db/db.service";
-import { waitlistEntries } from "../../db/schema";
+import { books, waitlistEntries } from "../../db/schema";
+import { reservedQuantitySql } from "../../inventory";
 import { SmsService } from "../../sms";
 import { WaitlistInviteService, WaitlistInviteSettingsService } from "../../waitlist";
 import type { AdminContext } from "../orders";
@@ -49,6 +50,77 @@ export class AdminWaitlistInviteService {
     private readonly config: ConfigService<Env, true>,
   ) {}
 
+  /**
+   * Decide, before a single text is sent, which of these entries there is
+   * actually a copy for.
+   *
+   * An invite is a promise, and the shop can only keep as many as it has
+   * copies. Nothing used to check that: a staff member could select all three
+   * hundred people waiting for a sixty-copy print run and send every one of
+   * them a working link, and two hundred and forty of them would fill in a
+   * checkout form to be told no — after the shop had paid to text each of them.
+   *
+   * Decided here, in one pass, rather than inside the send loop, because that
+   * loop runs five at a time: five concurrent checks against the same book
+   * would each see the same remaining capacity and each claim it. Walking the
+   * ids sequentially here also means the budget is spent in the order staff
+   * selected, which is the order the list is sorted in — first to sign up,
+   * first served — rather than in whichever order the gateway answers.
+   *
+   * Only LOCKED entries are capped. An OPEN invite names no book, so it
+   * reserves nothing and there is nothing to run out of.
+   */
+  private async refuseBeyondStock(
+    ids: string[],
+    entries: { id: string; status: string; bookId: string | null; quantity: number }[],
+  ): Promise<Map<string, string>> {
+    const refusals = new Map<string, string>();
+
+    const eligible = ids
+      .map((id) => entries.find((row) => row.id === id))
+      .filter(
+        (entry): entry is (typeof entries)[number] =>
+          !!entry && entry.status !== "CANCELLED" && entry.status !== "CONVERTED" && !!entry.bookId,
+      );
+
+    const bookIds = [...new Set(eligible.map((entry) => entry.bookId!))];
+    if (bookIds.length === 0) return refusals;
+
+    /* Capacity is stock less what everyone *outside this batch* is holding.
+       The batch itself is then charged against that below, so re-inviting a
+       lapsed entry costs its copies once rather than twice. */
+    const rows = await this.dbService.db
+      .select({
+        id: books.id,
+        spare: sql<number>`${books.stockQuantity} - ${reservedQuantitySql(books.id, {
+          excludeEntryIds: eligible.map((entry) => entry.id),
+        })}`,
+      })
+      .from(books)
+      .where(inArray(books.id, bookIds));
+
+    const budget = new Map(rows.map((row) => [row.id, row.spare]));
+
+    for (const entry of eligible) {
+      const bookId = entry.bookId!;
+      const remaining = budget.get(bookId) ?? 0;
+
+      if (entry.quantity > remaining) {
+        refusals.set(
+          entry.id,
+          remaining > 0
+            ? `Only ${remaining} unreserved ${remaining === 1 ? "copy" : "copies"} left — this entry asks for ${entry.quantity}.`
+            : "No unreserved copies left. Print more, or wait for an invite to lapse.",
+        );
+        continue;
+      }
+
+      budget.set(bookId, remaining - entry.quantity);
+    }
+
+    return refusals;
+  }
+
   async invite(
     request: AdminWaitlistInviteRequest,
     context: AdminContext,
@@ -74,6 +146,8 @@ export class AdminWaitlistInviteService {
        still lists outcomes in the order staff selected them. */
     const results: AdminWaitlistInviteOutcome[] = new Array(request.ids.length);
 
+    const overCapacity = await this.refuseBeyondStock(request.ids, entries);
+
     await this.eachWithConcurrency(request.ids, INVITE_CONCURRENCY, async (id, index) => {
       const entry = entries.find((row) => row.id === id);
 
@@ -82,6 +156,12 @@ export class AdminWaitlistInviteService {
       // selected on screen.
       if (!entry || entry.status === "CANCELLED" || entry.status === "CONVERTED") {
         results[index] = { id, sent: false, mode: null, expiresAt: null, error: "Not eligible." };
+        return;
+      }
+
+      const refusal = overCapacity.get(id);
+      if (refusal) {
+        results[index] = { id, sent: false, mode: null, expiresAt: null, error: refusal };
         return;
       }
 
