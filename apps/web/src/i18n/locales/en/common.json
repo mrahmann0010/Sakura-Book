@@ -555,8 +555,8 @@
   "waitlistInvite": {
     "eyebrow": "Your turn to order",
     "title": "Complete your order",
-    "lockedNotice": "This link reserves {{bookTitle}} × {{quantity}} for you — the order can't be changed to something else.",
-    "lockedNoticeUpTo": "This link reserves up to {{quantity}} copies of {{bookTitle}} for you — you can order fewer, but not a different book.",
+    "lockedNotice": "This link reserves {{quantity}} copy of the book below for you — the order can't be changed to something else.",
+    "lockedNoticeUpTo": "This link reserves up to {{quantity}} copies of the book below for you — you can order fewer, but not a different book.",
     "quantityLabel": "How many copies?",
     "quantityHint": "{{quantity}} reserved for you. You can take fewer.",
     "expired": {
