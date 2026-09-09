@@ -102,10 +102,20 @@ export class SmsService {
     language: "en" | "bn",
     ttlHours: number,
   ): Promise<void> {
+    /* Both templates are short because an SMS is billed by segment, and the
+       two languages do not get the same budget. English is GSM-7: 160
+       characters. Bangla is UCS-2 — any Bangla character forces it — and
+       that is 70 characters for the entire message, link included, counted
+       by code point, so a conjunct like "প্রিয়" costs six.
+
+       The previous wording opened with a greeting and a thank-you and then
+       restated what the link is for. At 195 characters that was three billed
+       segments per Bangla invite; this is one. The courtesy now lives on the
+       page the link opens, where it costs nothing. */
     const message =
       language === "bn"
-        ? `প্রিয় গ্রাহক, আমাদের সাথে থাকার জন্য ধন্যবাদ। আপনার বইটি অর্ডারের জন্য প্রস্তুত। অর্ডার নিশ্চিত করতে ${ttlHours} ঘণ্টার মধ্যে অর্ডার করুন: ${url}`
-        : `Dear customer, thanks for supporting us. Your book is ready for order. To confirm your order, please place it within ${ttlHours} hours: ${url}`;
+        ? `${ttlHours} ঘণ্টার মধ্যে বই অর্ডার করুন: ${url}`
+        : `Order your book within ${ttlHours} hours: ${url}`;
 
     await this.send(phone, message);
   }

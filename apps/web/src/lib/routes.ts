@@ -25,7 +25,10 @@ export function routes(locale: Locale | string) {
     terms: `${base}/terms`,
     contact: `${base}/contact`,
     notify: `${base}/notify`,
-    waitlistInvite: (token: string) => `${base}/waitlist/invite/${encodeURIComponent(token)}`,
+    /* Short on purpose: this path is what an SMS pays for. A Bangla invite is
+       UCS-2, so the whole message gets 70 characters — `/waitlist/invite/`
+       spent 17 of them saying twice what `/invite/` says once. */
+    waitlistInvite: (token: string) => `${base}/invite/${encodeURIComponent(token)}`,
     /* Where a customer writes about the service. Deliberately not under
        `/reviews` — that path is left free for the listing of approved
        testimonials, so neither page has to move when the other arrives. */

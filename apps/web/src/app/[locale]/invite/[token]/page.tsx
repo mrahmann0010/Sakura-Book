@@ -25,7 +25,7 @@ export const metadata: Metadata = {
 
 export default async function WaitlistInvitePage({
   params,
-}: PageProps<"/[locale]/waitlist/invite/[token]">) {
+}: PageProps<"/[locale]/invite/[token]">) {
   const { locale, token } = (await params) as { locale: Locale; token: string };
   const path = routes(locale);
 
