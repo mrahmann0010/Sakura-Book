@@ -366,11 +366,18 @@ Two consequences worth stating, because both are easy to get wrong later:
   practice — every real price is a multiple of 100. Clients format with
   `maximumFractionDigits: 0`; rendering `৳450.00` is wrong in a way a customer
   notices.
-- **The shipping figures are not a units conversion.** `DELIVERY_FLAT` and
-  `FREE_DELIVERY_THRESHOLD` in `apps/web/src/lib/cart.ts` are 350 and 3000 —
-  £3.50 and £30. Reinterpreting those as taka gives ৳3.50 postage. The
-  server-side values are set independently at ৳60 and ৳1,500, and the frontend
-  constants are now wrong rather than merely duplicated.
+- **The shipping figures were never a units conversion.** `DELIVERY_FLAT` and
+  `FREE_DELIVERY_THRESHOLD` in `apps/web/src/lib/cart.ts` were 350 and 3000 —
+  £3.50 and £30, left over from a sterling draft. Read as poisha they came out
+  at ৳3.50 postage, free over ৳30, and the cart page priced its whole summary
+  off them, so the total on screen was not the total checkout charged. Both
+  constants are now deleted: nothing prices a cart in the browser, and the
+  "free over X" line quotes `freeDeliveryThresholdCents` off the quote (or, on
+  a page with no cart, `GET /shipping/regions`). The authoritative defaults are
+  `DELIVERY_FLAT_CENTS=10000` and `FREE_DELIVERY_THRESHOLD_CENTS=400000` —
+  ৳100 postage, waived at ৳4,000 — and those apply only until an operator saves
+  Settings → Shipping, after which `shop_settings` is in force and the endpoint
+  says so via its `source` field.
 
 A flat national rate also cannot express the usual inside/outside-Dhaka split.
 If the shop charges differently by region, the rate belongs on the regions
