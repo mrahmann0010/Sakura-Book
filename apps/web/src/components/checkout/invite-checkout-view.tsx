@@ -292,11 +292,22 @@ export function InviteCheckoutView({
           ]}
         />
 
-        <Notice tone="info" className="mt-6">
+        {/*
+          The title is lifted out of the sentence rather than interpolated into
+          it. Inline, it was one more clause in a line of reserve-and-restrict
+          copy and readers skimmed past the one thing they need to check before
+          paying — which book this is. The sentence now points at it ("the book
+          below") and the title carries the display face on its own line.
+        */}
+        <Notice tone="info" className="mt-6 text-center">
           {t(quantity > 1 ? "waitlistInvite.lockedNoticeUpTo" : "waitlistInvite.lockedNotice", {
-            bookTitle: recapLines[0]?.book.title ?? "",
             quantity,
           })}
+          {/* 500, not `strong`'s default bold: Lora is loaded at 400/500 only,
+              so anything heavier is a synthesised smear rather than a weight. */}
+          <strong className="text-h3 text-ink mt-2 block font-serif font-medium">
+            {recapLines[0]?.book.title ?? ""}
+          </strong>
         </Notice>
 
         <div className="border-rule mt-6 flex flex-wrap items-center justify-between gap-3 border-b pb-6">

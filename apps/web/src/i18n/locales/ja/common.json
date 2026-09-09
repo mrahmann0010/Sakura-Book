@@ -553,8 +553,8 @@
   "waitlistInvite": {
     "eyebrow": "ご注文の順番です",
     "title": "ご注文を完了する",
-    "lockedNotice": "このリンクは{{bookTitle}} × {{quantity}}を確保しています — 内容を変更することはできません。",
-    "lockedNoticeUpTo": "このリンクは{{bookTitle}}を最大{{quantity}}冊まで確保しています — 冊数を減らすことはできますが、別の本には変更できません。",
+    "lockedNotice": "このリンクは下の本を{{quantity}}冊確保しています — 内容を変更することはできません。",
+    "lockedNoticeUpTo": "このリンクは下の本を最大{{quantity}}冊まで確保しています — 冊数を減らすことはできますが、別の本には変更できません。",
     "quantityLabel": "何冊にしますか?",
     "quantityHint": "{{quantity}}冊を確保しています。減らすことができます。",
     "expired": {
