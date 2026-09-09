@@ -87,3 +87,49 @@ describe("WaitlistInviteService.consume", () => {
     await expect(service.consume("tok_spent", tx)).resolves.toBeNull();
   });
 });
+
+/**
+ * Taking an invite back.
+ *
+ * The reservation subquery in `inventory/reservations.ts` holds a copy for
+ * exactly as long as its token could still be spent, and reads no status at
+ * all — so revoking is the *only* thing that returns copies before the TTL
+ * runs out, and cancelling an entry without it leaves the shop holding stock
+ * for someone it just removed from the list, who still has a working link.
+ */
+describe("WaitlistInviteService.revoke", () => {
+  function fakeTx() {
+    const where = vi.fn().mockResolvedValue(undefined);
+    const set = vi.fn().mockReturnValue({ where });
+    const update = vi.fn().mockReturnValue({ set });
+
+    return { tx: { update } as never, set, where };
+  }
+
+  it("clears all three invite columns together, never one without the others", async () => {
+    // The invariant both `redeem` and `consume` assert non-null against, and
+    // that the table's CHECK constraint now enforces: a token, its mode and
+    // its expiry exist together or not at all.
+    const { tx, set } = fakeTx();
+
+    await new WaitlistInviteService({} as never).revoke("e1", tx);
+
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(set.mock.calls[0]![0]).toMatchObject({
+      inviteToken: null,
+      inviteMode: null,
+      inviteExpiresAt: null,
+    });
+  });
+
+  it("never touches invite_used_at, so a spent invite keeps its record", async () => {
+    // Erasing the token a redemption was made with would leave `invite_used_at`
+    // stamped against nothing — and there is nothing to reclaim either: a spent
+    // invite dropped out of the reservation count when it was spent.
+    const { tx, set } = fakeTx();
+
+    await new WaitlistInviteService({} as never).revoke("e1", tx);
+
+    expect(set.mock.calls[0]![0]).not.toHaveProperty("inviteUsedAt");
+  });
+});

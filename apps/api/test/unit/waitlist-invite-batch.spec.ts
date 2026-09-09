@@ -130,12 +130,10 @@ function makeService(entries: Entry[], sendInviteLink: SmsService["sendInviteLin
   const { dbService, writes } = fakeDeps(entries);
 
   const inviteService = {
-    issue: vi
-      .fn()
-      .mockImplementation(async (id: string) => ({
-        token: `tok_${id}`,
-        expiresAt: new Date(Date.now() + 3_600_000),
-      })),
+    issue: vi.fn().mockImplementation(async (id: string) => ({
+      token: `tok_${id}`,
+      expiresAt: new Date(Date.now() + 3_600_000),
+    })),
   };
 
   const service = new AdminWaitlistInviteService(
@@ -258,15 +256,27 @@ describe("AdminWaitlistInviteService.invite — durable outcomes", () => {
  * `spare` in these fakes is what the real query computes: stock, less the
  * copies held by live invites belonging to entries outside this batch.
  */
-function makeCappedService(entries: Entry[], spare: Record<string, number>) {
+function makeCappedService(
+  entries: Entry[],
+  spare: Record<string, number>,
+  holding: string[] = [],
+) {
   const { dbService } = fakeDeps(entries);
   const sendInviteLink = vi.fn().mockResolvedValue(undefined);
 
+  /* Two different reads go through `select` here, and they have to answer
+     differently: the books query asks for each title's spare capacity, and
+     the holders query asks which of these entries already has a live invite.
+     The projection is what tells them apart, as it does in the real code. */
   Object.assign(dbService.db, {
-    select: () => ({
+    select: (fields: Record<string, unknown>) => ({
       from: () => ({
         where: () =>
-          Promise.resolve(Object.entries(spare).map(([id, value]) => ({ id, spare: value }))),
+          Promise.resolve(
+            "spare" in fields
+              ? Object.entries(spare).map(([id, value]) => ({ id, spare: value }))
+              : holding.map((id) => ({ id })),
+          ),
       }),
     }),
   });
@@ -342,6 +352,76 @@ describe("AdminWaitlistInviteService.invite — never promises more copies than 
 
     expect(result.results[0]!.error).toBeDefined();
     expect(result.results[1]!.error).toBeUndefined();
+  });
+
+  /**
+   * The budget must not grow when an entry is refused.
+   *
+   * `spare` is computed with every entry in the batch excluded from the
+   * reserved count — a loan against the assumption that each of them is about
+   * to have its token rewritten. A *refused* entry has nothing rewritten: its
+   * existing invite stands and its copies stay held. Charging it back is what
+   * keeps the refusal branch from funding the entries behind it with copies
+   * that are already promised.
+   */
+  it("keeps a refused entry's existing reservation charged against the book", async () => {
+    // Five copies unclaimed by anyone outside this batch. Entry "1" asks for
+    // six and is already holding a live invite for those six — a stock count
+    // lowered under it. Its renewal is refused, but the six copies it holds do
+    // not come back just because the renewal did not go through, so entry "2"
+    // must be refused too rather than served from the gap.
+    const { service, sendInviteLink } = makeCappedService(
+      [
+        entry("1", { bookId: "book-a", quantity: 6 }),
+        entry("2", { bookId: "book-a", quantity: 3 }),
+      ],
+      { "book-a": 5 },
+      ["1"],
+    );
+
+    const result = await service.invite({ ids: ["1", "2"] }, context);
+
+    expect(result.results[0]!.error).toMatch(/Only 5 unreserved copies left/);
+    expect(result.results[1]!.error).toMatch(/No unreserved copies left/);
+    expect(sendInviteLink).not.toHaveBeenCalled();
+  });
+
+  it("does not charge back an entry whose invite has lapsed or was never issued", async () => {
+    // Same shape, but entry "1" holds nothing — a lapsed invite has already
+    // returned its copies. All five are genuinely free, so entry "2" fits.
+    const { service } = makeCappedService(
+      [
+        entry("1", { bookId: "book-a", quantity: 6 }),
+        entry("2", { bookId: "book-a", quantity: 3 }),
+      ],
+      { "book-a": 5 },
+      [],
+    );
+
+    const result = await service.invite({ ids: ["1", "2"] }, context);
+
+    expect(result.results[0]!.error).toBeDefined();
+    expect(result.results[1]!.error).toBeUndefined();
+  });
+
+  it("refuses everyone once refusals have driven the book over-issued", async () => {
+    // Two entries each holding three copies of a two-copy run — an admin
+    // lowered the stock count under live invites. Neither renewal fits, and
+    // the arithmetic must not hand the shortfall to the third entry.
+    const { service, sendInviteLink } = makeCappedService(
+      [
+        entry("1", { bookId: "book-a", quantity: 3 }),
+        entry("2", { bookId: "book-a", quantity: 3 }),
+        entry("3", { bookId: "book-a", quantity: 1 }),
+      ],
+      { "book-a": 2 },
+      ["1", "2"],
+    );
+
+    const result = await service.invite({ ids: ["1", "2", "3"] }, context);
+
+    expect(result.results.every((row) => row.error !== undefined)).toBe(true);
+    expect(sendInviteLink).not.toHaveBeenCalled();
   });
 
   it("leaves OPEN invites uncapped, since they reserve no particular book", async () => {

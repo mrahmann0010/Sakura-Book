@@ -1,5 +1,14 @@
 import { relations, sql } from "drizzle-orm";
-import { index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  check,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { books } from "../catalog/book";
 import { waitlistInviteModeEnum, waitlistInviteSmsStatusEnum, waitlistStatusEnum } from "../enums";
 import { orders } from "../orders/order";
@@ -143,6 +152,46 @@ export const waitlistEntries = pgTable(
     uniqueIndex("waitlist_entries_invite_token_idx")
       .on(table.inviteToken)
       .where(sql`${table.inviteToken} is not null`),
+
+    /**
+     * The three invite columns move as one, and the database is what says so.
+     *
+     * `inviteToken`, `inviteMode` and `inviteExpiresAt` have always been
+     * documented above as never appearing without each other — `issue()` sets
+     * all three, `revoke()` clears all three — and both `redeem` and `consume`
+     * rely on it hard enough to write `entry.inviteMode!` and
+     * `entry.inviteExpiresAt!` off the back of a token match. That is a
+     * non-null assertion whose only backing was a comment.
+     *
+     * Half-written state here is not a null-check away from being handled: a
+     * token with no expiry is a link that outlives the copies it reserved, and
+     * a token with no mode reaches `consume`, which returns `mode!` and hands
+     * `undefined` to a LOCKED/OPEN branch that then lets the order through
+     * unchecked. Same argument as `books_stock_quantity_nonnegative`: the
+     * application guard keeps being right and keeps being bypassable by the
+     * next writer, and this turns the whole class into a failed statement at
+     * the line that tried it.
+     */
+    check(
+      "waitlist_entries_invite_columns_together",
+      sql`(${table.inviteToken} is null) = (${table.inviteMode} is null)
+          and (${table.inviteToken} is null) = (${table.inviteExpiresAt} is null)`,
+    ),
+
+    /**
+     * A spent invite keeps the credential it was spent with.
+     *
+     * `inviteUsedAt` is the single-use flag, and it is only meaningful next to
+     * the token it refers to — a used stamp on a row with no token records
+     * that something was redeemed without saying what. It is also what makes
+     * `revoke()`'s "unspent only" guard structural rather than a convention:
+     * clearing a token out from under a redemption is now a constraint
+     * violation, not a subtly wrong row.
+     */
+    check(
+      "waitlist_entries_invite_used_implies_token",
+      sql`${table.inviteUsedAt} is null or ${table.inviteToken} is not null`,
+    ),
   ],
 );
 

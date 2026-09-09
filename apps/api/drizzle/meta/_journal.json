@@ -239,6 +239,13 @@
       "when": 1788927891208,
       "tag": "0033_stock_quantity_nonnegative",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788927891209,
+      "tag": "0034_waitlist_invite_integrity",
+      "breakpoints": true
     }
   ]
 }

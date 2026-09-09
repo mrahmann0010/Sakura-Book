@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { AdminWaitlistInviteOutcome, AdminWaitlistInviteRequest, AdminWaitlistInviteResult } from "@sakura/contracts";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Env } from "../../config/env.schema";
 import { AuditService } from "../../audit";
 import { DbService } from "../../db/db.service";
@@ -101,6 +101,17 @@ export class AdminWaitlistInviteService {
 
     const budget = new Map(rows.map((row) => [row.id, row.spare]));
 
+    /* Which of these entries is *already* holding a live invite right now.
+       Needed because the exclusion above is a loan against an assumption —
+       that every entry in the batch is about to have its token rewritten. A
+       refused entry has no token rewritten: its existing invite stands, and
+       the copies it holds were nonetheless taken out of `spare`. Without
+       charging them back, every refusal on a book quietly raises that book's
+       budget by the refused quantity and hands the difference to the entries
+       behind it — the exact over-issue the whole method exists to prevent,
+       reached through the branch that is supposed to prevent it. */
+    const stillHolding = await this.liveInviteHolders(eligible.map((entry) => entry.id));
+
     for (const entry of eligible) {
       const bookId = entry.bookId!;
       const remaining = budget.get(bookId) ?? 0;
@@ -112,6 +123,13 @@ export class AdminWaitlistInviteService {
             ? `Only ${remaining} unreserved ${remaining === 1 ? "copy" : "copies"} left — this entry asks for ${entry.quantity}.`
             : "No unreserved copies left. Print more, or wait for an invite to lapse.",
         );
+
+        /* A reservation is charged whether or not this batch renewed it. The
+           result can go negative, and that is the honest reading: the book is
+           over-issued — more copies promised than printed, which an admin
+           lowering the stock count can create at any time — and every entry
+           after this one is refused, which is the correct behaviour for it. */
+        if (stillHolding.has(entry.id)) budget.set(bookId, remaining - entry.quantity);
         continue;
       }
 
@@ -119,6 +137,34 @@ export class AdminWaitlistInviteService {
     }
 
     return refusals;
+  }
+
+  /**
+   * Of these entries, the ones whose invite could still be spent this second.
+   *
+   * The same three conditions `reservations.ts` counts a copy as spoken for
+   * under, and matched here for that reason: this answers "is this entry's
+   * reservation inside the number `spare` was computed from", so it has to be
+   * the same question, asked the same way. `now()` rather than a JS
+   * timestamp, so an invite lapsing mid-request is read by the database's
+   * clock like everywhere else.
+   */
+  private async liveInviteHolders(ids: string[]): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+
+    const rows = await this.dbService.db
+      .select({ id: waitlistEntries.id })
+      .from(waitlistEntries)
+      .where(
+        and(
+          inArray(waitlistEntries.id, ids),
+          isNotNull(waitlistEntries.inviteToken),
+          isNull(waitlistEntries.inviteUsedAt),
+          sql`${waitlistEntries.inviteExpiresAt} > now()`,
+        ),
+      );
+
+    return new Set(rows.map((row) => row.id));
   }
 
   async invite(

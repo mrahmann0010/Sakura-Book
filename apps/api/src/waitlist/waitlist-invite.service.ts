@@ -34,7 +34,8 @@ function isTokenCollision(error: unknown): boolean {
    entry behind it. */
 
 /**
- * The invite-token mechanism: issuing, reading, and single-use redemption.
+ * The invite-token mechanism: issuing, reading, revoking, and single-use
+ * redemption.
  *
  * Deliberately separate from `WaitlistService` (which owns signup) and from
  * whatever eventually decides *who* gets invited when stock is released —
@@ -95,6 +96,47 @@ export class WaitlistInviteService {
         if (attempt >= 3 || !isTokenCollision(error)) throw error;
       }
     }
+  }
+
+  /**
+   * Take an unspent invite back, and with it the copies it was holding.
+   *
+   * The counterpart to `issue`, and the piece that was missing. The
+   * reservation subquery in `inventory/reservations.ts` deliberately has no
+   * `status` clause — a copy is held for exactly as long as the token behind
+   * it could still be spent — so an entry moving to CANCELLED did nothing on
+   * its own: the person staff had just taken off the list kept a working link
+   * and kept the shop's copies off the shelf until the TTL ran out. Status
+   * said one thing and the invite said another, and the invite is what the
+   * checkout path actually reads.
+   *
+   * Nulls all three token columns together, never one without the others —
+   * the same invariant `issue` upholds from the other side, and now the one
+   * the table's own CHECK constraints enforce against every future writer.
+   *
+   * `invite_used_at is null` is a guard, not an optimisation. A spent token is
+   * history: the order that spent it points back at this entry, and erasing
+   * the credential it was redeemed with would leave `invite_used_at` stamped
+   * against nothing. There is also nothing to reclaim — a spent invite already
+   * dropped out of the reservation subquery when it was spent.
+   *
+   * Silent when it matches nothing. Revoking is expressed as a desired end
+   * state ("this entry holds no live invite"), and an entry that was never
+   * invited already satisfies it.
+   */
+  async revoke(
+    entryId: string,
+    tx: PostgresJsDatabase<typeof schema> = this.dbService.db,
+  ): Promise<void> {
+    await tx
+      .update(waitlistEntries)
+      .set({
+        inviteToken: null,
+        inviteMode: null,
+        inviteExpiresAt: null,
+        updatedAt: sql`now()`,
+      })
+      .where(and(eq(waitlistEntries.id, entryId), isNull(waitlistEntries.inviteUsedAt)));
   }
 
   /**
