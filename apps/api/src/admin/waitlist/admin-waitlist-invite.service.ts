@@ -87,7 +87,9 @@ export class AdminWaitlistInviteService {
 
       const mode = entry.bookId ? "LOCKED" : "OPEN";
       const { token, expiresAt } = await this.waitlistInviteService.issue(entry.id, ttlHours, mode);
-      const url = `${webOrigin}/${entry.locale}/waitlist/invite/${token}`;
+      // Kept in step with web's `routes().waitlistInvite` — short because
+      // every character here is billed SMS.
+      const url = `${webOrigin}/${entry.locale}/invite/${token}`;
 
       // "customer" defers to whichever locale the entry was submitted under;
       // an explicit "en"/"bn" pins the text regardless. The template only

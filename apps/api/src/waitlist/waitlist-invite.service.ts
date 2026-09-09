@@ -1,12 +1,29 @@
-import { randomBytes } from "node:crypto";
 import { Injectable } from "@nestjs/common";
 import type { WaitlistInvite, WaitlistInviteMode } from "@sakura/contracts";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import { isPostgresError } from "../common/errors";
 import { DbService } from "../db/db.service";
 import * as schema from "../db/schema";
 import { waitlistEntries } from "../db/schema";
+import { generateInviteToken, normalizeInviteToken } from "./invite-token";
 import { WaitlistInviteInvalidError } from "./waitlist-invite.errors";
+
+/** The partial unique index on `invite_token` — see the entry's schema. */
+const INVITE_TOKEN_CONSTRAINT = "waitlist_entries_invite_token_idx";
+
+/**
+ * Keyed on the one constraint, not the bare 23505, for the reason
+ * checkout.service spells out: an UPDATE can violate other unique
+ * constraints, and retrying with a fresh token would not fix those.
+ */
+function isTokenCollision(error: unknown): boolean {
+  return (
+    isPostgresError(error) &&
+    error.code === "23505" &&
+    error.constraint_name === INVITE_TOKEN_CONSTRAINT
+  );
+}
 
 /* An invite entitles its holder to exactly the quantity their entry asked
    for. There was a cap here that silently reduced every larger entry to 3,
@@ -50,15 +67,34 @@ export class WaitlistInviteService {
     ttlHours: number,
     mode: WaitlistInviteMode,
   ): Promise<{ token: string; expiresAt: Date }> {
-    const token = randomBytes(32).toString("base64url");
     const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
 
-    await this.dbService.db
-      .update(waitlistEntries)
-      .set({ inviteToken: token, inviteMode: mode, inviteExpiresAt: expiresAt, inviteUsedAt: null })
-      .where(eq(waitlistEntries.id, entryId));
+    /* Retry on collision rather than trusting 55 bits never to repeat. At the
+       volumes this sees a second attempt is close to unreachable, but the
+       unique index on `invite_token` is what makes that guarantee real, and
+       the alternative to catching it here is a 500 on a staff member's
+       restock batch. Three attempts turns a one-in-ten-million event into one
+       we can stop thinking about; past that something else is wrong and the
+       error deserves to surface. */
+    for (let attempt = 1; ; attempt += 1) {
+      const token = generateInviteToken();
 
-    return { token, expiresAt };
+      try {
+        await this.dbService.db
+          .update(waitlistEntries)
+          .set({
+            inviteToken: token,
+            inviteMode: mode,
+            inviteExpiresAt: expiresAt,
+            inviteUsedAt: null,
+          })
+          .where(eq(waitlistEntries.id, entryId));
+
+        return { token, expiresAt };
+      } catch (error) {
+        if (attempt >= 3 || !isTokenCollision(error)) throw error;
+      }
+    }
   }
 
   /**
@@ -73,7 +109,7 @@ export class WaitlistInviteService {
   async redeem(token: string): Promise<WaitlistInvite> {
     const entry = await this.dbService.db.query.waitlistEntries.findFirst({
       where: and(
-        eq(waitlistEntries.inviteToken, token),
+        eq(waitlistEntries.inviteToken, normalizeInviteToken(token)),
         isNull(waitlistEntries.inviteUsedAt),
         gt(waitlistEntries.inviteExpiresAt, new Date()),
       ),
@@ -137,7 +173,7 @@ export class WaitlistInviteService {
       .set({ inviteUsedAt: sql`now()`, updatedAt: sql`now()` })
       .where(
         and(
-          eq(waitlistEntries.inviteToken, token),
+          eq(waitlistEntries.inviteToken, normalizeInviteToken(token)),
           isNull(waitlistEntries.inviteUsedAt),
           gt(waitlistEntries.inviteExpiresAt, new Date()),
         ),
