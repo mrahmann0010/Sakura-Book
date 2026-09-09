@@ -1,22 +1,17 @@
 import { Injectable } from "@nestjs/common";
 import type { WaitlistEntry, WaitlistSubscribeRequest } from "@sakura/contracts";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { DuplicateResourceError, ResourceNotFoundError } from "../common/errors";
 import { DbService } from "../db/db.service";
 import { books, waitlistEntries } from "../db/schema";
+import { toE164Bd } from "../sms/phone";
 
 @Injectable()
 export class WaitlistService {
   constructor(private readonly dbService: DbService) {}
 
   /**
-   * Join a restock waitlist — the shop-wide one, or one title's.
-   *
-   * `bookId` decides which. Absent means the general list, which is what the
-   * shop-wide pause needs and what every entry written before this existed
-   * is. Present means a wait on that title, and the two live in one table
-   * under two partial unique indexes: a phone may wait on several different
-   * books, but not join the same book's list — or the general list — twice.
+   * Join a book's restock waitlist.
    *
    * `source`/`locale` are recorded as sent; this endpoint doesn't decide what
    * they mean, it just stores them. `bookTitleSnapshot` is the exception, and
@@ -24,26 +19,27 @@ export class WaitlistService {
    * here, so the record says what the shop called the book at the moment they
    * asked, rather than what a browser posted.
    *
+   * The phone is normalized to E.164 (`toE164Bd`, the same helper the SMS
+   * gateway path uses) before it is compared or stored, not just typed as
+   * submitted. Without that, "01712345678" and "+8801712345678" are two
+   * different strings that both pass the unique index below, and the same
+   * person joins the same book's list twice — which is exactly the duplicate
+   * this index exists to stop.
+   *
    * The duplicate check is a query, not a caught constraint violation: the
    * Postgres driver here wraps every error in `DrizzleQueryError`, which is
    * not a `PostgresError` itself, so `mapPostgresError`'s `instanceof` check
    * never fires and a unique-index hit would otherwise surface as an opaque
    * 500 — see `orders/transaction-id-claim.ts` for the same tradeoff made the
-   * same way on the checkout path. The indexes remain the backstop for the
+   * same way on the checkout path. The index remains the backstop for the
    * race this query cannot close.
    */
   async subscribe(request: WaitlistSubscribeRequest): Promise<WaitlistEntry> {
-    const book = request.bookId ? await this.findBook(request.bookId) : null;
+    const book = await this.findBook(request.bookId);
+    const phone = toE164Bd(request.phone);
 
     const existing = await this.dbService.db.query.waitlistEntries.findFirst({
-      where: and(
-        eq(waitlistEntries.customerPhone, request.phone),
-        /* Matches the index that would reject the insert: the general list is
-           keyed on a null book, a per-book list on that book's id. Comparing
-           with `eq` against null would match nothing and let a duplicate
-           through to a 500 — `is null` is the only form that works here. */
-        book ? eq(waitlistEntries.bookId, book.id) : isNull(waitlistEntries.bookId),
-      ),
+      where: and(eq(waitlistEntries.customerPhone, phone), eq(waitlistEntries.bookId, book.id)),
       columns: { id: true },
     });
 
@@ -54,11 +50,11 @@ export class WaitlistService {
     const [row] = await this.dbService.db
       .insert(waitlistEntries)
       .values({
-        bookId: book?.id ?? null,
-        bookTitleSnapshot: book?.title ?? null,
+        bookId: book.id,
+        bookTitleSnapshot: book.title,
         customerName: request.fullName,
         customerEmail: request.email,
-        customerPhone: request.phone,
+        customerPhone: phone,
         quantity: request.quantity,
         locale: request.locale,
         source: request.source,

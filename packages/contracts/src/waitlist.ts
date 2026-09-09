@@ -3,10 +3,10 @@ import { z } from "zod";
 /* --------------------------------------------------------------------------
    Waitlist — "notify me when it's back".
 
-   Covers two signups through one shape: the shop-wide restock list (no book
-   named) and a wait on one specific title. Which one it is comes down to
-   whether `bookId` is present — that mirrors `waitlistEntries.bookId` being
-   nullable, and the two partial unique indexes over it, exactly.
+   Every signup names one book. `waitlistEntries.bookId` stays nullable at
+   the schema level — old rows written before this was required still read
+   fine, and the general-list index is harmless dead weight rather than a
+   migration — but new requests must choose a title.
 
    One book per signup, not several. A request maps to one row, so someone
    waiting on three titles submits three times and holds three independent
@@ -26,23 +26,29 @@ export type WaitlistStatus = (typeof waitlistStatuses)[number];
 
 export const waitlistSubscribeRequestSchema = z.object({
   /**
-   * The title they want, or absent for "tell me when anything is back".
-   *
-   * Optional rather than required, because the general list is the default
-   * the shop-wide pause needs: a customer who just wants to know when you
-   * reopen has somewhere to go, and the entry point that has been writing
-   * rows since day one keeps working unchanged.
+   * The title they want. Required — "notify me about something, someday"
+   * isn't a queue staff can act on, so every signup has to name a book.
    *
    * The book's *title* is not accepted here — the server reads it from the
    * catalog and snapshots it. A title sent by the client would be a display
    * string the customer's browser chose, stored as the record of what they
    * asked for.
    */
-  bookId: z.string().uuid("Choose a book from the list.").optional(),
+  bookId: z.string().uuid("Choose a book from the list."),
 
   fullName: required("Add your name."),
   email: z.string().trim().email("Use an address like you@example.com so we can reach you."),
-  phone: required("Add a phone number so we can text you when it's back."),
+  /**
+   * Bangladeshi mobile, with or without the country code — matches the
+   * client's own picker regex. The service normalizes this to E.164 before
+   * it dedupes or stores it (see `waitlist.service.ts`), so this schema's
+   * job is just to reject anything that couldn't normalize to a real number
+   * before it reaches that point.
+   */
+  phone: z
+    .string()
+    .trim()
+    .regex(/^(\+?88)?01[3-9]\d{8}$/, "Use a Bangladeshi mobile number, e.g. 01712345678."),
   quantity: z
     .number()
     .int("Enter a whole number.")
