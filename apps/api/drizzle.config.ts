@@ -6,13 +6,22 @@ import { join } from "node:path";
 process.loadEnvFile(join(__dirname, ".env"));
 
 /**
- * Migrations run over the direct/session connection, never the transaction
- * pooler. A pooler hands consecutive statements different backends, and
- * `drizzle-kit migrate` holds session state across them — the resulting
- * failures are intermittent, which is the worst way for a migration to break.
- * Falls back to DATABASE_URL for a plain Postgres, where the two are the same.
+ * The database the application connects to, and no other.
+ *
+ * This preferred DIRECT_DATABASE_URL until that variable, left over from
+ * Supabase and never updated after the move to the self-hosted Postgres, sent
+ * a year of migrations to a database nothing reads — see the long note in
+ * `src/db/migrate.ts`, which now applies the same rule. A migrator pointed
+ * somewhere other than the server is pointed produces a schema that is correct
+ * everywhere except where it matters.
+ *
+ * The pooler warning that used to live here still stands, and is now the one
+ * reason to reintroduce a split: `drizzle-kit migrate` holds session state
+ * across statements, and a transaction pooler hands consecutive statements to
+ * different backends. If DATABASE_URL ever names a pooler again, migrations
+ * need a session connection to that *same* database.
  */
-const migrationUrl = process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL;
+const migrationUrl = process.env.DATABASE_URL;
 
 if (!migrationUrl) {
   throw new Error("DATABASE_URL is not set — check apps/api/.env.");
