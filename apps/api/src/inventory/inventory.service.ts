@@ -4,7 +4,7 @@ import { DbService } from "../db/db.service";
 import type { Executor, Transaction } from "../db/db.types";
 import { books } from "../db/schema";
 import { OutOfStockError } from "./inventory.errors";
-import { publicAvailableSql, reservedQuantitySql } from "./reservations";
+import { publicAvailableSql } from "./reservations";
 
 /**
  * Stock movement. The only writer of `books.stock_quantity`.
@@ -29,20 +29,23 @@ export class InventoryService {
    * both decide it is fine, and both write. Here Postgres serialises the two
    * updates on the row lock and the loser matches zero rows.
    *
-   * What it checks is the *unreserved* remainder, not the stock count. Sixty
-   * copies against sixty live invites is nothing a stranger may buy, and
+   * What it checks is what a stranger may actually buy, not the stock count.
+   * Sixty copies against sixty live invites is nothing a stranger may buy, and
    * checking `stockQuantity` alone is what used to let one take a copy that
-   * had been promised to somebody who had been waiting for weeks. Since
-   * reserved can never be below zero, requiring `stock - reserved >= quantity`
-   * also makes `stock >= quantity` true — so this cannot drive the column
+   * had been promised to somebody who had been waiting for weeks. Neither
+   * subtracted term can be below zero, so requiring `available >= quantity`
+   * also makes `stock >= quantity` true — this cannot drive the column
    * negative, and does not need a separate guard saying so.
    *
-   * An invited customer passes this same check rather than bypassing it.
-   * `WaitlistInviteService.consume` spends their token earlier in this
-   * transaction, which drops their own reservation out of the subquery and
-   * frees exactly the copy it was holding. That is why there is no longer an
-   * `allowNegative` here and no "except for this book" argument: the holder is
-   * admitted by the arithmetic rather than by an exemption from it.
+   * An invited customer passes this same check rather than bypassing it, and
+   * that survives the ringfence being added to it. `WaitlistInviteService
+   * .consume` spends their token earlier in this transaction, which drops
+   * their own reservation out of the first subquery and moves the same copy
+   * into the spent half of the release's `committed` — so the ringfence shrinks
+   * by exactly what the reservation gave up, and the copy is freed once rather
+   * than twice or never. That is why there is no `allowNegative` here and no
+   * "except for this book" argument: the holder is admitted by the arithmetic
+   * rather than by an exemption from it.
    *
    * Zero rows is ambiguous on its own — the book might not exist at all — so
    * the follow-up read distinguishes the two. It runs only on the failure
@@ -63,7 +66,13 @@ export class InventoryService {
       .where(
         and(
           eq(books.id, bookId),
-          sql`${books.stockQuantity} - ${reservedQuantitySql(books.id)} >= ${quantity}`,
+          /* The same expression the storefront renders and the cart quotes,
+             not a second phrasing of it. `reservations.ts` opens by saying
+             those three must not be allowed to disagree, and the cheapest way
+             to keep that true is for the guard to call the function rather
+             than restate its arithmetic — which is how the ringfence term
+             arrived here for free when it was added there. */
+          sql`${publicAvailableSql(books.stockQuantity, books.id)} >= ${quantity}`,
         ),
       )
       .returning({ stockQuantity: books.stockQuantity });

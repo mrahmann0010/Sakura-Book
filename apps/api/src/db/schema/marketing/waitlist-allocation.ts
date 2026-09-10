@@ -1,5 +1,14 @@
 import { relations, sql } from "drizzle-orm";
-import { check, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  check,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { adminUsers } from "../admin/admin-user";
 import { books } from "../catalog/book";
 import { waitlistAllocationStatusEnum } from "../enums";
@@ -18,14 +27,22 @@ import { timestamps } from "../timestamps";
  * a decision the shop makes deliberately, once per release, before a single
  * person is contacted.
  *
- * ## `copies` caps invites, it does not partition inventory
+ * ## `copies` holds inventory back, and it does so by arithmetic
  *
- * The shop's walk-in reserve is not marked or held anywhere. It does not need
- * to be: `publicAvailableSql` is `stock − live holds`, and live holds cannot
- * exceed 50 if only 50 invites are ever issued. The counter's ten copies are
- * what is left over by arithmetic.
+ * The shop's walk-in reserve is not marked or held anywhere, and does not need
+ * to be: `publicAvailableSql` is `stock − live holds − this release's unspent
+ * budget`, so the counter's ten copies are what is left over rather than
+ * something anybody writes down.
  *
- * That is deliberate and it is the safer of the two shapes. A second
+ * The middle term was missing at first, and the gap was the whole feature's
+ * honesty. With only `stock − live holds`, `copies` capped what *staff* could
+ * hand out and nothing more — so a shop that gave the queue fifty of sixty at
+ * nine in the morning could sell all sixty to walk-ins by eleven, and every
+ * invite issued afterwards was refused for lack of physical stock. The set-
+ * aside now takes effect when the decision is made rather than when the texts
+ * go out.
+ *
+ * Derived rather than stored, and that is the safer of the two shapes. A second
  * `reserved_for_walk_ins` column would be a number that has to agree with this
  * one on every read, every restock and every manual stock correction — and the
  * first time it did not, the shop would either strand copies or oversell them

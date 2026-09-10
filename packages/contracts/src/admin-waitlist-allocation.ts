@@ -36,6 +36,32 @@ export const adminWaitlistAllocationOpenSchema = z.object({
 export type AdminWaitlistAllocationOpen = z.infer<typeof adminWaitlistAllocationOpenSchema>;
 
 /**
+ * Correct an open release's size without ending it.
+ *
+ * Separate from opening because the id names an existing decision rather than
+ * a book, and because the two must not be confused: close-then-reopen is the
+ * obvious-looking way to resize and is the one thing that silently over-issues
+ * — `committed` is counted per allocation, so a fresh row starts at zero and
+ * hands out copies the closed one already promised.
+ *
+ * `note` is optional and absent means "leave it alone", not "clear it". A
+ * correction usually has nothing to say about a note written when the restock
+ * landed, and wiping it because the field was not sent would lose the only
+ * record of why the split was chosen.
+ */
+export const adminWaitlistAllocationResizeSchema = z.object({
+  copies: z
+    .number()
+    .int("Copies must be a whole number.")
+    .positive("A release of zero copies is a closed one — close it instead.")
+    .max(100_000),
+
+  note: z.string().trim().max(500).nullish(),
+});
+
+export type AdminWaitlistAllocationResize = z.infer<typeof adminWaitlistAllocationResizeSchema>;
+
+/**
  * A release's budget, worked out at read time.
  *
  * Every number below `copies` is derived from the invites themselves on every

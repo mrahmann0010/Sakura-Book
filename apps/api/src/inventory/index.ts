@@ -8,6 +8,11 @@ export { InventoryService } from "./inventory.service";
  * moment they drifted. These are `sql` fragments with no Nest wiring behind
  * them: importing them does not require importing InventoryModule.
  */
-export { publicAvailableSql, reservedQuantitySql } from "./reservations";
+export {
+  chargedQuantitySql,
+  publicAvailableSql,
+  reservedQuantitySql,
+  ringfencedQuantitySql,
+} from "./reservations";
 export { OutOfStockError } from "./inventory.errors";
 export { UnitsSoldReconciler, COUNTED_STATUSES } from "./units-sold-reconciler";

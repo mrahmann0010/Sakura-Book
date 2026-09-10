@@ -25,6 +25,7 @@ import {
   adminSmsSendResultSchema,
   adminSmsSettingsSchema,
   adminSmsSettingsUpdateSchema,
+  adminStockListSchema,
   adminWaitlistBooksSchema,
   adminWaitlistEntrySchema,
   adminWaitlistInviteRequestSchema,
@@ -32,6 +33,7 @@ import {
   adminWaitlistInviteSettingsSchema,
   adminWaitlistInviteSettingsUpdateSchema,
   adminWaitlistAllocationOpenSchema,
+  adminWaitlistAllocationResizeSchema,
   adminWaitlistAllocationViewSchema,
   adminWaitlistListSchema,
   adminWaitlistNotifyRequestSchema,
@@ -73,6 +75,7 @@ import {
   type AdminSmsSendResult,
   type AdminSmsSettings,
   type AdminSmsSettingsUpdate,
+  type AdminStockList,
   type AdminUploadResult,
   type AdminWaitlistEntry,
   type AdminWaitlistInviteRequest,
@@ -83,6 +86,7 @@ import {
   type AdminWaitlistNotifyRequest,
   type AdminWaitlistNotifyResult,
   type AdminWaitlistAllocationOpen,
+  type AdminWaitlistAllocationResize,
   type AdminWaitlistAllocationView,
   type AdminWaitlistQuery,
   type AdminWaitlistUpdateRequest,
@@ -827,9 +831,7 @@ export function sendAdminWaitlistWave(
    Stock releases — how many copies of a restock the waitlist may be promised.
    -------------------------------------------------------------------------- */
 
-export function getAdminWaitlistAllocations(
-  bookId: string,
-): Promise<AdminWaitlistAllocationView> {
+export function getAdminWaitlistAllocations(bookId: string): Promise<AdminWaitlistAllocationView> {
   return adminFetch(
     `/admin/waitlist/allocations?bookId=${encodeURIComponent(bookId)}`,
     adminWaitlistAllocationViewSchema,
@@ -844,6 +846,33 @@ export function openAdminWaitlistAllocation(
     method: "POST",
     body: validated,
   });
+}
+
+/**
+ * Every title's stock, split into promised, reserved and on-shelf.
+ *
+ * Unpaginated and unfiltered: the whole point of the screen is that one glance
+ * covers the shelf, and a book that will refuse every invite it is asked to
+ * send must not be able to hide on page two.
+ */
+export function getAdminStock(): Promise<AdminStockList> {
+  return adminFetch("/admin/stock", adminStockListSchema);
+}
+
+/** Correct an open release's size. Never close-then-reopen to do this: the
+ *  replacement starts at zero committed and re-promises copies the closed one
+ *  already gave away. */
+export function resizeAdminWaitlistAllocation(
+  id: string,
+  bookId: string,
+  request: AdminWaitlistAllocationResize,
+): Promise<AdminWaitlistAllocationView> {
+  const validated = validate(adminWaitlistAllocationResizeSchema, request);
+  return adminFetch(
+    `/admin/waitlist/allocations/${id}?bookId=${encodeURIComponent(bookId)}`,
+    adminWaitlistAllocationViewSchema,
+    { method: "PATCH", body: validated },
+  );
 }
 
 /** `bookId` rides along so the response is the same view the panel renders —
@@ -885,9 +914,7 @@ export function getAdminSmsSettings(): Promise<AdminSmsSettings> {
   return adminFetch("/admin/settings/sms", adminSmsSettingsSchema);
 }
 
-export function updateAdminSmsSettings(
-  request: AdminSmsSettingsUpdate,
-): Promise<AdminSmsSettings> {
+export function updateAdminSmsSettings(request: AdminSmsSettingsUpdate): Promise<AdminSmsSettings> {
   const validated = validate(adminSmsSettingsUpdateSchema, request);
   return adminFetch("/admin/settings/sms", adminSmsSettingsSchema, {
     method: "PATCH",

@@ -4,7 +4,7 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import { DbService } from "../db/db.service";
 import type { Executor, Transaction } from "../db/db.types";
 import { books, waitlistAllocations, waitlistEntries } from "../db/schema";
-import { reservedQuantitySql } from "../inventory";
+import { chargedQuantitySql, reservedQuantitySql } from "../inventory";
 import { InvalidInputError, ResourceNotFoundError } from "../common/errors";
 
 /**
@@ -173,6 +173,72 @@ export class WaitlistAllocationService {
   }
 
   /**
+   * Change an open release's size without ending it.
+   *
+   * The missing third verb. A release could be opened and closed but never
+   * corrected, so "I gave the queue fifty and meant thirty" had no safe path:
+   * closing and reopening looks like the obvious workaround and is the one
+   * thing that must not happen, because `committed` is counted per allocation
+   * id. A fresh row starts at zero committed and would hand out copies the
+   * closed one had already promised — the same copies, twice.
+   *
+   * Keeping the row is what makes this safe. Every invite charged here stays
+   * charged, `remaining` recomputes against the new number, and the history
+   * still shows one release per restock rather than one per correction.
+   *
+   * The floor is what the release has already spent. Below that the budget
+   * would open overdrawn: the copies are gone — texted to people holding live
+   * links, or sold — and a smaller number could not un-promise them. It would
+   * only make `remaining` read zero while the holds carried on existing, which
+   * is a lie the panel would have no way to show. Withdrawing invites is the
+   * real operation for that, and it is a different decision.
+   *
+   * `stockSnapshot` is deliberately left alone. It records what the original
+   * decision was a share *of* — "50 of 60" — and a correction two hours later
+   * is still a correction to that same restock, not a new one.
+   */
+  async resize(
+    id: string,
+    copies: number,
+    tx: Transaction,
+    note?: string | null,
+  ): Promise<AllocationBudget> {
+    const [row] = await tx
+      .select({ bookId: waitlistAllocations.bookId, committed: this.committedSql(id) })
+      .from(waitlistAllocations)
+      .where(and(eq(waitlistAllocations.id, id), eq(waitlistAllocations.status, "OPEN")));
+
+    if (!row) throw new ResourceNotFoundError("Open stock release", id);
+
+    if (copies < row.committed) {
+      throw new InvalidInputError(
+        `This release has already promised ${row.committed} cop${
+          row.committed === 1 ? "y" : "ies"
+        }, so it cannot be cut to ${copies}. Withdraw invites first, or wait for windows to lapse.`,
+        { allocationId: id, committed: row.committed },
+      );
+    }
+
+    await tx
+      .update(waitlistAllocations)
+      .set({
+        copies,
+        ...(note === undefined ? {} : { note: note?.trim() || null }),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(waitlistAllocations.id, id), eq(waitlistAllocations.status, "OPEN")));
+
+    /* Re-read rather than patching the row above: `spendable` is the smaller
+       of this number and physical stock, and the caller acts on that rather
+       than on `copies`. Recomputing is the only way to answer it honestly. */
+    const budget = await this.describe(row.bookId, tx);
+
+    if (!budget) throw new ResourceNotFoundError("Open stock release", id);
+
+    return budget;
+  }
+
+  /**
    * Stop charging new invites to this release.
    *
    * Deliberately does not touch the invites already issued against it. A
@@ -220,7 +286,24 @@ export class WaitlistAllocationService {
     bookIds: string[],
     options: { excludeEntryIds?: string[] } = {},
     executor: Executor = this.dbService.db,
-  ): Promise<Map<string, { allocationId: string; spendable: number }>> {
+  ): Promise<
+    Map<
+      string,
+      {
+        allocationId: string;
+        spendable: number;
+        /* Carried alongside `spendable` so a refusal can say *which* limit
+           bit. Zero-because-the-release-is-spent and
+           zero-because-the-shelf-is-empty need opposite actions from a human,
+           and a single number cannot tell them apart — which is how "This
+           release is fully spoken for" ended up being shown to somebody whose
+           release had sold through and who simply needed a new one. */
+        copies: number;
+        committed: number;
+        physicalSpare: number;
+      }
+    >
+  > {
     if (bookIds.length === 0) return new Map();
 
     /* Excluded from *both* terms, and that pairing is the point. The invite
@@ -260,6 +343,9 @@ export class WaitlistAllocationService {
         {
           allocationId: row.allocationId,
           spendable: Math.max(Math.min(row.copies - row.committed, row.physicalSpare), 0),
+          copies: row.copies,
+          committed: row.committed,
+          physicalSpare: row.physicalSpare,
         },
       ]),
     );
@@ -349,45 +435,6 @@ export type AllocationBudget = {
   openedAt: Date;
   openedByEmail: string | null;
 };
-
-/**
- * What one entry costs the release it is charged to, as a per-row expression.
- *
- * Two different questions wearing the same word. While a hold is live the
- * charge is what was *promised* — `quantity`, the copies nobody else may be
- * offered. Once the invite is spent the charge is what was *taken*, and those
- * are not the same number: an invite's quantity is a ceiling, not an exact
- * match (see `CheckoutService.consumeInvite`), so somebody invited for two who
- * ordered one has returned a copy to the shop.
- *
- * Summing `quantity` in both cases is what this replaces, and it leaked in one
- * direction only: the unbought copy went back on the public shelf the instant
- * the token was spent — `reservations.ts` stops counting a spent invite — while
- * the release went on being charged for it until it was closed. The shelf and
- * the budget disagreed about the same copy, and the budget was the one nobody
- * could see was wrong. On a restock where a third of invitees take fewer than
- * they asked for, that is the release quietly running short of its own number.
- *
- * The fallback is the deleted-order case. `converted_order_id` is `set null` on
- * delete, so an order removed after the fact would otherwise turn a real charge
- * into zero and hand the release copies that were genuinely sold. Falling back
- * to `quantity` keeps the pre-existing (conservative) answer for a row whose
- * order is gone.
- *
- * Raw `we.` / `oi.` identifiers throughout, for the aliasing reason
- * `reservedQuantitySql` sets out.
- */
-function chargedQuantitySql(): SQL<number> {
-  return sql<number>`case
-    when we.invite_used_at is null then we.quantity
-    else coalesce((
-      select sum(oi.quantity)
-      from order_items oi
-      where oi.order_id = we.converted_order_id
-        and oi.book_id = we.book_id
-    ), we.quantity)
-  end`;
-}
 
 /**
  * `and we.id not in (...)`, or nothing.
