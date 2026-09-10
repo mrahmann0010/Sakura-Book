@@ -176,19 +176,49 @@ export const waitlistEntries = pgTable(
     ...timestamps,
   },
   (table) => [
-    // One phone number can wait on several different books, but not join the
-    // same book's list twice. Postgres treats every NULL as distinct under a
-    // plain unique index, so a bare (phone, bookId) index would silently let
-    // the general waitlist (bookId null) collect duplicate signups from the
-    // same phone — hence two partial indexes instead of one.
+    /**
+     * One phone number can wait on several different books, but not join the
+     * same book's list twice — while that first request is still outstanding.
+     *
+     * Postgres treats every NULL as distinct under a plain unique index, so a
+     * bare (phone, bookId) index would silently let the general waitlist
+     * (bookId null) collect duplicate signups from the same phone — hence two
+     * partial indexes instead of one.
+     *
+     * `status <> 'CONVERTED'` is the other half of the predicate, and it is
+     * what makes a waitlist a queue for *one* print run rather than a
+     * lifetime register. Without it the shop's best customer — the one who
+     * waited, got the SMS and bought — is the one person permanently unable
+     * to ask for the next reprint, because their own purchase is what holds
+     * their slot. A title this shop reprints therefore locks out exactly the
+     * people who proved they want it.
+     *
+     * CANCELLED is deliberately NOT excluded, and the asymmetry is the point.
+     * Converting is the queue working; cancelling is somebody asking to be
+     * taken off it, and that request is meant to stick — see
+     * `AdminWaitlistService.update`, which keeps the row precisely so a
+     * re-subscribe cannot slip through as if nothing had happened. Cancel is
+     * also the only do-not-contact tool the shop has. Letting a converted
+     * customer back in line is a different question from over-riding somebody
+     * who asked to be left alone, so they get different answers.
+     *
+     * A rejoin is a new row, never a reset of the old one. `created_at` is the
+     * fairness key the whole queue is ordered by, so reusing the row would
+     * seat a repeat customer ahead of everyone who signed up while they were
+     * away — and would erase the record of the earlier purchase to do it. The
+     * old entry stays as history; the new one starts at the back with
+     * `invite_attempts` at zero, which is the truth: they have had no turn in
+     * *this* print run.
+     */
     uniqueIndex("waitlist_entries_phone_book_idx")
       .on(table.customerPhone, table.bookId)
-      .where(sql`${table.bookId} is not null`),
+      .where(sql`${table.bookId} is not null and ${table.status} <> 'CONVERTED'`),
 
-    // ...and not join the general (book-less) waitlist twice either.
+    // ...and not join the general (book-less) waitlist twice either, under the
+    // same rule. Legacy rows only: signups have named a book since f862b6d.
     uniqueIndex("waitlist_entries_phone_general_idx")
       .on(table.customerPhone)
-      .where(sql`${table.bookId} is null`),
+      .where(sql`${table.bookId} is null and ${table.status} <> 'CONVERTED'`),
 
     index("waitlist_entries_status_idx").on(table.status),
     index("waitlist_entries_book_id_idx").on(table.bookId),

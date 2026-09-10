@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import type { WaitlistEntry, WaitlistSubscribeRequest } from "@sakura/contracts";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { DuplicateResourceError, ResourceNotFoundError } from "../common/errors";
 import { DbService } from "../db/db.service";
 import { books, waitlistEntries } from "../db/schema";
@@ -33,13 +33,28 @@ export class WaitlistService {
    * on it is now a 409 like this one rather than an opaque 500 — `common/
    * errors/postgres-error.mapper.ts` unwraps the `DrizzleQueryError` the
    * driver's errors arrive inside.
+   *
+   * A CONVERTED entry does not block a fresh signup, and this condition must
+   * stay character-for-character the predicate on
+   * `waitlist_entries_phone_book_idx` — the two are one rule written twice,
+   * and the index is the half that is actually enforced. Were this query the
+   * stricter of the pair it would refuse signups the database would have
+   * accepted, which is the failure that cannot be seen from the outside: the
+   * customer is told they are already on a list they are not on.
+   *
+   * See the index's comment for why buying frees the slot and cancelling does
+   * not.
    */
   async subscribe(request: WaitlistSubscribeRequest): Promise<WaitlistEntry> {
     const book = await this.findBook(request.bookId);
     const phone = toE164Bd(request.phone);
 
     const existing = await this.dbService.db.query.waitlistEntries.findFirst({
-      where: and(eq(waitlistEntries.customerPhone, phone), eq(waitlistEntries.bookId, book.id)),
+      where: and(
+        eq(waitlistEntries.customerPhone, phone),
+        eq(waitlistEntries.bookId, book.id),
+        ne(waitlistEntries.status, "CONVERTED"),
+      ),
       columns: { id: true },
     });
 
