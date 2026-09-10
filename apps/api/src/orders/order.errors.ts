@@ -94,28 +94,29 @@ export class TransactionIdAlreadyUsedError extends BusinessRuleError {
 }
 
 /**
- * A LOCKED waitlist invite was redeemed with a cart that isn't the one it
- * reserved.
+ * A LOCKED waitlist invite was redeemed for a basket that does not honour what
+ * it reserved.
  *
- * A BusinessRuleError (422): the invite names one book and a number of copies
- * held for it, and an order for anything else is not a race that a retry
- * resolves — it is the wrong request. `WaitlistInviteInvalidError` (404)
- * covers the token itself being wrong/expired/spent; this is the one case
- * where the token is good but what it was spent on isn't.
+ * A BusinessRuleError (422): the invite holds a number of copies of one book,
+ * and a basket that leaves that book out or asks for more of it than were held
+ * is not a race that a retry resolves — it is the wrong request.
+ * `WaitlistInviteInvalidError` (404) covers the token itself being
+ * wrong/expired/spent; this is the one case where the token is good but what
+ * it was spent on isn't.
  *
- * `quantity` is the most the invite allows, not the only figure it accepts —
- * ordering fewer copies than were reserved is permitted, so this fires on
- * more, on a different book, or on a cart of several. See
- * CheckoutService.consumeInvite for why the reservation is a ceiling.
+ * Only the reserved book is at issue. Other titles in the same basket are
+ * ordinary purchases, refused (if at all) by the ordinary stock rules — see
+ * CheckoutService.consumeInvite for why an invite order is allowed to carry
+ * them, and why the reservation is a ceiling rather than an exact figure.
  */
 export class WaitlistInviteMismatchError extends BusinessRuleError {
   readonly code = "WAITLIST_INVITE_MISMATCH";
 
   constructor(bookId: string, maxQuantity: number) {
     super(
-      `This invite is reserved for one book (${bookId}), up to ${maxQuantity} ${
+      `This invite holds up to ${maxQuantity} ${
         maxQuantity === 1 ? "copy" : "copies"
-      }`,
+      } of one book (${bookId}), and the order must include it`,
       { bookId, maxQuantity },
     );
   }

@@ -214,19 +214,39 @@ describe("a LOCKED invite's quantity is a ceiling", () => {
     await expect(run()).rejects.toBeInstanceOf(WaitlistInviteMismatchError);
   });
 
-  it("still refuses a different book, at any quantity", async () => {
+  it("refuses a basket that leaves the reserved book out", async () => {
+    /* The token would otherwise be spent on an order for something else: the
+       entry would close as CONVERTED against a book it never reserved, and the
+       copies it held would go to nobody. Those other titles need no invite. */
     const { run } = place([{ bookId: "book-2", quantity: 1 }], 3);
 
     await expect(run()).rejects.toBeInstanceOf(WaitlistInviteMismatchError);
   });
 
-  it("still refuses a cart of several titles", async () => {
-    /* Taking fewer copies is not licence to add a second book: the invite
-       reserved one title, and "one line only" is unchanged by the ceiling. */
-    const { run } = place(
+  it("lets the invited book travel with other titles in one order", async () => {
+    /* What LOCKED constrains is the reserved book, not the basket around it.
+       Refusing the second line here sent the customer away with two orders and
+       two delivery fees — and they could not place the *first* one without the
+       invite, since their own reservation makes the book read as sold out. */
+    const { run, updates } = place(
       [
         { bookId: "book-1", quantity: 1 },
         { bookId: "book-2", quantity: 1 },
+      ],
+      3,
+    );
+
+    await expect(run()).resolves.toBeDefined();
+    expect(updates.find((statement) => "convertedOrderId" in statement.values)).toBeDefined();
+  });
+
+  it("sums the reserved book across lines rather than reading the first", async () => {
+    /* A cart may name one book twice — pricing merges duplicates — so a
+       ceiling checked against a single line would let 2 + 2 past a hold of 3. */
+    const { run } = place(
+      [
+        { bookId: "book-1", quantity: 2 },
+        { bookId: "book-1", quantity: 2 },
       ],
       3,
     );

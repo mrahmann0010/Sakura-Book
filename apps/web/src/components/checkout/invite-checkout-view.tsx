@@ -43,15 +43,25 @@ import { ShippingFields } from "./shipping-fields";
 
 /* --------------------------------------------------------------------------
    Checkout for a LOCKED waitlist invite — one reserved book, up to the
-   number of copies it held, that cannot become a different order.
+   number of copies it held, plus anything else the shop can ship today.
 
    Deliberately its own component rather than CheckoutView plus branches: the
    two share the delivery/payment form (ShippingFields, PaymentSection) and
    the recap presentation, but not the thing underneath it. CheckoutView's
-   "cart" is Redux state a shopper edits; this one is the single book the
-   invite reserved — no add, no remove, nothing here reads or writes the cart
-   slice. An OPEN invite doesn't need any of this: it renders the ordinary
-   CheckoutView with contact fields pre-filled instead.
+   "cart" is Redux state a shopper edits and a session accumulates; this one
+   is a basket that exists for the length of this page and nothing here reads
+   or writes the cart slice. An OPEN invite doesn't need any of this: it
+   renders the ordinary CheckoutView with contact fields pre-filled instead.
+
+   The invite constrains its own book and nothing else. Other in-stock titles
+   (`alsoAvailable`, drawn from the public shelf, so already net of everyone
+   else's holds) may travel in the same order, because the alternative was the
+   shop refusing money: an invited customer who also wanted a title sitting in
+   stock could not have both in one box — this page refused the second book,
+   and the ordinary cart refused the *first*, since public availability
+   subtracts every live reservation including their own. Two orders and two
+   delivery fees, for one customer, on purpose. See
+   CheckoutService.consumeInvite, which enforces the same division server-side.
 
    The one thing that does move is quantity, and it only moves downwards.
    `quantity` on the invite is a ceiling: someone who joined the waitlist for
@@ -68,12 +78,23 @@ import { ShippingFields } from "./shipping-fields";
    see CheckoutService.writeOrder.
    -------------------------------------------------------------------------- */
 
+/** One title the invited customer may add — see the page's `offerable()`. */
+export type AlsoAvailableBook = {
+  id: string;
+  title: string;
+  author: string;
+  priceCents: number;
+  /** Public stock, already net of every live invite. The stepper's ceiling. */
+  maxQuantity: number;
+};
+
 export function InviteCheckoutView({
   locale,
   token,
   bookId,
   quantity,
   prefill,
+  alsoAvailable = [],
 }: {
   locale: Locale;
   token: string;
@@ -81,6 +102,8 @@ export function InviteCheckoutView({
   /** What the entry reserved — the most this order may contain, not the only figure. */
   quantity: number;
   prefill: Pick<CheckoutValues, "fullName" | "email" | "phone">;
+  /** Other titles that may ride along. Empty is a normal state, not a failure. */
+  alsoAvailable?: AlsoAvailableBook[];
 }) {
   const { t } = useTranslation();
   const path = routes(locale);
@@ -93,6 +116,11 @@ export function InviteCheckoutView({
   /* Starts at everything the invite held — the common case is ordering all of
      it, so the shopper only touches this to take fewer. */
   const [orderQuantity, setOrderQuantity] = useState(quantity);
+  /* Extra titles, by id, at zero until someone asks for one. Local state and
+     not the cart slice: this basket belongs to the link, and merging it into
+     the shopper's saved cart would leave a book sitting there after they close
+     the tab, waiting to surprise them on a later visit. */
+  const [extras, setExtras] = useState<Record<string, number>>({});
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -161,13 +189,24 @@ export function InviteCheckoutView({
   const region = useWatch({ control, name: "region" });
   const [divisionChosen, setDivisionChosen] = useState(false);
 
-  /* One fixed entry, priced the same way the ordinary cart is — through the
-     real quote endpoint, so this page never shows a price it made up itself.
-     Keyed on the entry and region exactly like useCart's own quote query. */
+  /* The reserved book first, then whatever was added to it. One list, built
+     once: the quote and the order must be the same basket, and two places
+     assembling it is how a customer is shown one total and charged another. */
+  const items = [
+    { bookId, quantity: orderQuantity },
+    ...alsoAvailable
+      .filter((book) => (extras[book.id] ?? 0) > 0)
+      .map((book) => ({ bookId: book.id, quantity: extras[book.id]! })),
+  ];
+
+  /* Priced the same way the ordinary cart is — through the real quote
+     endpoint, so this page never shows a price it made up itself. Keyed on the
+     basket and region exactly like useCart's own quote query; `items` is
+     serialised into the key because its identity changes on every render. */
   const { data: quote, isLoading } = useQuery({
-    queryKey: ["invite-quote", bookId, orderQuantity, divisionChosen ? region : undefined],
+    queryKey: ["invite-quote", JSON.stringify(items), divisionChosen ? region : undefined],
     queryFn: () =>
-      quoteCart([{ bookId, quantity: orderQuantity }], {
+      quoteCart(items, {
         region: divisionChosen ? region : undefined,
         inviteToken: token,
       }),
@@ -183,7 +222,7 @@ export function InviteCheckoutView({
 
     try {
       const order = await placeOrderRequest(
-        { items: [{ bookId, quantity: orderQuantity }], customer: values, inviteToken: token },
+        { items, customer: values, inviteToken: token },
         crypto.randomUUID(),
       );
 
@@ -305,8 +344,11 @@ export function InviteCheckoutView({
           })}
           {/* 500, not `strong`'s default bold: Lora is loaded at 400/500 only,
               so anything heavier is a synthesised smear rather than a weight. */}
+          {/* Found by id, never by position: the basket may now hold other
+              titles and the quote is under no obligation to return the
+              reserved one first. */}
           <strong className="text-h3 text-ink mt-2 block font-serif font-medium">
-            {recapLines[0]?.book.title ?? ""}
+            {recapLines.find((line) => line.book.id === bookId)?.book.title ?? ""}
           </strong>
         </Notice>
 
@@ -326,6 +368,43 @@ export function InviteCheckoutView({
             engaged
           />
         </div>
+
+        {/* Offered under the reserved book rather than above it: the invite is
+            what the customer came for, and a shelf between them and it reads
+            as an upsell gate. Absent entirely when there is nothing to show —
+            an empty "also available" heading is worse than silence. */}
+        {alsoAvailable.length > 0 ? (
+          <section className="border-rule mt-6 border-b pb-6">
+            <p className="text-13.5 text-ink">{t("waitlistInvite.alsoAvailable.title")}</p>
+            <p className="text-caption text-secondary mt-1">
+              {t("waitlistInvite.alsoAvailable.hint")}
+            </p>
+
+            <ul className="mt-4 flex flex-col gap-3.5">
+              {alsoAvailable.map((book) => (
+                <li key={book.id} className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-13.5 text-ink truncate">{book.title}</p>
+                    <p className="text-caption text-secondary mt-0.5 truncate">
+                      {book.author} · {formatMoney(book.priceCents, money)}
+                    </p>
+                  </div>
+                  <Stepper
+                    label={book.title}
+                    value={extras[book.id] ?? 0}
+                    /* Zero is a real value here, unlike the reserved book's
+                       stepper: taking none of an extra title is the default,
+                       and stepping down to it is how a book is removed. */
+                    min={0}
+                    max={book.maxQuantity}
+                    onChange={(next) => setExtras((current) => ({ ...current, [book.id]: next }))}
+                    engaged={(extras[book.id] ?? 0) > 0}
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         <CollapsibleOrderRecap
           className="mt-6 lg:hidden"

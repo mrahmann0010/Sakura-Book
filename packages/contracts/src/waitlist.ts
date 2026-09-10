@@ -51,13 +51,7 @@ export type WaitlistStatus = (typeof waitlistStatuses)[number];
  * holds copies back under, so the admin panel and the storefront cannot
  * disagree about who is holding what. See `waitlist/waitlist-lane.ts`.
  */
-export const waitlistLanes = [
-  "WAITING",
-  "INVITED",
-  "EXPIRED",
-  "CONVERTED",
-  "CANCELLED",
-] as const;
+export const waitlistLanes = ["WAITING", "INVITED", "EXPIRED", "CONVERTED", "CANCELLED"] as const;
 
 export type WaitlistLane = (typeof waitlistLanes)[number];
 
@@ -198,9 +192,10 @@ export const waitlistInviteSchema = z.object({
   bookTitle: z.string().nullable(),
   quantity: z.number().int(),
   /**
-   * LOCKED: checkout is fixed to bookTitle/quantity above, editable only in
-   * that it can be completed or abandoned. OPEN: these are a pre-fill only —
-   * the cart behaves normally. See the DB enum's own comment for why.
+   * LOCKED: bookTitle/quantity above are a floor and a ceiling — the order
+   * must contain that book, at up to that many copies, and may carry other
+   * in-stock titles alongside it. OPEN: these are a pre-fill only — the cart
+   * behaves normally. See the DB enum's own comment for why.
    */
   mode: z.enum(waitlistInviteModes),
   /** When this link stops working. ISO 8601. */
