@@ -71,6 +71,10 @@ const NAV_GROUPS = [
     ],
   },
   {
+    label: "Feedback",
+    items: [{ href: "/reviews", label: "Reviews" }],
+  },
+  {
     label: "Shop",
     items: [
       { href: "/sms", label: "Send SMS" },
