@@ -2,8 +2,10 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
-import { sql } from "drizzle-orm";
+import { is, sql } from "drizzle-orm";
+import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import postgres from "postgres";
+import * as schema from "./schema";
 
 /* --------------------------------------------------------------------------
    Apply pending migrations, then get out of the way.
@@ -77,12 +79,128 @@ async function main(): Promise<void> {
        `npm run db:migrate:deploy` without a second path to keep in step. */
     await migrate(db, { migrationsFolder: join(__dirname, "../../drizzle") });
 
-    console.log("migrations up to date");
+    console.log(`migrations up to date on ${describe(url)}`);
+
+    /* The application's own connection, which is the one that has to be right.
+       Same string in every environment today; deliberately re-read rather than
+       reusing `url`, because the day they differ is the day this check earns
+       its keep. */
+    const runtimeUrl = process.env.DATABASE_URL ?? url;
+    await assertNoDrift(runtimeUrl);
+
+    console.log(`schema verified on ${describe(runtimeUrl)}`);
   } finally {
     /* Best-effort: if the migration threw, its error is the one worth
        reporting, and the lock dies with the session anyway. */
     await db.execute(sql`select pg_advisory_unlock(${MIGRATION_LOCK_KEY})`).catch(() => undefined);
     await client.end();
+  }
+}
+
+/**
+ * Every column the code will write, as the schema declares it.
+ *
+ * Drizzle names *all* of a table's columns in an INSERT — `default` for the
+ * ones a caller left out — so a column the code knows about and the database
+ * does not breaks every insert into that table, including inserts that never
+ * mention it. Reads are narrower and keep working, which is what made the last
+ * one of these invisible until a customer hit it: the storefront, the invite
+ * lookup and the reservation subquery were all fine while joining the waitlist
+ * answered 500.
+ */
+function expectedColumns(): Map<string, Set<string>> {
+  const expected = new Map<string, Set<string>>();
+
+  for (const exported of Object.values(schema)) {
+    if (!is(exported, PgTable)) continue;
+
+    const config = getTableConfig(exported as PgTable);
+    expected.set(
+      config.name,
+      new Set(config.columns.map((column) => column.name)),
+    );
+  }
+
+  return expected;
+}
+
+/**
+ * Refuse to hand over to a server whose database is not the one it was built
+ * against.
+ *
+ * Checked on `DATABASE_URL` — the connection the *application* uses — and not
+ * on the one just migrated, because those are allowed to differ (see the
+ * DIRECT_DATABASE_URL note above) and "migrated a different database than the
+ * app talks to" is precisely one of the two ways the queue columns went
+ * missing. The other is bookkeeping that records a migration nobody applied.
+ * Neither shows up in the migrator's own output, and both show up here.
+ *
+ * Only missing tables and columns are reported. Type and nullability drift is
+ * real but needs judgement to act on, and a deploy gate that fires on a widened
+ * varchar is a gate somebody switches off.
+ */
+async function assertNoDrift(runtimeUrl: string): Promise<void> {
+  const client = postgres(runtimeUrl, {
+    max: 1,
+    ssl: process.env.DATABASE_SSL === "disable" ? false : "require",
+  });
+
+  try {
+    const live = await client<{ table_name: string; column_name: string }[]>`
+      select table_name, column_name
+        from information_schema.columns
+       where table_schema = 'public'
+    `;
+
+    const actual = new Map<string, Set<string>>();
+    for (const { table_name, column_name } of live) {
+      const columns = actual.get(table_name) ?? new Set<string>();
+      columns.add(column_name);
+      actual.set(table_name, columns);
+    }
+
+    const problems: string[] = [];
+
+    for (const [table, columns] of expectedColumns()) {
+      const present = actual.get(table);
+
+      if (!present) {
+        problems.push(`table "${table}" is missing entirely`);
+        continue;
+      }
+
+      const missing = [...columns].filter((column) => !present.has(column));
+      if (missing.length > 0) {
+        problems.push(`table "${table}" is missing: ${missing.join(", ")}`);
+      }
+    }
+
+    if (problems.length > 0) {
+      throw new Error(
+        [
+          `The database at ${describe(runtimeUrl)} does not match the schema this build ships:`,
+          ...problems.map((problem) => `  - ${problem}`),
+          "",
+          "Migrations reported success, so either they were applied to a different",
+          "database than DATABASE_URL points at, or its bookkeeping records a migration",
+          "that never ran. Both are repaired by a migration that has not been recorded",
+          "yet — see drizzle/0037_waitlist_queue_repair.sql for the shape of one.",
+        ].join("\n"),
+      );
+    }
+  } finally {
+    await client.end();
+  }
+}
+
+/** Host and database only — the password is in this URL. */
+function describe(url: string): string {
+  try {
+    const parsed = new URL(url);
+
+    return `${parsed.host}${parsed.pathname}`;
+  } catch {
+    return "the configured database";
   }
 }
 
