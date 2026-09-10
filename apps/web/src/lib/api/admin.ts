@@ -28,6 +28,8 @@ import {
   adminWaitlistInviteResultSchema,
   adminWaitlistInviteSettingsSchema,
   adminWaitlistInviteSettingsUpdateSchema,
+  adminWaitlistAllocationOpenSchema,
+  adminWaitlistAllocationViewSchema,
   adminWaitlistListSchema,
   adminWaitlistNotifyRequestSchema,
   adminWaitlistNotifyResultSchema,
@@ -71,6 +73,8 @@ import {
   type AdminWaitlistList,
   type AdminWaitlistNotifyRequest,
   type AdminWaitlistNotifyResult,
+  type AdminWaitlistAllocationOpen,
+  type AdminWaitlistAllocationView,
   type AdminWaitlistQuery,
   type AdminWaitlistUpdateRequest,
   type Dashboard,
@@ -785,6 +789,42 @@ export function inviteAdminWaitlist(
     method: "POST",
     body: validated,
   });
+}
+
+/* --------------------------------------------------------------------------
+   Stock releases — how many copies of a restock the waitlist may be promised.
+   -------------------------------------------------------------------------- */
+
+export function getAdminWaitlistAllocations(
+  bookId: string,
+): Promise<AdminWaitlistAllocationView> {
+  return adminFetch(
+    `/admin/waitlist/allocations?bookId=${encodeURIComponent(bookId)}`,
+    adminWaitlistAllocationViewSchema,
+  );
+}
+
+export function openAdminWaitlistAllocation(
+  request: AdminWaitlistAllocationOpen,
+): Promise<AdminWaitlistAllocationView> {
+  const validated = validate(adminWaitlistAllocationOpenSchema, request);
+  return adminFetch("/admin/waitlist/allocations", adminWaitlistAllocationViewSchema, {
+    method: "POST",
+    body: validated,
+  });
+}
+
+/** `bookId` rides along so the response is the same view the panel renders —
+ *  closing a release and seeing the book's new state is one round trip. */
+export function closeAdminWaitlistAllocation(
+  id: string,
+  bookId: string,
+): Promise<AdminWaitlistAllocationView> {
+  return adminFetch(
+    `/admin/waitlist/allocations/${id}/close?bookId=${encodeURIComponent(bookId)}`,
+    adminWaitlistAllocationViewSchema,
+    { method: "POST" },
+  );
 }
 
 export function getAdminWaitlistInviteSettings(): Promise<AdminWaitlistInviteSettings> {

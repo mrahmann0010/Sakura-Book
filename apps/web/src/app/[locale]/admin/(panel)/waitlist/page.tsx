@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { BellRing, BookMarked, CircleX, Clock3, PackageCheck, TimerOff } from "lucide-react";
 import type {
+  AdminWaitlistAllocationView,
   AdminWaitlistBook,
   AdminWaitlistCounts,
   AdminWaitlistEntry,
@@ -14,11 +15,14 @@ import { AdminTableRows } from "@/components/admin/skeletons";
 import { Button } from "@/components/ui";
 import {
   AdminApiError,
+  closeAdminWaitlistAllocation,
   downloadAdminWaitlistCsv,
+  getAdminWaitlistAllocations,
   getAdminWaitlistBooks,
   inviteAdminWaitlist,
   listAdminWaitlist,
   notifyAdminWaitlist,
+  openAdminWaitlistAllocation,
   updateAdminWaitlistEntry,
 } from "@/lib/api/admin";
 
@@ -90,6 +94,11 @@ export default function AdminWaitlistPage() {
   // button counts rows that are no longer on screen.
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
+  /* The open release for whichever book is filtered, or null. Only ever
+     fetched when a book *is* filtered: a release is a per-title decision, and
+     "All books" has no single answer to show. */
+  const [allocation, setAllocation] = useState<AdminWaitlistAllocationView | null>(null);
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /* Starts true: a load fires on mount, and the first thing this screen
@@ -139,6 +148,67 @@ export default function AdminWaitlistPage() {
       setError(err instanceof AdminApiError ? err.message : "Could not load the waitlist.");
     } finally {
       setLoading(false);
+    }
+
+    /* After the list, not alongside it, and deliberately not fatal. The
+       release header is context for a decision; the list is the work. A
+       release lookup that fails should not blank the table staff came for. */
+    if (bookId) {
+      try {
+        setAllocation(await getAdminWaitlistAllocations(bookId));
+      } catch {
+        setAllocation(null);
+      }
+    } else {
+      setAllocation(null);
+    }
+  }
+
+  async function openRelease() {
+    const answer = window.prompt(
+      "How many copies of this restock go to the waitlist?\n\nThe rest stay on the shelf for walk-in customers.",
+      "",
+    );
+    if (answer === null) return;
+
+    const copies = Number(answer.trim());
+    if (!Number.isInteger(copies) || copies < 1) {
+      setError("Enter a whole number of copies, at least one.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      setAllocation(await openAdminWaitlistAllocation({ bookId, copies }));
+      setNotice(`Allocated ${copies} cop${copies === 1 ? "y" : "ies"} to the waitlist.`);
+    } catch (err) {
+      setError(err instanceof AdminApiError ? err.message : "Could not open that release.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function closeRelease(id: string) {
+    /* Spelled out because it is the most common misreading of this button:
+       closing stops new invites and leaves live ones alone. */
+    if (
+      !window.confirm(
+        "Close this release?\n\nNo new invites will be charged to it. Invites already sent keep their windows and their copies.",
+      )
+    ) {
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      setAllocation(await closeAdminWaitlistAllocation(id, bookId));
+      setNotice("Release closed.");
+    } catch (err) {
+      setError(err instanceof AdminApiError ? err.message : "Could not close that release.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -329,6 +399,59 @@ export default function AdminWaitlistPage() {
           </Button>
         </div>
       </div>
+
+      {/* The release, shown only with a book filtered — a release is a
+          per-title decision and "All books" has no single answer. */}
+      {bookId ? (
+        <div className="rounded-control border-rule bg-surface border px-4 py-3">
+          {allocation?.open ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-13.5">
+                <span className="text-ink font-medium">
+                  {allocation.open.copies} of {allocation.open.stockSnapshot} to the waitlist
+                </span>
+                <span className="text-secondary ml-3">
+                  {allocation.open.committed} spoken for · {allocation.open.spendable} to give out
+                  {/* The two limits can differ, and which one is biting changes
+                      what staff should do about it — print more, or allocate
+                      more. Say so only when they disagree. */}
+                  {allocation.open.remaining > allocation.open.spendable
+                    ? ` (held down by ${allocation.open.stockQuantity} in stock)`
+                    : null}
+                </span>
+                {allocation.open.overIssued ? (
+                  <span className="text-clay-deep mt-1 block font-medium">
+                    More copies are promised than this book has. Print more, or withdraw an invite
+                    — the storefront is refusing to sell it meanwhile.
+                  </span>
+                ) : null}
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={busy}
+                onClick={() => void closeRelease(allocation.open!.id)}
+              >
+                Close release
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* Not a warning about a missing setting — it is the step that
+                  has to happen before any invite for this book will send, so
+                  it says what it blocks. */}
+              <p className="text-13.5 text-secondary">
+                No open release for this book, so invites will not send. Decide how many copies of
+                the restock the waitlist gets.
+              </p>
+              <Button type="button" size="sm" loading={busy} onClick={() => void openRelease()}>
+                Allocate copies
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : null}
 
       <div className="border-rule flex gap-1 border-b">
         {TABS.map((t) => (
