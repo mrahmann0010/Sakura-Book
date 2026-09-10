@@ -22,6 +22,7 @@ import {
   adminSmsSendResultSchema,
   adminSmsSettingsSchema,
   adminSmsSettingsUpdateSchema,
+  adminStockListSchema,
   adminWaitlistBooksSchema,
   adminWaitlistEntrySchema,
   adminWaitlistInviteRequestSchema,
@@ -67,6 +68,7 @@ import {
   type AdminSmsSendResult,
   type AdminSmsSettings,
   type AdminSmsSettingsUpdate,
+  type AdminStockList,
   type AdminUploadResult,
   type AdminWaitlistEntry,
   type AdminWaitlistInviteRequest,
@@ -837,6 +839,17 @@ export function openAdminWaitlistAllocation(
     method: "POST",
     body: validated,
   });
+}
+
+/**
+ * Every title's stock, split into promised, reserved and on-shelf.
+ *
+ * Unpaginated and unfiltered: the whole point of the screen is that one glance
+ * covers the shelf, and a book that will refuse every invite it is asked to
+ * send must not be able to hide on page two.
+ */
+export function getAdminStock(): Promise<AdminStockList> {
+  return adminFetch("/admin/stock", adminStockListSchema);
 }
 
 /** Correct an open release's size. Never close-then-reopen to do this: the

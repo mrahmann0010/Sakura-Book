@@ -22,6 +22,7 @@ import { AdminPaymentsController, AdminPaymentsService } from "./payments";
 import { AdminReviewsController, AdminReviewsService } from "./reviews";
 import { AdminSettingsController, AdminSettingsService } from "./settings";
 import { AdminSmsController, AdminSmsService } from "./sms";
+import { AdminStockController, AdminStockService } from "./stock";
 import {
   AdminWaitlistAllocationService,
   AdminWaitlistController,
@@ -117,6 +118,7 @@ import {
     AdminBooksController,
     AdminUploadsController,
     AdminWaitlistController,
+    AdminStockController,
     AdminReviewsController,
     AdminSmsController,
   ],
@@ -131,6 +133,7 @@ import {
     AdminWaitlistInviteService,
     AdminWaitlistAllocationService,
     AdminWaitlistWaveService,
+    AdminStockService,
     AdminReviewsService,
     AdminSmsService,
     { provide: APP_GUARD, useClass: AdminJwtGuard },

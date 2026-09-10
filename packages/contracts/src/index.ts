@@ -35,6 +35,7 @@ export * from "./payment-verification";
 export * from "./payment-numbers";
 export * from "./waitlist";
 export * from "./admin-waitlist";
+export * from "./admin-stock";
 export * from "./admin-waitlist-allocation";
 export * from "./review";
 export * from "./admin-review";

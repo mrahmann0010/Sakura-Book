@@ -58,7 +58,14 @@ const NAV_GROUPS = [
   },
   {
     label: "Catalog",
-    items: [{ href: "/books", label: "Books" }],
+    /* Books is what a title *is* — cover, price, blurb. Stock is how many
+       there are and who they are owed to, which is a decision about one
+       restock rather than a property of the title, and it draws on the
+       waitlist as much as on the catalog. Neighbours, not one screen. */
+    items: [
+      { href: "/books", label: "Books" },
+      { href: "/stock", label: "Stock" },
+    ],
   },
   {
     label: "Waitlist",
