@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { WaitlistAllocationService } from "../../src/waitlist/waitlist-allocation.service";
 
 /**
@@ -28,6 +30,41 @@ function service(row: Record<string, unknown> | undefined) {
   };
 
   return new WaitlistAllocationService(dbService as never);
+}
+
+/**
+ * Run a method for its *query* rather than its answer, and hand back the field
+ * map it selected.
+ *
+ * The arithmetic above stubs the row and reads the numbers; this reads the SQL
+ * that would have produced them. Both halves are needed, because the charge
+ * rule lives entirely inside a fragment the stub never evaluates — a subquery
+ * that summed the wrong column would pass every assertion in this file.
+ * Rendered through the real dialect, for the reason admin-waitlist.query.spec
+ * gives.
+ */
+async function captureSelect(
+  call: (service: WaitlistAllocationService) => Promise<unknown>,
+): Promise<Record<string, SQL>> {
+  const select = vi.fn().mockReturnValue({
+    from: () => ({
+      innerJoin: () => ({ where: () => Promise.resolve([]) }),
+      where: () => ({ orderBy: () => Promise.resolve([]), then: undefined }),
+    }),
+  });
+
+  await call(new WaitlistAllocationService({ db: { select } } as never));
+
+  return select.mock.calls[0]![0] as Record<string, SQL>;
+}
+
+function renderField(
+  fields: Record<string, SQL>,
+  name: string,
+): { sql: string; params: unknown[] } {
+  const query = new PgDialect().sqlToQuery(fields[name]!);
+
+  return { sql: query.sql, params: query.params };
 }
 
 function allocationRow(overrides: Record<string, unknown> = {}) {
@@ -64,9 +101,9 @@ describe("WaitlistAllocationService.describe — what the queue may still be pro
   });
 
   it("counts a spent copy as spent, so a sale does not free the copy it took", async () => {
-    const budget = await service(
-      allocationRow({ committed: 31, physicalSpare: 29 }),
-    ).describe("book-1");
+    const budget = await service(allocationRow({ committed: 31, physicalSpare: 29 })).describe(
+      "book-1",
+    );
 
     expect(budget!.remaining).toBe(19);
     expect(budget!.spendable).toBe(19);
@@ -181,6 +218,21 @@ describe("WaitlistAllocationService.spendableByBook — the invite path's budget
     expect(budgets.get("book-a")!.spendable).toBe(0);
   });
 
+  it("charges every release the same way, through one expression", async () => {
+    // `describe` and `spendableByBook` answer the same question for one book
+    // and for many, and they used to answer it with two hand-written copies of
+    // the same subquery. The copies are what drift: the exclusion clause was
+    // added to one of them and the charge rule to the other. Rendering both and
+    // comparing is the cheapest way to keep them one thing.
+    const single = renderField(await captureSelect((svc) => svc.describe("book-1")), "committed");
+    const batch = renderField(
+      await captureSelect((svc) => svc.spendableByBook(["book-1"])),
+      "committed",
+    );
+
+    expect(batch.sql).toBe(single.sql);
+  });
+
   it("asks nothing of the database for an empty book list", async () => {
     // The invite path calls this with whatever books a selection touched, and
     // an all-OPEN batch touches none. A query with an empty `in ()` would be a
@@ -190,5 +242,64 @@ describe("WaitlistAllocationService.spendableByBook — the invite path's budget
 
     expect(await empty.spendableByBook([])).toEqual(new Map());
     expect(dbService.db.select).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * What a release is charged for, once the invite it issued has been spent.
+ *
+ * An invite's quantity is a ceiling, not an exact match — checkout lets someone
+ * invited for two order one — and this used to be charged as two forever. The
+ * copy went back on the public shelf immediately (`reservations.ts` stops
+ * counting a spent invite) while the release kept paying for it, so the shelf
+ * and the budget disagreed about the same copy and only the shelf was visible.
+ * The fragment below is where the two are made to agree, and it is not
+ * reachable through the stubbed rows above: a subquery summing the wrong column
+ * would satisfy every arithmetic test in this file.
+ */
+describe("what a spent invite costs its release", () => {
+  it("charges a live hold what it promised, and a spent one what was taken", async () => {
+    const { sql } = renderField(await captureSelect((svc) => svc.describe("book-1")), "committed");
+
+    // Unspent: the promise. Nobody else may be offered these copies, whatever
+    // the holder eventually decides to do with them.
+    expect(sql).toContain("when we.invite_used_at is null then we.quantity");
+
+    // Spent: the order. Same book, because an invite order may carry other
+    // titles and only the reserved one is charged to this release.
+    expect(sql).toContain("from order_items oi");
+    expect(sql).toContain("oi.order_id = we.converted_order_id");
+    expect(sql).toContain("oi.book_id = we.book_id");
+  });
+
+  it("falls back to the promised quantity when the order is gone", async () => {
+    // `converted_order_id` is `set null` on delete, so a removed order would
+    // otherwise turn a real charge into zero and hand the release copies that
+    // were genuinely sold. The conservative answer is the old one.
+    const { sql } = renderField(await captureSelect((svc) => svc.describe("book-1")), "committed");
+
+    expect(sql).toContain("), we.quantity)");
+  });
+
+  it("counts a partly-redeemed invite as sold for what it sold", async () => {
+    // `sold` in the release history is the same question with one condition
+    // more, and it is read as a plain count of copies out the door — an invite
+    // redeemed for one of two sold one.
+    const { sql } = renderField(await captureSelect((svc) => svc.history("book-1")), "sold");
+
+    expect(sql).toContain("we.invite_used_at is not null");
+    expect(sql).toContain("from order_items oi");
+  });
+
+  it("reads the clock in Postgres, never as a bound timestamp", async () => {
+    // Same rule the lane SQL follows: an entry lapsing between two round trips
+    // must not be live in one and expired in the other.
+    const { sql, params } = renderField(
+      await captureSelect((svc) => svc.describe("book-1")),
+      "committed",
+    );
+
+    expect(sql).toContain("we.invite_expires_at > now()");
+    expect(params).toEqual([]);
   });
 });

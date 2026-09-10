@@ -41,18 +41,20 @@ export class WaitlistAllocationService {
    * `revoke()` nulls `invite_allocation_id` along with the token, so they stop
    * being charged here at the moment they stop holding anything.
    *
-   * Sums `quantity`, not rows: three people holding two copies each is six
-   * copies spent, not three.
+   * Sums copies, not rows: three people holding two copies each is six copies
+   * spent, not three — and see `chargedQuantitySql` for what "copies" means
+   * once an invite has actually been redeemed.
    */
-  private committedSql(allocationId: PgColumn | SQL | string): SQL<number> {
+  private committedSql(
+    allocationId: PgColumn | SQL | string,
+    excludeEntryIds?: string[],
+  ): SQL<number> {
     return sql<number>`coalesce((
-      select sum(${waitlistEntries.quantity})
-      from ${waitlistEntries}
-      where ${waitlistEntries.inviteAllocationId} = ${allocationId}
-        and (
-          ${waitlistEntries.inviteUsedAt} is not null
-          or ${waitlistEntries.inviteExpiresAt} > now()
-        )
+      select sum(${chargedQuantitySql()})
+      from waitlist_entries we
+      where we.invite_allocation_id = ${allocationId}
+        and (we.invite_used_at is not null or we.invite_expires_at > now())
+        ${excludeSql(excludeEntryIds)}
     ), 0)::int`;
   }
 
@@ -72,7 +74,10 @@ export class WaitlistAllocationService {
    * under live holds) reads as "nothing to give out" rather than as a negative
    * that some later `>=` accepts by accident.
    */
-  async describe(bookId: string, executor: Executor = this.dbService.db): Promise<AllocationBudget | null> {
+  async describe(
+    bookId: string,
+    executor: Executor = this.dbService.db,
+  ): Promise<AllocationBudget | null> {
     const [row] = await executor
       .select({
         id: waitlistAllocations.id,
@@ -225,13 +230,7 @@ export class WaitlistAllocationService {
        to this release's committed total would exclude them from one budget and
        not the other, and a re-invite would be refused by whichever still
        counted them. */
-    const committed = sql<number>`coalesce((
-      select sum(we.quantity)
-      from waitlist_entries we
-      where we.invite_allocation_id = ${waitlistAllocations.id}
-        and (we.invite_used_at is not null or we.invite_expires_at > now())
-        ${excludeSql(options.excludeEntryIds)}
-    ), 0)::int`;
+    const committed = this.committedSql(waitlistAllocations.id, options.excludeEntryIds);
 
     const rows = await executor
       .select({
@@ -284,11 +283,15 @@ export class WaitlistAllocationService {
         note: waitlistAllocations.note,
         status: waitlistAllocations.status,
         committed: this.committedSql(waitlistAllocations.id),
+        /* Copies that left the shop through this release. Charged the same way
+           `committed` charges a spent invite — by the order, not by what the
+           entry asked for — because this column is read as "sold" and an
+           invite redeemed for one of two copies sold one. */
         sold: sql<number>`coalesce((
-          select sum(${waitlistEntries.quantity})
-          from ${waitlistEntries}
-          where ${waitlistEntries.inviteAllocationId} = ${waitlistAllocations.id}
-            and ${waitlistEntries.inviteUsedAt} is not null
+          select sum(${chargedQuantitySql()})
+          from waitlist_entries we
+          where we.invite_allocation_id = ${waitlistAllocations.id}
+            and we.invite_used_at is not null
         ), 0)::int`,
         openedAt: waitlistAllocations.createdAt,
         openedByEmail: waitlistAllocations.openedByEmail,
@@ -346,6 +349,45 @@ export type AllocationBudget = {
   openedAt: Date;
   openedByEmail: string | null;
 };
+
+/**
+ * What one entry costs the release it is charged to, as a per-row expression.
+ *
+ * Two different questions wearing the same word. While a hold is live the
+ * charge is what was *promised* — `quantity`, the copies nobody else may be
+ * offered. Once the invite is spent the charge is what was *taken*, and those
+ * are not the same number: an invite's quantity is a ceiling, not an exact
+ * match (see `CheckoutService.consumeInvite`), so somebody invited for two who
+ * ordered one has returned a copy to the shop.
+ *
+ * Summing `quantity` in both cases is what this replaces, and it leaked in one
+ * direction only: the unbought copy went back on the public shelf the instant
+ * the token was spent — `reservations.ts` stops counting a spent invite — while
+ * the release went on being charged for it until it was closed. The shelf and
+ * the budget disagreed about the same copy, and the budget was the one nobody
+ * could see was wrong. On a restock where a third of invitees take fewer than
+ * they asked for, that is the release quietly running short of its own number.
+ *
+ * The fallback is the deleted-order case. `converted_order_id` is `set null` on
+ * delete, so an order removed after the fact would otherwise turn a real charge
+ * into zero and hand the release copies that were genuinely sold. Falling back
+ * to `quantity` keeps the pre-existing (conservative) answer for a row whose
+ * order is gone.
+ *
+ * Raw `we.` / `oi.` identifiers throughout, for the aliasing reason
+ * `reservedQuantitySql` sets out.
+ */
+function chargedQuantitySql(): SQL<number> {
+  return sql<number>`case
+    when we.invite_used_at is null then we.quantity
+    else coalesce((
+      select sum(oi.quantity)
+      from order_items oi
+      where oi.order_id = we.converted_order_id
+        and oi.book_id = we.book_id
+    ), we.quantity)
+  end`;
+}
 
 /**
  * `and we.id not in (...)`, or nothing.
