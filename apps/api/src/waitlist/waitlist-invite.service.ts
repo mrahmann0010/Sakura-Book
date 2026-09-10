@@ -67,6 +67,7 @@ export class WaitlistInviteService {
     entryId: string,
     ttlHours: number,
     mode: WaitlistInviteMode,
+    allocationId: string | null = null,
   ): Promise<{ token: string; expiresAt: Date }> {
     const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
 
@@ -88,6 +89,12 @@ export class WaitlistInviteService {
             inviteMode: mode,
             inviteExpiresAt: expiresAt,
             inviteUsedAt: null,
+            /* Written on every issue, including as null. A re-invite is a new
+               hold charged to whichever release is open *now*, so carrying the
+               previous one forward would bill a closed release for copies it
+               never allocated — and leaving it stale is worse than clearing
+               it, because the number would still look like an answer. */
+            inviteAllocationId: allocationId,
           })
           .where(eq(waitlistEntries.id, entryId));
 
@@ -134,6 +141,12 @@ export class WaitlistInviteService {
         inviteToken: null,
         inviteMode: null,
         inviteExpiresAt: null,
+        /* Released with the hold it paid for. A withdrawn invite that kept its
+           allocation reference would go on looking like a charge against that
+           release forever — `committed` would not count it, since it holds no
+           live token, but the row would still point at a budget it no longer
+           spends, and the table's own CHECK refuses that pairing anyway. */
+        inviteAllocationId: null,
         updatedAt: sql`now()`,
       })
       .where(and(eq(waitlistEntries.id, entryId), isNull(waitlistEntries.inviteUsedAt)));

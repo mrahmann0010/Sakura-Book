@@ -1,10 +1,12 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
+  adminWaitlistAllocationOpenSchema,
   adminWaitlistInviteRequestSchema,
   adminWaitlistNotifyRequestSchema,
   adminWaitlistQuerySchema,
   adminWaitlistUpdateRequestSchema,
+  type AdminWaitlistAllocationView,
   type AdminWaitlistEntry,
   type AdminWaitlistInviteResult,
   type AdminWaitlistList,
@@ -15,6 +17,7 @@ import { createZodDto } from "nestjs-zod";
 import { CurrentAdmin, Roles } from "../auth/admin-auth.decorators";
 import type { AccessClaims } from "../auth/tokens";
 import type { AdminContext } from "../orders";
+import { AdminWaitlistAllocationService } from "./admin-waitlist-allocation.service";
 import { AdminWaitlistInviteService } from "./admin-waitlist-invite.service";
 import { AdminWaitlistService } from "./admin-waitlist.service";
 
@@ -22,6 +25,7 @@ class AdminWaitlistQueryDto extends createZodDto(adminWaitlistQuerySchema) {}
 class AdminWaitlistNotifyDto extends createZodDto(adminWaitlistNotifyRequestSchema) {}
 class AdminWaitlistUpdateDto extends createZodDto(adminWaitlistUpdateRequestSchema) {}
 class AdminWaitlistInviteDto extends createZodDto(adminWaitlistInviteRequestSchema) {}
+class AdminWaitlistAllocationOpenDto extends createZodDto(adminWaitlistAllocationOpenSchema) {}
 
 /**
  * Who is waiting, over HTTP.
@@ -40,6 +44,7 @@ export class AdminWaitlistController {
   constructor(
     private readonly adminWaitlistService: AdminWaitlistService,
     private readonly adminWaitlistInviteService: AdminWaitlistInviteService,
+    private readonly adminWaitlistAllocationService: AdminWaitlistAllocationService,
   ) {}
 
   /**
@@ -114,6 +119,63 @@ export class AdminWaitlistController {
     @Req() request: Request,
   ): Promise<AdminWaitlistInviteResult> {
     return this.adminWaitlistInviteService.invite(body, contextOf(admin, request));
+  }
+
+  /* ------------------------------------------------------------------------
+     Stock releases.
+
+     Deliberately mounted under the waitlist rather than under books: the
+     number being set is not a property of the title, it is a decision about
+     this queue's share of one restock, and the screen it belongs on is the one
+     where staff can see how many people are waiting for it.
+     ---------------------------------------------------------------------- */
+
+  @Get("allocations")
+  @ApiOperation({ summary: "A book's open stock release and its release history." })
+  async allocations(
+    @Query("bookId", ParseUUIDPipe) bookId: string,
+  ): Promise<AdminWaitlistAllocationView> {
+    return this.adminWaitlistAllocationService.view(bookId);
+  }
+
+  /**
+   * Decide how many copies of a restock the waitlist gets. **ADMIN only.**
+   *
+   * Restricted where the rest of this controller is not, and on the same axis
+   * the CSV export is: working the list is staff work, but this is the one
+   * action that decides how much of the shop's stock is given away through it.
+   * Getting it wrong does not just message the wrong person — it takes copies
+   * off the shelf for as long as an invite window lasts.
+   */
+  @Post("allocations")
+  @Roles("ADMIN")
+  @ApiOperation({ summary: "Open a stock release: how many copies the waitlist may be promised." })
+  async openAllocation(
+    @Body() body: AdminWaitlistAllocationOpenDto,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminWaitlistAllocationView> {
+    return this.adminWaitlistAllocationService.open(body, contextOf(admin, request));
+  }
+
+  /**
+   * Stop charging new invites to a release. **ADMIN only.**
+   *
+   * Does not touch the invites already issued — they run out their own
+   * windows. Withdrawing a live hold is a different action with a different
+   * apology attached, and it is not this one.
+   */
+  @Post("allocations/:id/close")
+  @Roles("ADMIN")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Close a stock release. Live invites keep their windows." })
+  async closeAllocation(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Query("bookId", ParseUUIDPipe) bookId: string,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminWaitlistAllocationView> {
+    return this.adminWaitlistAllocationService.close(id, bookId, contextOf(admin, request));
   }
 
   /**

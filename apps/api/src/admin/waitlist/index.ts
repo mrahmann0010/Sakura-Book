@@ -6,3 +6,4 @@
 export { AdminWaitlistController } from "./admin-waitlist.controller";
 export { AdminWaitlistService } from "./admin-waitlist.service";
 export { AdminWaitlistInviteService } from "./admin-waitlist-invite.service";
+export { AdminWaitlistAllocationService } from "./admin-waitlist-allocation.service";

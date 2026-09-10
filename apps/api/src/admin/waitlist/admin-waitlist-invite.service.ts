@@ -5,10 +5,13 @@ import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Env } from "../../config/env.schema";
 import { AuditService } from "../../audit";
 import { DbService } from "../../db/db.service";
-import { books, waitlistEntries } from "../../db/schema";
-import { reservedQuantitySql } from "../../inventory";
+import { waitlistEntries } from "../../db/schema";
 import { SmsService } from "../../sms";
-import { WaitlistInviteService, WaitlistInviteSettingsService } from "../../waitlist";
+import {
+  WaitlistAllocationService,
+  WaitlistInviteService,
+  WaitlistInviteSettingsService,
+} from "../../waitlist";
 import type { AdminContext } from "../orders";
 
 /**
@@ -45,6 +48,7 @@ export class AdminWaitlistInviteService {
     private readonly dbService: DbService,
     private readonly waitlistInviteService: WaitlistInviteService,
     private readonly waitlistInviteSettingsService: WaitlistInviteSettingsService,
+    private readonly waitlistAllocationService: WaitlistAllocationService,
     private readonly smsService: SmsService,
     private readonly auditService: AuditService,
     private readonly config: ConfigService<Env, true>,
@@ -70,11 +74,12 @@ export class AdminWaitlistInviteService {
    * Only LOCKED entries are capped. An OPEN invite names no book, so it
    * reserves nothing and there is nothing to run out of.
    */
-  private async refuseBeyondStock(
+  private async refuseBeyondAllocation(
     ids: string[],
     entries: { id: string; status: string; bookId: string | null; quantity: number }[],
-  ): Promise<Map<string, string>> {
+  ): Promise<{ refusals: Map<string, string>; allocationByBook: Map<string, string> }> {
     const refusals = new Map<string, string>();
+    const allocationByBook = new Map<string, string>();
 
     const eligible = ids
       .map((id) => entries.find((row) => row.id === id))
@@ -84,28 +89,31 @@ export class AdminWaitlistInviteService {
       );
 
     const bookIds = [...new Set(eligible.map((entry) => entry.bookId!))];
-    if (bookIds.length === 0) return refusals;
+    if (bookIds.length === 0) return { refusals, allocationByBook };
 
-    /* Capacity is stock less what everyone *outside this batch* is holding.
-       The batch itself is then charged against that below, so re-inviting a
-       lapsed entry costs its copies once rather than twice. */
-    const rows = await this.dbService.db
-      .select({
-        id: books.id,
-        spare: sql<number>`${books.stockQuantity} - ${reservedQuantitySql(books.id, {
-          excludeEntryIds: eligible.map((entry) => entry.id),
-        })}`,
-      })
-      .from(books)
-      .where(inArray(books.id, bookIds));
+    /* Capacity is now the *release's* budget, not the print run — the whole
+       point of `docs/waitlist-queue-system.md` step 2. `spendableByBook`
+       returns the smaller of what this release has left and what physically
+       exists unheld, so a 50-of-60 release stops at 50 and the shop's ten
+       counter copies survive the morning.
 
-    const budget = new Map(rows.map((row) => [row.id, row.spare]));
+       Entries in this batch are excluded from both halves of that sum, so
+       re-inviting a lapsed entry costs its copies once rather than twice. */
+    const budgets = await this.waitlistAllocationService.spendableByBook(bookIds, {
+      excludeEntryIds: eligible.map((entry) => entry.id),
+    });
+
+    const budget = new Map<string, number>();
+    for (const [bookId, row] of budgets) {
+      budget.set(bookId, row.spendable);
+      allocationByBook.set(bookId, row.allocationId);
+    }
 
     /* Which of these entries is *already* holding a live invite right now.
        Needed because the exclusion above is a loan against an assumption —
        that every entry in the batch is about to have its token rewritten. A
        refused entry has no token rewritten: its existing invite stands, and
-       the copies it holds were nonetheless taken out of `spare`. Without
+       the copies it holds were nonetheless taken out of the budget. Without
        charging them back, every refusal on a book quietly raises that book's
        budget by the refused quantity and hands the difference to the entries
        behind it — the exact over-issue the whole method exists to prevent,
@@ -114,14 +122,27 @@ export class AdminWaitlistInviteService {
 
     for (const entry of eligible) {
       const bookId = entry.bookId!;
+
+      /* No open release is a refusal, never a fallback to physical stock.
+         Defaulting to the print run here is precisely the behaviour releases
+         exist to end, and it would come back silently — the batch would send,
+         the copies would go, and nothing would say which budget paid. */
+      if (!budgets.has(bookId)) {
+        refusals.set(
+          entry.id,
+          "No open stock release for this book. Open one to decide how many copies the waitlist gets.",
+        );
+        continue;
+      }
+
       const remaining = budget.get(bookId) ?? 0;
 
       if (entry.quantity > remaining) {
         refusals.set(
           entry.id,
           remaining > 0
-            ? `Only ${remaining} unreserved ${remaining === 1 ? "copy" : "copies"} left — this entry asks for ${entry.quantity}.`
-            : "No unreserved copies left. Print more, or wait for an invite to lapse.",
+            ? `Only ${remaining} ${remaining === 1 ? "copy" : "copies"} left in this release — this entry asks for ${entry.quantity}.`
+            : "This release is fully spoken for. Wait for an invite to lapse, or allocate more copies.",
         );
 
         /* A reservation is charged whether or not this batch renewed it. The
@@ -136,7 +157,7 @@ export class AdminWaitlistInviteService {
       budget.set(bookId, remaining - entry.quantity);
     }
 
-    return refusals;
+    return { refusals, allocationByBook };
   }
 
   /**
@@ -192,7 +213,10 @@ export class AdminWaitlistInviteService {
        still lists outcomes in the order staff selected them. */
     const results: AdminWaitlistInviteOutcome[] = new Array(request.ids.length);
 
-    const overCapacity = await this.refuseBeyondStock(request.ids, entries);
+    const { refusals: overCapacity, allocationByBook } = await this.refuseBeyondAllocation(
+      request.ids,
+      entries,
+    );
 
     await this.eachWithConcurrency(request.ids, INVITE_CONCURRENCY, async (id, index) => {
       const entry = entries.find((row) => row.id === id);
@@ -212,7 +236,17 @@ export class AdminWaitlistInviteService {
       }
 
       const mode = entry.bookId ? "LOCKED" : "OPEN";
-      const { token, expiresAt } = await this.waitlistInviteService.issue(entry.id, ttlHours, mode);
+      /* Null for an OPEN invite, which names no book, reserves nothing and so
+         has no release to charge. Every LOCKED one has an id here: the
+         capacity pass above refuses any book without an open release before
+         this line is reached. */
+      const allocationId = entry.bookId ? (allocationByBook.get(entry.bookId) ?? null) : null;
+      const { token, expiresAt } = await this.waitlistInviteService.issue(
+        entry.id,
+        ttlHours,
+        mode,
+        allocationId,
+      );
       // Kept in step with web's `routes().waitlistInvite` — short because
       // every character here is billed SMS.
       const url = `${webOrigin}/${entry.locale}/invite/${token}`;
