@@ -15,6 +15,9 @@ import {
   adminRecordRefundRequestSchema,
   adminRevertPaymentRequestSchema,
   adminRegionSchema,
+  adminReviewListSchema,
+  adminReviewSchema,
+  adminReviewUpdateRequestSchema,
   adminSessionSchema,
   adminShippingTermsSchema,
   adminUploadResultSchema,
@@ -60,6 +63,10 @@ import {
   type AdminRegion,
   type AdminRegionCreate,
   type AdminRegionUpdate,
+  type AdminReview,
+  type AdminReviewList,
+  type AdminReviewQuery,
+  type AdminReviewUpdateRequest,
   type AdminSession,
   type AdminShippingTerms,
   type AdminSmsSendRequest,
@@ -961,6 +968,44 @@ export async function downloadAdminWaitlistCsv(
      reading the blob when `click()` returns, and revoking synchronously gives
      a silently empty file. */
   setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+/* --------------------------------------------------------------------------
+   Testimonials — the "your experience" moderation queue.
+   -------------------------------------------------------------------------- */
+
+function reviewSearch(query: Partial<AdminReviewQuery>): string {
+  const search = new URLSearchParams();
+  if (query.status) query.status.forEach((status) => search.append("status", status));
+  if (query.q) search.set("q", query.q);
+  if (query.isFeatured !== undefined) search.set("isFeatured", String(query.isFeatured));
+  if (query.submittedFrom) search.set("submittedFrom", query.submittedFrom);
+  if (query.submittedTo) search.set("submittedTo", query.submittedTo);
+  if (query.sort) search.set("sort", query.sort);
+  if (query.page) search.set("page", String(query.page));
+  if (query.pageSize) search.set("pageSize", String(query.pageSize));
+
+  const qs = search.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export function listAdminReviews(query: Partial<AdminReviewQuery> = {}): Promise<AdminReviewList> {
+  return adminFetch(`/admin/reviews${reviewSearch(query)}`, adminReviewListSchema);
+}
+
+export function updateAdminReview(
+  id: string,
+  request: AdminReviewUpdateRequest,
+): Promise<AdminReview> {
+  const validated = validate(adminReviewUpdateRequestSchema, request);
+  return adminFetch(`/admin/reviews/${encodeURIComponent(id)}`, adminReviewSchema, {
+    method: "PATCH",
+    body: validated,
+  });
+}
+
+export async function deleteAdminReview(id: string): Promise<void> {
+  await adminFetch(`/admin/reviews/${encodeURIComponent(id)}`, z.void(), { method: "DELETE" });
 }
 
 export type { AdminBookQuery };
