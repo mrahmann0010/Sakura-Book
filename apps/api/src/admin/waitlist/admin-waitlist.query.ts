@@ -1,20 +1,7 @@
 import type { AdminWaitlistQuery } from "@sakura/contracts";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gte,
-  ilike,
-  inArray,
-  isNotNull,
-  isNull,
-  lte,
-  or,
-  sql,
-  type SQL,
-} from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, or, type SQL } from "drizzle-orm";
 import { waitlistEntries } from "../../db/schema";
+import { waitlistLaneFilterSql } from "../../waitlist";
 
 /**
  * `where` and `order by` for the waitlist, built from validated params.
@@ -23,10 +10,10 @@ import { waitlistEntries } from "../../db/schema";
  * function returns a fragment and runs nothing, which is what makes the
  * filters readable on their own.
  *
- * Unlike the order queue this takes a `skipStatus` flag, because the status
- * counts are the same query with that one condition dropped. Building them
- * from one function rather than two is what keeps the tabs honest — a filter
- * added here cannot apply to the rows and not to the numbers above them.
+ * Unlike the order queue this takes a `skipLane` flag, because the tab counts
+ * are the same query with that one condition dropped. Building them from one
+ * function rather than two is what keeps the tabs honest — a filter added
+ * here cannot apply to the rows and not to the numbers above them.
  */
 
 /**
@@ -53,33 +40,26 @@ function textMatch(term: string): SQL {
 
 export function adminWaitlistFilters(
   query: AdminWaitlistQuery,
-  options: { skipStatus?: boolean } = {},
+  options: { skipLane?: boolean } = {},
 ): SQL | undefined {
   const conditions: SQL[] = [];
 
-  if (!options.skipStatus && query.status?.length) {
+  if (query.status?.length) {
     conditions.push(inArray(waitlistEntries.status, query.status));
+  }
+
+  /* Dropped for the counts, the same way the status filter used to be: the
+     tabs are "how many of my current search are in each lane", so the one
+     condition they must not apply is the lane itself. */
+  if (!options.skipLane && query.lane?.length) {
+    const lanes = waitlistLaneFilterSql(query.lane);
+    if (lanes) conditions.push(lanes);
   }
 
   if (query.q) conditions.push(textMatch(query.q));
   if (query.source) conditions.push(ilike(waitlistEntries.source, query.source));
   if (query.locale) conditions.push(ilike(waitlistEntries.locale, query.locale));
   if (query.bookId) conditions.push(eq(waitlistEntries.bookId, query.bookId));
-
-  /* "Issued and not spent" is three columns, not one: a row with no token was
-     never invited, and `inviteUsedAt` alone would sweep those in too — which
-     on the re-invite tab would mean texting people a *second* link who never
-     got a first. `expired` narrows the same set by the clock, evaluated in
-     Postgres rather than against a JS `new Date()` so a long-running list and
-     its count can't straddle the expiry of a row between them. */
-  if (query.inviteState) {
-    conditions.push(isNotNull(waitlistEntries.inviteToken));
-    conditions.push(isNull(waitlistEntries.inviteUsedAt));
-
-    if (query.inviteState === "expired") {
-      conditions.push(lte(waitlistEntries.inviteExpiresAt, sql`now()`));
-    }
-  }
 
   if (query.signedFrom) {
     conditions.push(gte(waitlistEntries.createdAt, new Date(`${query.signedFrom}T00:00:00.000Z`)));

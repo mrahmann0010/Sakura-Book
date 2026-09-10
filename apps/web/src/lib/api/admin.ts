@@ -746,11 +746,11 @@ export function uploadAdminPdf(file: File): Promise<AdminUploadResult> {
 function waitlistSearch(query: Partial<AdminWaitlistQuery>): string {
   const search = new URLSearchParams();
   for (const status of query.status ?? []) search.append("status", status);
+  for (const lane of query.lane ?? []) search.append("lane", lane);
   if (query.q) search.set("q", query.q);
   if (query.source) search.set("source", query.source);
   if (query.locale) search.set("locale", query.locale);
   if (query.bookId) search.set("bookId", query.bookId);
-  if (query.inviteState) search.set("inviteState", query.inviteState);
   if (query.signedFrom) search.set("signedFrom", query.signedFrom);
   if (query.signedTo) search.set("signedTo", query.signedTo);
   if (query.sort) search.set("sort", query.sort);

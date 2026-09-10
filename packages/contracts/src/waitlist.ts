@@ -24,6 +24,43 @@ const required = (fix: string) => z.string().trim().min(1, fix);
 export const waitlistStatuses = ["PENDING", "NOTIFIED", "CONVERTED", "CANCELLED"] as const;
 export type WaitlistStatus = (typeof waitlistStatuses)[number];
 
+/**
+ * Where an entry actually stands right now — the thing staff work from, and
+ * the thing `status` above cannot answer on its own.
+ *
+ * `status` records decisions people made: reached them, they bought, they
+ * asked to be removed. It is deliberately monotonic and it has no opinion
+ * about the clock. But the question a restock morning asks is "is this person
+ * holding a copy, did their window lapse, or have they not had a turn yet",
+ * and the answer moves without anybody writing a row.
+ *
+ *   WAITING    in the queue, holding nothing. Never invited, or their invite
+ *              was withdrawn.
+ *   INVITED    holding a live, unspent link — and therefore holding copies
+ *              that the storefront may not sell to anyone else.
+ *   EXPIRED    was invited, never ordered, window closed. Their copies went
+ *              back to the pool the instant it did.
+ *   CONVERTED  became an order.
+ *   CANCELLED  taken off the list.
+ *
+ * **There is no `EXPIRED` in `waitlistStatuses` and there must never be one.**
+ * Storing it would mean writing it, and between a window closing and whatever
+ * job noticed, the database would say a copy is held while the shelf says it
+ * is free — which is precisely where a shop oversells. The lane is computed
+ * from the invite columns by the same expression `inventory/reservations.ts`
+ * holds copies back under, so the admin panel and the storefront cannot
+ * disagree about who is holding what. See `waitlist/waitlist-lane.ts`.
+ */
+export const waitlistLanes = [
+  "WAITING",
+  "INVITED",
+  "EXPIRED",
+  "CONVERTED",
+  "CANCELLED",
+] as const;
+
+export type WaitlistLane = (typeof waitlistLanes)[number];
+
 export const waitlistSubscribeRequestSchema = z.object({
   /**
    * The title they want. Required — "notify me about something, someday"

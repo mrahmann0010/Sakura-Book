@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BellRing, BookMarked, CircleX, Clock3, PackageCheck } from "lucide-react";
+import { BellRing, BookMarked, CircleX, Clock3, PackageCheck, TimerOff } from "lucide-react";
 import type {
   AdminWaitlistBook,
   AdminWaitlistCounts,
   AdminWaitlistEntry,
+  WaitlistLane,
   WaitlistStatus,
 } from "@sakura/contracts";
 
@@ -24,11 +25,14 @@ import {
 /* --------------------------------------------------------------------------
    The waitlist desk.
 
-   Four tabs over one `status[]` filter, the same shape as the order queue —
-   marking someone notified moves their status, and they stop matching the
-   Pending tab on the next load. There is no separate bookkeeping and no
-   detail page: a waitlist entry is one row of contact details, so the row is
-   the whole record and everything you can do to it is done from the table.
+   Five tabs over one `lane[]` filter. A lane is where an entry stands right
+   now rather than what was last written to it — see `waitlistLanes` — and the
+   difference is the Expired tab: every entry on it is `NOTIFIED`, so tabs
+   built on status could not show it at all, and the people whose window
+   lapsed were invisible between the Notified and Converted tabs. There is no
+   separate bookkeeping and no detail page: a waitlist entry is one row of
+   contact details, so the row is the whole record and everything you can do
+   to it is done from the table.
 
    The screen is built around the one morning it exists for — stock lands,
    and someone has to work down a list of people who were promised first
@@ -39,21 +43,34 @@ import {
    -------------------------------------------------------------------------- */
 
 const TABS = [
-  { key: "PENDING", label: "Pending" },
-  { key: "NOTIFIED", label: "Notified" },
+  { key: "WAITING", label: "Waiting" },
+  { key: "INVITED", label: "Invited" },
+  { key: "EXPIRED", label: "Expired" },
   { key: "CONVERTED", label: "Converted" },
   { key: "CANCELLED", label: "Cancelled" },
-] as const satisfies readonly { key: WaitlistStatus; label: string }[];
+] as const satisfies readonly { key: WaitlistLane; label: string }[];
 
 const EMPTY_COUNTS: AdminWaitlistCounts = {
-  PENDING: 0,
-  NOTIFIED: 0,
+  WAITING: 0,
+  INVITED: 0,
+  EXPIRED: 0,
   CONVERTED: 0,
   CANCELLED: 0,
 };
 
+/** Sentence case for the cell, so a row reads as a state rather than as an
+ *  enum member leaking through. `Holding a copy` says what INVITED costs the
+ *  shop, which is the thing staff are deciding about. */
+const LANE_LABELS: Record<WaitlistLane, string> = {
+  WAITING: "Waiting",
+  INVITED: "Holding a copy",
+  EXPIRED: "Lapsed",
+  CONVERTED: "Ordered",
+  CANCELLED: "Removed",
+};
+
 export default function AdminWaitlistPage() {
-  const [tab, setTab] = useState<WaitlistStatus>("PENDING");
+  const [tab, setTab] = useState<WaitlistLane>("WAITING");
   const [items, setItems] = useState<AdminWaitlistEntry[]>([]);
   const [counts, setCounts] = useState<AdminWaitlistCounts>(EMPTY_COUNTS);
   const [totalQuantity, setTotalQuantity] = useState(0);
@@ -94,7 +111,7 @@ export default function AdminWaitlistPage() {
       .catch(() => undefined);
   }, []);
 
-  async function load(activeTab: WaitlistStatus, pageNumber: number) {
+  async function load(activeTab: WaitlistLane, pageNumber: number) {
     setError(null);
     setLoading(true);
     /* Cleared so a refetch shows the skeleton rather than the previous tab's
@@ -102,7 +119,7 @@ export default function AdminWaitlistPage() {
     setItems([]);
     try {
       const list = await listAdminWaitlist({
-        status: [activeTab],
+        lane: [activeTab],
         q: q || undefined,
         source: source || undefined,
         locale: locale || undefined,
@@ -229,7 +246,7 @@ export default function AdminWaitlistPage() {
     setError(null);
     try {
       await downloadAdminWaitlistCsv({
-        status: [tab],
+        lane: [tab],
         q: q || undefined,
         source: source || undefined,
         locale: locale || undefined,
@@ -250,12 +267,21 @@ export default function AdminWaitlistPage() {
           <div className="text-13.5 text-secondary mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
             <span className="inline-flex items-center gap-1.5">
               <Clock3 className="h-3.5 w-3.5" aria-hidden />
-              {counts.PENDING} pending
+              {counts.WAITING} waiting
             </span>
             <span className="inline-flex items-center gap-1.5">
               <BellRing className="h-3.5 w-3.5" aria-hidden />
-              {counts.NOTIFIED} notified
+              {counts.INVITED} holding a copy
             </span>
+            {/* Only when there are any. A permanent "0 lapsed" is noise on
+                every morning except the one after a window closes, which is
+                the morning it needs to be impossible to miss. */}
+            {counts.EXPIRED > 0 ? (
+              <span className="text-clay inline-flex items-center gap-1.5 font-medium">
+                <TimerOff className="h-3.5 w-3.5" aria-hidden />
+                {counts.EXPIRED} lapsed
+              </span>
+            ) : null}
             <span className="inline-flex items-center gap-1.5">
               <PackageCheck className="h-3.5 w-3.5" aria-hidden />
               {counts.CONVERTED} converted
@@ -276,8 +302,12 @@ export default function AdminWaitlistPage() {
         <div className="flex gap-2">
           {selected.size > 0 ? (
             <>
+              {/* Same endpoint either way — issuing a token over a dead one is
+                  what re-inviting *is* — but the word matters on the Expired
+                  tab, where "Invite" would read as first contact for people
+                  the shop has already texted once. */}
               <Button type="button" loading={busy} onClick={() => void invite([...selected])}>
-                {`Invite ${selected.size}`}
+                {tab === "EXPIRED" ? `Re-invite ${selected.size}` : `Invite ${selected.size}`}
               </Button>
               <Button
                 type="button"
@@ -403,7 +433,7 @@ export default function AdminWaitlistPage() {
               <th className="px-4 py-3 font-medium">Qty</th>
               <th className="px-4 py-3 font-medium">Lang</th>
               <th className="px-4 py-3 font-medium">Waiting on</th>
-              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">State</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -438,7 +468,16 @@ export default function AdminWaitlistPage() {
                   {entry.bookTitle ?? <span className="text-muted">General</span>}
                 </td>
                 <td className="text-secondary px-4 py-3">
-                  <span className="block">{entry.status}</span>
+                  <span className="text-ink block">{LANE_LABELS[entry.lane]}</span>
+                  {/* The window, on the two lanes where it is the point: how
+                      long an INVITED customer still has, and how long ago an
+                      EXPIRED one ran out. */}
+                  {entry.invite && (entry.lane === "INVITED" || entry.lane === "EXPIRED") ? (
+                    <span className="text-caption text-muted block">
+                      {entry.lane === "INVITED" ? "until " : "lapsed "}
+                      {new Date(entry.invite.expiresAt).toLocaleString()}
+                    </span>
+                  ) : null}
                   {entry.notifiedAt ? (
                     <span className="text-caption text-muted">
                       {new Date(entry.notifiedAt).toLocaleDateString()}
@@ -451,14 +490,18 @@ export default function AdminWaitlistPage() {
                   ) : null}
                 </td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
-                  {entry.status !== "CANCELLED" && entry.status !== "CONVERTED" ? (
+                  {/* Lane, not status: an INVITED entry is still eligible —
+                      re-issuing replaces a link a customer says never
+                      arrived — and the two lanes with nothing left to offer
+                      are the terminal ones. */}
+                  {entry.lane !== "CANCELLED" && entry.lane !== "CONVERTED" ? (
                     <button
                       type="button"
                       disabled={busy}
                       onClick={() => void invite([entry.id])}
                       className="text-clay hover:text-clay-deep"
                     >
-                      Invite
+                      {entry.lane === "WAITING" ? "Invite" : "Re-invite"}
                     </button>
                   ) : null}
                   <button
@@ -469,7 +512,7 @@ export default function AdminWaitlistPage() {
                   >
                     Note
                   </button>
-                  {entry.status !== "CANCELLED" ? (
+                  {entry.lane !== "CANCELLED" ? (
                     <button
                       type="button"
                       disabled={busy}

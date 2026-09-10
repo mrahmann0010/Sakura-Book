@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { paginated, pageQuerySchema } from "./pagination";
-import { waitlistInviteModes, waitlistStatuses } from "./waitlist";
+import { waitlistInviteModes, waitlistLanes, waitlistStatuses } from "./waitlist";
 
 /* --------------------------------------------------------------------------
    The waitlist, as staff see it.
@@ -27,29 +27,6 @@ import { waitlistInviteModes, waitlistStatuses } from "./waitlist";
 export const adminWaitlistSorts = ["oldest", "recent", "quantity-desc"] as const;
 
 export type AdminWaitlistSort = (typeof adminWaitlistSorts)[number];
-
-/**
- * Narrow the list by what happened to the entry's invite token, rather than
- * by its status.
- *
- * `status` cannot answer this on its own. A NOTIFIED entry is one that was
- * *reached*, which says nothing about whether the link it was sent has been
- * spent — and the entries staff most need to find after a restock are exactly
- * the ones where those two diverge: texted, never ordered. Reading it off
- * `inviteUsedAt`/`inviteExpiresAt` makes that a filter instead of a manual
- * scan.
- *
- *   unused    a token was issued and has not been redeemed. Includes links
- *             that are still live.
- *   expired   the same, narrowed to links whose window has already closed —
- *             the ones where re-inviting is the only way back in.
- *
- * There is deliberately no "used" member: an entry whose token was spent is
- * already CONVERTED, and the status filter says that more plainly.
- */
-export const adminWaitlistInviteStates = ["unused", "expired"] as const;
-
-export type AdminWaitlistInviteState = (typeof adminWaitlistInviteStates)[number];
 
 export const adminWaitlistQuerySchema = pageQuerySchema({ defaultPageSize: 50 }).extend({
   /**
@@ -78,9 +55,22 @@ export const adminWaitlistQuerySchema = pageQuerySchema({ defaultPageSize: 50 })
    *  language at a time rather than needing a translator per batch. */
   locale: z.string().trim().min(2).max(12).optional(),
 
-  /** See `adminWaitlistInviteStates`. Absent means "don't filter on the
-   *  token at all", which is every screen except the re-invite tab. */
-  inviteState: z.enum(adminWaitlistInviteStates).optional(),
+  /**
+   * The panel's tabs. See `waitlistLanes` for what each one means and why
+   * this is not just another way of spelling `status`.
+   *
+   * Repeatable for the same reason `status` is, and because the one screen
+   * that needs two lanes at once — the invite batch, which works "texted and
+   * still not ordered" — needs `INVITED` and `EXPIRED` together. That used to
+   * be a separate `inviteState=unused` flag; it is the same question asked
+   * once, in the vocabulary the rest of the panel already uses.
+   */
+  lane: z
+    .preprocess(
+      (value) => (value === undefined ? undefined : Array.isArray(value) ? value : [value]),
+      z.array(z.enum(waitlistLanes)),
+    )
+    .optional(),
 
   /** Inclusive date bounds on when they signed up. ISO-8601 dates. */
   signedFrom: z.iso.date().optional(),
@@ -115,6 +105,19 @@ export const adminWaitlistEntrySchema = z.object({
   source: z.string(),
 
   status: z.enum(waitlistStatuses),
+
+  /**
+   * Where this entry stands right now — see `waitlistLanes`.
+   *
+   * Computed by the database in the same statement that selected the row, not
+   * derived in the client from the fields below it. A browser reading
+   * `invite.expiresAt` against its own clock would disagree with the server
+   * about who is holding a copy on exactly the rows where it matters, and a
+   * tab that says "Invited" over a link that stopped working an hour ago is
+   * worse than no tab.
+   */
+  lane: z.enum(waitlistLanes),
+
   /** When the restock alert actually went out. Null until it has. */
   notifiedAt: z.string().nullable(),
   /** The order this signup became, if it has. Null otherwise — nothing sets
@@ -168,17 +171,23 @@ export const adminWaitlistEntrySchema = z.object({
 export type AdminWaitlistEntry = z.infer<typeof adminWaitlistEntrySchema>;
 
 /**
- * How many entries sit in each status.
+ * How many entries sit in each lane.
  *
- * Computed against every active filter *except* `status`, so the tabs read as
- * "how many of my current search are pending" rather than as a table-wide
+ * Computed against every active filter *except* `lane`, so the tabs read as
+ * "how many of my current search are waiting" rather than as a table-wide
  * constant that ignores the search box above it. With no filters applied it
- * is the whole-table answer, which is the "234 pending, 40 notified" line the
+ * is the whole-table answer, which is the "234 waiting, 40 invited" line the
  * screen leads with.
+ *
+ * Keyed by lane rather than by status because the tabs are lanes: a
+ * status-keyed count could not put a number on the Expired tab at all, since
+ * every expired entry is `NOTIFIED` and indistinguishable there from someone
+ * whose link is still live.
  */
 export const adminWaitlistCountsSchema = z.object({
-  PENDING: z.number().int().nonnegative(),
-  NOTIFIED: z.number().int().nonnegative(),
+  WAITING: z.number().int().nonnegative(),
+  INVITED: z.number().int().nonnegative(),
+  EXPIRED: z.number().int().nonnegative(),
   CONVERTED: z.number().int().nonnegative(),
   CANCELLED: z.number().int().nonnegative(),
 });
