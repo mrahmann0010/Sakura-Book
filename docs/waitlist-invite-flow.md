@@ -199,7 +199,9 @@ transaction, right after the order row exists.
   different releases. The fix is a per-person invite session carrying one entitlement
   per book; it moves the token off `waitlist_entries`, which means `reservations.ts`,
   `waitlist-lane.ts`, the cart quote's holding lookup and four CHECK constraints move
-  with it.
+  with it. Written up in
+  [waitlist-multi-book-invites.md](./waitlist-multi-book-invites.md), which owns the
+  basket rule and the situations it comes from.
 
 - **Conversion only closes for invited orders.** An order placed through a token links
   itself; an order from someone on the list who never used their link is still invisible
