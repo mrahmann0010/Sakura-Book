@@ -7,12 +7,14 @@ import type {
   AdminWaitlistBook,
   AdminWaitlistCounts,
   AdminWaitlistEntry,
+  AdminWaitlistInviteOutcome,
   AdminWaitlistWavePlan,
   WaitlistLane,
   WaitlistStatus,
 } from "@sakura/contracts";
 
 import { AdminTableRows } from "@/components/admin/skeletons";
+import { StockReleaseDialog } from "@/components/admin/stock-release-dialog";
 import { Button } from "@/components/ui";
 import {
   AdminApiError,
@@ -76,6 +78,39 @@ const LANE_LABELS: Record<WaitlistLane, string> = {
   CANCELLED: "Removed",
 };
 
+/**
+ * What a batch of invites actually did, in words.
+ *
+ * The count on its own — "3 failed" — was a dead end: the three most common
+ * failures are capacity refusals decided before a text is attempted, so they
+ * leave no trace on the row either and "see the entries" pointed at nothing.
+ * The server already returns a precise sentence per entry; this only stops the
+ * page from throwing it away.
+ *
+ * Distinct reasons rather than one line per entry, because a refused batch
+ * almost always fails for one reason twenty times over — the release ran out —
+ * and twenty identical sentences bury the one that differs.
+ */
+function summariseInvites(results: readonly AdminWaitlistInviteOutcome[]): {
+  sent: number;
+  failed: number;
+  errors: Map<string, string>;
+  reasons: string[];
+} {
+  const errors = new Map<string, string>();
+  const reasons: string[] = [];
+
+  for (const outcome of results) {
+    if (outcome.sent) continue;
+
+    const reason = outcome.error ?? "Did not send.";
+    errors.set(outcome.id, reason);
+    if (!reasons.includes(reason)) reasons.push(reason);
+  }
+
+  return { sent: results.length - errors.size, failed: errors.size, errors, reasons };
+}
+
 export default function AdminWaitlistPage() {
   const [tab, setTab] = useState<WaitlistLane>("WAITING");
   const [items, setItems] = useState<AdminWaitlistEntry[]>([]);
@@ -107,12 +142,29 @@ export default function AdminWaitlistPage() {
      number as soon as anybody in line wants two. */
   const [wavePlan, setWavePlan] = useState<AdminWaitlistWavePlan | null>(null);
 
+  /* Why each entry's invite did not go out, by entry id.
+
+     Kept in page state rather than read back off the row, because the most
+     common refusals never touch the database: an entry turned away by the
+     capacity check is refused *before* any text is attempted, so it writes no
+     `inviteSms` outcome and the row it came back on looks untouched. The
+     server computes a precise reason for every one of them and this is the
+     only place it can be seen. Cleared on reload, like the selection. */
+  const [inviteErrors, setInviteErrors] = useState<Map<string, string>>(new Map());
+
+  const [releaseOpen, setReleaseOpen] = useState(false);
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /* Starts true: a load fires on mount, and the first thing this screen
      shows should be the shape of a table, not an empty one. */
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
+
+  /* The filtered title, for the release dialog: `books` carries the live stock
+     count, and a book with no open release has no `allocation` to read it
+     from — which is exactly when the dialog is opened. */
+  const selectedBook = books.find((book) => book.id === bookId) ?? null;
 
   useEffect(() => {
     void load(tab, 1);
@@ -152,6 +204,10 @@ export default function AdminWaitlistPage() {
       setTotalPages(list.totalPages);
       setPage(list.page);
       setSelected(new Set());
+      /* Same reasoning as the selection: a reason attached to a row that is no
+         longer on screen is worse than no reason at all. A send re-applies
+         them straight after its own reload. */
+      setInviteErrors(new Map());
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Could not load the waitlist.");
     } finally {
@@ -203,16 +259,18 @@ export default function AdminWaitlistPage() {
 
     try {
       const result = await sendAdminWaitlistWave({ bookId });
-      const sent = result.results.filter((row) => row.sent).length;
-      const failed = result.results.length - sent;
+      const { sent, failed, errors, reasons } = summariseInvites(result.results);
 
       setNotice(
         failed === 0
           ? `Wave sent — ${sent} invite${sent === 1 ? "" : "s"}.`
-          : `Wave sent — ${sent} out, ${failed} failed. The failures are on the Invited tab, marked.`,
+          : `Wave sent — ${sent} out, ${failed} did not. ${reasons.join(" ")}`,
       );
 
       await load(tab, 1);
+      // After the reload, which clears it — the reasons describe the rows the
+      // reload just fetched, so they have to outlive it.
+      setInviteErrors(errors);
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Could not send that wave.");
     } finally {
@@ -220,26 +278,30 @@ export default function AdminWaitlistPage() {
     }
   }
 
-  async function openRelease() {
-    const answer = window.prompt(
-      "How many copies of this restock go to the waitlist?\n\nThe rest stay on the shelf for walk-in customers.",
-      "",
-    );
-    if (answer === null) return;
-
-    const copies = Number(answer.trim());
-    if (!Number.isInteger(copies) || copies < 1) {
-      setError("Enter a whole number of copies, at least one.");
-      return;
-    }
-
+  /**
+   * Commit the split chosen in the dialog.
+   *
+   * Opening only. Changing an open release's size is deliberately not offered
+   * here: `WaitlistAllocationService.open` refuses a second open release, and
+   * the close-then-reopen workaround would be actively wrong — `committed` is
+   * counted per allocation id, so a fresh release starts at zero and would
+   * hand out copies the closed one had already promised. Resizing needs an
+   * endpoint that keeps the row, and until it exists the honest UI is one that
+   * does not pretend.
+   */
+  async function saveRelease(copies: number, note: string) {
     setBusy(true);
     setError(null);
     try {
-      setAllocation(await openAdminWaitlistAllocation({ bookId, copies }));
-      setNotice(`Allocated ${copies} cop${copies === 1 ? "y" : "ies"} to the waitlist.`);
+      setAllocation(await openAdminWaitlistAllocation({ bookId, copies, note: note || undefined }));
+      setNotice(`The queue may be promised ${copies} cop${copies === 1 ? "y" : "ies"}.`);
+      setReleaseOpen(false);
+      /* The plan is a function of the budget just changed — leaving the old
+         one on screen would label the send button with a number that is no
+         longer true. */
+      setWavePlan(await getAdminWaitlistWavePlan(bookId).catch(() => null));
     } catch (err) {
-      setError(err instanceof AdminApiError ? err.message : "Could not open that release.");
+      setError(err instanceof AdminApiError ? err.message : "Could not set that share.");
     } finally {
       setBusy(false);
     }
@@ -321,16 +383,18 @@ export default function AdminWaitlistPage() {
 
     try {
       const result = await inviteAdminWaitlist({ ids });
-      const sent = result.results.filter((row) => row.sent).length;
-      const failed = result.results.length - sent;
+      const { sent, failed, errors, reasons } = summariseInvites(result.results);
 
       setNotice(
         failed === 0
           ? `Sent ${sent} invite${sent === 1 ? "" : "s"}.`
-          : `Sent ${sent} invite${sent === 1 ? "" : "s"}, ${failed} failed — see the entries.`,
+          : sent === 0
+            ? `Nothing sent. ${reasons.join(" ")}`
+            : `Sent ${sent}, ${failed} did not go. ${reasons.join(" ")}`,
       );
 
       await load(tab, page);
+      setInviteErrors(errors);
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Could not send those invites.");
     } finally {
@@ -456,9 +520,20 @@ export default function AdminWaitlistPage() {
         </div>
       </div>
 
-      {/* The release, shown only with a book filtered — a release is a
-          per-title decision and "All books" has no single answer. */}
-      {bookId ? (
+      {/* Always on screen, never conditional on the filter.
+
+          It used to render only with a book selected, which hid the one
+          control that decides whether any invite can send at all — and hid it
+          behind a dropdown nobody had a reason to touch. Staff selected a
+          customer, pressed Invite, and were told nothing happened. From "All
+          books" there is genuinely no single release to show, so this says
+          that in the one sentence that leads somewhere. */}
+      {!bookId ? (
+        <div className="rounded-control border-rule bg-surface text-13.5 text-secondary border px-4 py-3">
+          Invites are funded per book. Pick a title above to see its share of stock — and to set one
+          if it has none, which is what stops invites from sending.
+        </div>
+      ) : (
         <div className="rounded-control border-rule bg-surface border px-4 py-3">
           {allocation?.open ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -477,8 +552,8 @@ export default function AdminWaitlistPage() {
                 </span>
                 {allocation.open.overIssued ? (
                   <span className="text-clay-deep mt-1 block font-medium">
-                    More copies are promised than this book has. Print more, or withdraw an invite
-                    — the storefront is refusing to sell it meanwhile.
+                    More copies are promised than this book has. Print more, or withdraw an invite —
+                    the storefront is refusing to sell it meanwhile.
                   </span>
                 ) : null}
                 {/* Never silent. An entry that keeps being passed over waits
@@ -524,13 +599,13 @@ export default function AdminWaitlistPage() {
                 No open release for this book, so invites will not send. Decide how many copies of
                 the restock the waitlist gets.
               </p>
-              <Button type="button" size="sm" loading={busy} onClick={() => void openRelease()}>
-                Allocate copies
+              <Button type="button" size="sm" loading={busy} onClick={() => setReleaseOpen(true)}>
+                Set the waitlist&rsquo;s share
               </Button>
             </div>
           )}
         </div>
-      ) : null}
+      )}
 
       <div className="border-rule flex gap-1 border-b">
         {TABS.map((t) => (
@@ -690,6 +765,24 @@ export default function AdminWaitlistPage() {
                       {entry.convertedOrderNumber}
                     </span>
                   ) : null}
+
+                  {/* Why this row's invite did not go, from the send that just
+                      ran. On the row rather than only in the banner, because a
+                      mixed batch — most sent, two refused — is precisely when
+                      "which two?" is the whole question. */}
+                  {inviteErrors.has(entry.id) ? (
+                    <span className="text-caption text-clay-deep mt-1 block font-medium">
+                      {inviteErrors.get(entry.id)}
+                    </span>
+                  ) : entry.inviteSms?.status === "FAILED" ? (
+                    /* The durable record, for a failure from an earlier send
+                       whose response is long gone. Written by the API for
+                       gateway failures only — a capacity refusal never reaches
+                       the gateway, which is why the live map above exists. */
+                    <span className="text-caption text-clay-deep mt-1 block">
+                      SMS failed {new Date(entry.inviteSms.at).toLocaleString()}
+                    </span>
+                  ) : null}
                 </td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
                   {/* Lane, not status: an INVITED entry is still eligible —
@@ -771,6 +864,17 @@ export default function AdminWaitlistPage() {
             Next
           </Button>
         </div>
+      ) : null}
+
+      {releaseOpen && selectedBook ? (
+        <StockReleaseDialog
+          onClose={() => setReleaseOpen(false)}
+          bookTitle={selectedBook.title}
+          stockQuantity={selectedBook.stockQuantity}
+          committed={allocation?.open?.committed ?? 0}
+          busy={busy}
+          onSubmit={saveRelease}
+        />
       ) : null}
     </div>
   );
