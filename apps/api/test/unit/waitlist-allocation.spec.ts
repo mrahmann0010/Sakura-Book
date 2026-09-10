@@ -197,7 +197,17 @@ describe("WaitlistAllocationService.spendableByBook — the invite path's budget
       { bookId: "book-a", allocationId: "alloc-1", copies: 50, committed: 10, physicalSpare: 60 },
     ]).spendableByBook(["book-a"]);
 
-    expect(budgets.get("book-a")).toEqual({ allocationId: "alloc-1", spendable: 40 });
+    expect(budgets.get("book-a")).toEqual({
+      allocationId: "alloc-1",
+      spendable: 40,
+      /* The three limits `spendable` was the smaller of, carried alongside it
+         so a refusal can say which one bit. Zero-because-the-release-is-spent
+         and zero-because-the-shelf-is-empty need opposite actions from a
+         human, and the single number cannot tell them apart. */
+      copies: 50,
+      committed: 10,
+      physicalSpare: 60,
+    });
   });
 
   it("takes the tighter of the release and the shelf, per book", async () => {

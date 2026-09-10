@@ -11,6 +11,7 @@ import { StockReleaseDialog } from "@/components/admin/stock-release-dialog";
 import { Button, Input, Modal, Notice } from "@/components/ui";
 import {
   AdminApiError,
+  closeAdminWaitlistAllocation,
   getAdminStock,
   openAdminWaitlistAllocation,
   resizeAdminWaitlistAllocation,
@@ -49,6 +50,18 @@ function rowFlag(row: AdminStockRow): { tone: "error" | "warn"; text: string } |
     return {
       tone: "warn",
       text: `${row.waiting} waiting, nothing set aside — invites for this book will not send.`,
+    };
+  }
+
+  /* The trap this whole flag exists for. A release that has sold through looks
+     exactly like a healthy one — an open release, a share that reads the number
+     you set — and refuses every invite. Setting the same share again changes
+     nothing, because a copy that sells stays charged to the release that sold
+     it, so it is the *release* that has to be replaced, not the number. */
+  if (row.releaseSpent && row.waiting > 0) {
+    return {
+      tone: "warn",
+      text: `This release has used all ${row.allocationCopies} of its copies. Close it and start a new one — ${row.onShelf} on the shelf are waiting to be given out.`,
     };
   }
 
@@ -121,15 +134,37 @@ export default function AdminStockPage() {
     }
   }
 
-  /** Open a release, or correct the open one. Never close-then-reopen: that
-   *  resets what the release has committed and re-promises copies already
-   *  given out. */
+  /**
+   * Commit a share, by whichever route the book's state calls for.
+   *
+   * Three cases, one dialog:
+   *
+   *   no release      open one
+   *   live release    resize it in place
+   *   spent release   close it, then open its successor
+   *
+   * The middle and last look identical on screen and must not be confused
+   * underneath. Resizing keeps the row, which is right while a release is
+   * still working — closing and reopening there would reset what it has
+   * committed and re-promise copies already given out. But a release that has
+   * sold through *has* to be replaced: its copies are charged to it forever
+   * (that is what stops a sale refilling the budget), so no new number makes
+   * it spendable again. `releaseSpent` is the server's word for which of the
+   * two this is; the browser does not guess it.
+   */
   async function saveShare(row: AdminStockRow, copies: number, note: string) {
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      if (row.allocationId) {
+      if (row.allocationId && row.releaseSpent) {
+        await closeAdminWaitlistAllocation(row.allocationId, row.bookId);
+        await openAdminWaitlistAllocation({
+          bookId: row.bookId,
+          copies,
+          note: note || undefined,
+        });
+      } else if (row.allocationId) {
         await resizeAdminWaitlistAllocation(row.allocationId, row.bookId, {
           copies,
           note: note || undefined,
@@ -309,13 +344,20 @@ export default function AdminStockPage() {
             <div>
               <p className="text-caption text-muted mb-2">The queue&rsquo;s share</p>
               <div className="flex flex-wrap items-center gap-2">
+                {/* Labelled with what it will actually do. "Change share" over
+                    a spent release would be a lie twice over: the number is
+                    not what changes, and the release itself is replaced. */}
                 <Button
                   type="button"
                   size="sm"
                   disabled={busy}
                   onClick={() => setReleaseFor(openRow)}
                 >
-                  {openRow.allocationId ? "Change share" : "Set the share"}
+                  {openRow.releaseSpent
+                    ? "Start a new release"
+                    : openRow.allocationId
+                      ? "Change share"
+                      : "Set the share"}
                 </Button>
                 {openRow.waiting > 0 ? (
                   <Link
@@ -353,16 +395,22 @@ export default function AdminStockPage() {
         <StockReleaseDialog
           onClose={() => setReleaseFor(null)}
           bookTitle={releaseFor.title}
-          stockQuantity={releaseFor.onHand}
+          /* A successor release starts from what is genuinely free, not from
+             the shelf count: copies still held by live invites belong to
+             whoever is holding them, whichever release charged them. For a
+             spent release `reserved` is zero, so that is exactly `onShelf`. */
+          stockQuantity={releaseFor.releaseSpent ? releaseFor.onShelf : releaseFor.onHand}
           committed={
-            /* What this release has already spent: its size less what is left
-               of it. Zero when there is no release, which is the floor the
-               dialog wants anyway. */
-            releaseFor.allocationCopies !== null
-              ? Math.max(releaseFor.allocationCopies - releaseFor.reserved, 0)
-              : 0
+            /* What the release being edited has already spent: its size less
+               what is left of it. A successor has spent nothing — its
+               predecessor's charges go with the release they belong to. */
+            releaseFor.releaseSpent || releaseFor.allocationCopies === null
+              ? 0
+              : Math.max(releaseFor.allocationCopies - releaseFor.reserved, 0)
           }
-          currentCopies={releaseFor.allocationCopies ?? undefined}
+          currentCopies={
+            releaseFor.releaseSpent ? undefined : (releaseFor.allocationCopies ?? undefined)
+          }
           busy={busy}
           onSubmit={(copies, note) => void saveShare(releaseFor, copies, note)}
         />

@@ -59,6 +59,23 @@ export const adminStockRowSchema = z.object({
   allocationCopies: z.number().int().positive().nullable(),
 
   /**
+   * The release is open, has nothing left to give, and the shop has copies it
+   * could be giving.
+   *
+   * A release keeps charging copies it has *sold* — the rule that stops a
+   * queue re-promising the same copy after every purchase — so once it sells
+   * through it never refills, no matter how much stock arrives afterwards. The
+   * panel could not tell that state from a healthy release: both read as an
+   * open release, and the spent one simply refused every invite. Somebody
+   * restocking would set the same share again, change nothing, and be refused
+   * again in the same words.
+   *
+   * Only a new release frees those copies, so this is the flag that says to
+   * close this one.
+   */
+  releaseSpent: z.boolean(),
+
+  /**
    * More copies promised than the shop owns.
    *
    * Reachable whenever stock is lowered under live invites. The storefront

@@ -113,3 +113,84 @@ describe("AdminStockService.list — what a manager sees first", () => {
     expect(items[0]!.overIssued).toBe(true);
   });
 });
+
+describe("AdminStockService.list — a release that has sold through", () => {
+  it("flags an open release with nothing left and copies free on the shelf", async () => {
+    /* The trap: stock 1, share 1, invite one person, they buy. Restock to 1
+       and set the share to 1 again and nothing happens — a copy that sells
+       stays charged to the release that sold it, so the release never refills
+       and the number was never the problem. Indistinguishable from a healthy
+       release until this flag. */
+    const { items } = await service([
+      row({
+        onHand: 1,
+        promised: 0,
+        reserved: 0,
+        onShelf: 1,
+        allocationId: "a",
+        allocationCopies: 1,
+      }),
+    ]).list();
+
+    expect(items[0]!.releaseSpent).toBe(true);
+  });
+
+  it("does not flag a release that is merely waiting on stock", async () => {
+    // Nothing left to give and nothing on the shelf to give: the answer is a
+    // delivery, not a new release, and closing this one would help nobody.
+    const { items } = await service([
+      row({
+        onHand: 0,
+        promised: 0,
+        reserved: 0,
+        onShelf: 0,
+        allocationId: "a",
+        allocationCopies: 5,
+      }),
+    ]).list();
+
+    expect(items[0]!.releaseSpent).toBe(false);
+  });
+
+  it("does not flag a release whose copies are out on live invites", async () => {
+    // Those copies are spoken for but not gone — the holds can still lapse and
+    // hand them back to this same release. Replacing it would charge the shop
+    // twice for the same books.
+    const { items } = await service([
+      row({
+        onHand: 10,
+        promised: 4,
+        reserved: 6,
+        onShelf: 0,
+        allocationId: "a",
+        allocationCopies: 10,
+      }),
+    ]).list();
+
+    expect(items[0]!.releaseSpent).toBe(false);
+  });
+
+  it("ranks a spent release with the unfunded queues, since neither can send", async () => {
+    const { items } = await service([
+      row({
+        title: "Healthy",
+        onHand: 9,
+        reserved: 9,
+        onShelf: 0,
+        allocationId: "a",
+        allocationCopies: 9,
+      }),
+      row({
+        title: "Spent",
+        onHand: 1,
+        reserved: 0,
+        onShelf: 1,
+        waiting: 4,
+        allocationId: "b",
+        allocationCopies: 1,
+      }),
+    ]).list();
+
+    expect(items[0]!.title).toBe("Spent");
+  });
+});

@@ -107,6 +107,12 @@ export class AdminStockService {
          while holding no release at all — invites charged to one that has
          since been closed still hold their copies. */
       overIssued: row.onHand - row.promised < 0,
+      /* Open, nothing left in it, and copies free on the shelf it could be
+         handing out. `onShelf > 0` is what separates this from a release that
+         is merely waiting on stock: there the answer is to print more, here it
+         is to close the release, and only one of the two is fixed by a
+         delivery. */
+      releaseSpent: row.allocationId !== null && row.reserved === 0 && row.onShelf > 0,
     }));
 
     return { items: items.sort(byUrgency) };
@@ -122,8 +128,18 @@ export class AdminStockService {
  * sales — the storefront refuses to sell an over-issued title to anybody.
  */
 function byUrgency(a: AdminStockRow, b: AdminStockRow): number {
-  const rank = (row: AdminStockRow) =>
-    row.overIssued ? 0 : row.waiting > 0 && row.allocationId === null ? 1 : 2;
+  const rank = (row: AdminStockRow) => {
+    if (row.overIssued) return 0;
+
+    /* Both of these mean the same thing to the person waiting — no invite for
+       this book will send — and differ only in which single action fixes it,
+       so they share a rank. Neither has any other symptom: the entry is not
+       written to and the row looks untouched, which is what made them worth a
+       screen in the first place. */
+    if (row.waiting > 0 && (row.allocationId === null || row.releaseSpent)) return 1;
+
+    return 2;
+  };
 
   return rank(a) - rank(b) || a.title.localeCompare(b.title);
 }

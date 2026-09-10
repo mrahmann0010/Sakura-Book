@@ -262,9 +262,18 @@ describe("AdminWaitlistInviteService.invite — durable outcomes", () => {
  * the record has no open release, which is a refusal rather than a zero — the
  * distinction the last test in this block pins down.
  */
+/** What `spendableByBook` hands back for one book, when a test needs to say
+ *  which of the three limits is biting rather than just the total. */
+type Budget = {
+  spendable: number;
+  copies: number;
+  committed: number;
+  physicalSpare: number;
+};
+
 function makeCappedService(
   entries: Entry[],
-  spendable: Record<string, number>,
+  spendable: Record<string, number | Budget>,
   holding: string[] = [],
 ) {
   const { dbService } = fakeDeps(entries);
@@ -284,12 +293,27 @@ function makeCappedService(
     expiresAt: new Date(Date.now() + 3_600_000),
   }));
 
+  /* The full record the real service returns, not just `spendable`.
+
+     The three limits behind that number are what a refusal reads to say which
+     one bit — a release that sold through and a shelf that is empty both
+     produce zero and need opposite actions from a human. A stub carrying only
+     the total let those branches pass by accident on `undefined`, which is
+     precisely how the wrong sentence reached the panel. */
   const spendableByBook = vi.fn().mockImplementation(
     async () =>
       new Map(
         Object.entries(spendable).map(([bookId, value]) => [
           bookId,
-          { allocationId: `alloc_${bookId}`, spendable: value },
+          {
+            allocationId: `alloc_${bookId}`,
+            ...(typeof value === "number"
+              ? /* A bare number means "a healthy release with this much left":
+                   nothing committed yet, and plenty on the shelf. The cases
+                   that are not healthy say so explicitly. */
+                { spendable: value, copies: value, committed: 0, physicalSpare: value + 50 }
+              : value),
+          },
         ]),
       ),
   );
@@ -499,5 +523,67 @@ describe("AdminWaitlistInviteService.invite — never promises more copies than 
     expect(result.results.every((row) => row.error === undefined)).toBe(true);
     expect(sendInviteLink).toHaveBeenCalledTimes(3);
     expect(issue).toHaveBeenCalledWith("1", 48, "OPEN", null, null);
+  });
+});
+
+describe("AdminWaitlistInviteService.invite — telling apart the three ways of having nothing", () => {
+  it("tells staff to start a new release when this one has sold through", async () => {
+    /* The trap, in full: stock one, share one, invite one person, they buy.
+       Restock and set the share to one again and nothing happens — a copy that
+       sells stays charged to the release that sold it, so the release never
+       refills and the number was never what was wrong. The old wording ("this
+       release is fully spoken for. Wait for an invite to lapse, or allocate
+       more copies") described none of that, and every action it suggested was
+       one that could not work: nothing was going to lapse, and allocating more
+       to the same release is what they had just tried. */
+    const { service, sendInviteLink } = makeCappedService([entry("1", { bookId: "book-a" })], {
+      "book-a": { spendable: 0, copies: 1, committed: 1, physicalSpare: 1 },
+    });
+
+    const result = await service.invite({ ids: ["1"] }, context);
+
+    expect(result.results[0]!.error).toMatch(/Close this release and open a new one/);
+    expect(sendInviteLink).not.toHaveBeenCalled();
+  });
+
+  it("says to add stock when the release is spent and the shelf is bare too", async () => {
+    // Closing the release would achieve nothing here — its successor would
+    // open with no copies to give. The delivery is the thing that has to
+    // happen first, so that is what the sentence asks for.
+    const { service } = makeCappedService([entry("1", { bookId: "book-a" })], {
+      "book-a": { spendable: 0, copies: 4, committed: 4, physicalSpare: 0 },
+    });
+
+    const result = await service.invite({ ids: ["1"] }, context);
+
+    expect(result.results[0]!.error).toMatch(/Add stock, then open a new release/);
+  });
+
+  it("blames the shelf, not the release, when the budget is intact and the books are gone", async () => {
+    // The release has three copies left to give and the shop has none to give.
+    // Opening another release would promise thin air.
+    const { service } = makeCappedService([entry("1", { bookId: "book-a" })], {
+      "book-a": { spendable: 0, copies: 10, committed: 7, physicalSpare: 0 },
+    });
+
+    const result = await service.invite({ ids: ["1"] }, context);
+
+    expect(result.results[0]!.error).toMatch(/No copies left on the shelf/);
+  });
+
+  it("does not tell staff to close a healthy release their own batch just emptied", async () => {
+    /* The regression this pair of branches has to avoid. Entry one takes the
+       release's last two copies; entry two is refused because of it. The
+       release was fine a moment ago and is now holding copies for somebody who
+       has just been texted — closing it would be the worst available advice. */
+    const { service } = makeCappedService(
+      [entry("1", { bookId: "book-a", quantity: 2 }), entry("2", { bookId: "book-a" })],
+      { "book-a": { spendable: 2, copies: 2, committed: 0, physicalSpare: 40 } },
+    );
+
+    const result = await service.invite({ ids: ["1", "2"] }, context);
+
+    expect(result.results[1]!.error).toMatch(/fully spoken for/);
+    expect(result.results[1]!.error).not.toMatch(/Close this release/);
   });
 });

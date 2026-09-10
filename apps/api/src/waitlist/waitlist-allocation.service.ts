@@ -286,7 +286,24 @@ export class WaitlistAllocationService {
     bookIds: string[],
     options: { excludeEntryIds?: string[] } = {},
     executor: Executor = this.dbService.db,
-  ): Promise<Map<string, { allocationId: string; spendable: number }>> {
+  ): Promise<
+    Map<
+      string,
+      {
+        allocationId: string;
+        spendable: number;
+        /* Carried alongside `spendable` so a refusal can say *which* limit
+           bit. Zero-because-the-release-is-spent and
+           zero-because-the-shelf-is-empty need opposite actions from a human,
+           and a single number cannot tell them apart — which is how "This
+           release is fully spoken for" ended up being shown to somebody whose
+           release had sold through and who simply needed a new one. */
+        copies: number;
+        committed: number;
+        physicalSpare: number;
+      }
+    >
+  > {
     if (bookIds.length === 0) return new Map();
 
     /* Excluded from *both* terms, and that pairing is the point. The invite
@@ -326,6 +343,9 @@ export class WaitlistAllocationService {
         {
           allocationId: row.allocationId,
           spendable: Math.max(Math.min(row.copies - row.committed, row.physicalSpare), 0),
+          copies: row.copies,
+          committed: row.committed,
+          physicalSpare: row.physicalSpare,
         },
       ]),
     );

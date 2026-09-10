@@ -1,6 +1,10 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import type { AdminWaitlistInviteOutcome, AdminWaitlistInviteRequest, AdminWaitlistInviteResult } from "@sakura/contracts";
+import type {
+  AdminWaitlistInviteOutcome,
+  AdminWaitlistInviteRequest,
+  AdminWaitlistInviteResult,
+} from "@sakura/contracts";
 import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Env } from "../../config/env.schema";
 import { AuditService } from "../../audit";
@@ -109,6 +113,52 @@ export class AdminWaitlistInviteService {
       allocationByBook.set(bookId, row.allocationId);
     }
 
+    /**
+     * Why this book has nothing left to give, in the words of the fix.
+     *
+     * "This release is fully spoken for" was one sentence covering three
+     * situations that need three different actions, and it was shown most
+     * often to the one person it helped least: somebody whose release had sold
+     * through, who had fresh stock on the shelf, and who needed to close the
+     * release and open another. They set the same share again, changed
+     * nothing, and were refused again in the same words.
+     *
+     * A release keeps charging copies it has *sold* — that is the rule that
+     * stops a queue re-promising the same copy after every purchase — so a
+     * spent release never refills, and no amount of restocking makes it. Only
+     * a new release does, and this is the only place that can say so.
+     */
+    const exhaustionReason = (bookId: string): string => {
+      const row = budgets.get(bookId)!;
+
+      /* Read from the snapshot taken before this batch started, never from the
+         running `budget` above — the two answer different questions. "This
+         release had nothing left when we began" is a standing problem a person
+         must fix; "this batch just used the last of it" is the cap doing its
+         job on a release that was perfectly healthy a moment ago, and telling
+         somebody to close that one would throw away the copies it is still
+         holding for the people it just texted. */
+      const remainingBefore = row.copies - row.committed;
+
+      if (remainingBefore <= 0) {
+        return row.physicalSpare > 0
+          ? `This release has already used all ${row.copies} of its cop${
+              row.copies === 1 ? "y" : "ies"
+            } — a copy that sells stays charged to it, so restocking does not refill it. Close this release and open a new one for the ${row.physicalSpare} cop${
+              row.physicalSpare === 1 ? "y" : "ies"
+            } you have now.`
+          : "This release is used up and there are no copies on the shelf. Add stock, then open a new release.";
+      }
+
+      // The release had budget; the shop does not have the books.
+      if (row.physicalSpare <= 0) {
+        return "No copies left on the shelf for this book. Add stock before inviting anyone else.";
+      }
+
+      // The batch itself spent the rest, which is the cap working as intended.
+      return "This release is fully spoken for. Wait for an invite to lapse, or allocate more copies.";
+    };
+
     /* Which of these entries is *already* holding a live invite right now.
        Needed because the exclusion above is a loan against an assumption —
        that every entry in the batch is about to have its token rewritten. A
@@ -142,7 +192,7 @@ export class AdminWaitlistInviteService {
           entry.id,
           remaining > 0
             ? `Only ${remaining} ${remaining === 1 ? "copy" : "copies"} left in this release — this entry asks for ${entry.quantity}.`
-            : "This release is fully spoken for. Wait for an invite to lapse, or allocate more copies.",
+            : exhaustionReason(bookId),
         );
 
         /* A reservation is charged whether or not this batch renewed it. The
@@ -339,9 +389,7 @@ export class AdminWaitlistInviteService {
       }
     };
 
-    await Promise.all(
-      Array.from({ length: Math.min(limit, items.length) }, () => worker()),
-    );
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
   }
 
   /**
