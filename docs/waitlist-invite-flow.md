@@ -15,7 +15,7 @@ flowchart LR
     AdminList["/admin/waitlist<br/>list · book filter · Invite"]
     AdminTtl["/admin/settings/waitlist-invite<br/>TTL hours"]
     Landing["/[locale]/waitlist/invite/[token]<br/>server component"]
-    LockedView["InviteCheckoutView<br/>(LOCKED: fixed book, qty ≤ reserved)"]
+    LockedView["InviteCheckoutView<br/>(LOCKED: reserved book, qty ≤ reserved<br/>+ other in-stock titles)"]
     OpenView["CheckoutView<br/>(OPEN: shopper's own cart)"]
   end
 
@@ -88,7 +88,7 @@ sequenceDiagram
   alt no match
     Page-->>Cust: 404
   else LOCKED
-    Page-->>Cust: InviteCheckoutView, book fixed, qty 1..reserved, contact prefilled
+    Page-->>Cust: InviteCheckoutView — reserved book at qty 1..reserved,<br/>other in-stock titles addable, contact prefilled
   else OPEN
     Page-->>Cust: CheckoutView, cart is the shopper's own, contact prefilled
   end
@@ -100,7 +100,7 @@ sequenceDiagram
   Co->>Db: consume(token) — guarded UPDATE sets used_at
   alt zero rows
     Co-->>Cust: 404 WAITLIST_INVITE_INVALID
-  else LOCKED and cart outside the reservation
+  else LOCKED and the reserved book is missing or over its ceiling
     Co-->>Cust: 422 WAITLIST_INVITE_MISMATCH (rolls back)
   else
     Co->>Db: reprice, decrement stock, redeem coupon, insert order
@@ -111,14 +111,25 @@ sequenceDiagram
 ```
 
 **A LOCKED invite's quantity is a ceiling, not an exact match.** An entry that
-asked for three copies may be redeemed for three, two or one — never four, and
-never a different book. Ordering fewer is the customer changing their mind, and
-refusing it would only push them to place the same smaller order without the
-link, which costs the shop the sale's connection to the entry: it would never
-close as `CONVERTED`. Ordering more is the reservation being overrun, which is
-what `LOCKED` exists to prevent. The floor is one; `cartItemSchema` refuses zero
-before the invite check runs. The entry keeps the quantity it asked for — what
-was actually bought is on the order the entry now points at.
+asked for three copies may be redeemed for three, two or one — never four.
+Ordering fewer is the customer changing their mind, and refusing it would only
+push them to place the same smaller order without the link, which costs the shop
+the sale's connection to the entry: it would never close as `CONVERTED`. Ordering
+more is the reservation being overrun, which is what `LOCKED` exists to prevent.
+The floor is one; `cartItemSchema` refuses zero before the invite check runs. The
+entry keeps the quantity it asked for — what was actually bought is on the order
+the entry now points at, and it is that order the release is charged for.
+
+**What LOCKED constrains is the reserved book, not the basket around it.** The
+order must contain that book; other in-stock titles ride along as ordinary
+purchases, priced and stocked by the ordinary rules. The old rule — one line,
+that book — was the shop refusing money: an invited customer who also wanted a
+title sitting in stock could not have both in one box, because the invite refused
+the second line and the plain cart refused the _first_ (public availability
+subtracts every live reservation, including the customer's own). Two orders, two
+delivery fees and two bKash transfers to reconcile, for one customer. The reserved
+book must still be present, or the token would be spent on an order for something
+else and the entry would close as `CONVERTED` against it.
 
 The ordering inside the transaction is deliberate: the token is spent before pricing
 and before any stock moves, so a bad token costs nothing — and because it is one
@@ -153,15 +164,15 @@ stateDiagram-v2
 
 Token state lives on the same row, independent of `status`:
 
-| Column              | Set by                | Meaning                                          |
-| ------------------- | --------------------- | ------------------------------------------------ |
-| `invite_token`      | `issue()`             | The magic-link credential; unique partial index  |
-| `invite_mode`       | `issue()`             | `LOCKED` (that book, up to that qty) or `OPEN`   |
-| `invite_expires_at` | `issue()`             | `now + ttlHours`, TTL from shop settings         |
-| `invite_used_at`    | `consume()`, in-order | Non-null = spent; re-issuing clears it           |
-| `invite_sms_status` | `recordSmsOutcome()`  | `SENT` / `FAILED` for the **last** attempt       |
-| `invite_sms_error`  | `recordSmsOutcome()`  | The gateway's reason, truncated. Null on success |
-| `invite_sms_at`     | `recordSmsOutcome()`  | When that attempt ran — not `notified_at`        |
+| Column              | Set by                | Meaning                                                     |
+| ------------------- | --------------------- | ----------------------------------------------------------- |
+| `invite_token`      | `issue()`             | The magic-link credential; unique partial index             |
+| `invite_mode`       | `issue()`             | `LOCKED` (must include that book, up to that qty) or `OPEN` |
+| `invite_expires_at` | `issue()`             | `now + ttlHours`, TTL from shop settings                    |
+| `invite_used_at`    | `consume()`, in-order | Non-null = spent; re-issuing clears it                      |
+| `invite_sms_status` | `recordSmsOutcome()`  | `SENT` / `FAILED` for the **last** attempt                  |
+| `invite_sms_error`  | `recordSmsOutcome()`  | The gateway's reason, truncated. Null on success            |
+| `invite_sms_at`     | `recordSmsOutcome()`  | When that attempt ran — not `notified_at`                   |
 
 The three `invite_sms_*` columns are the recovery mechanism for a partial batch. Every
 attempt writes one, success or failure, **before** the HTTP response is built — so a
@@ -179,6 +190,16 @@ transaction, right after the order row exists.
 ---
 
 ## 4. Known gaps
+
+- **An invite belongs to an entry, not to a person.** Somebody waiting on three books
+  is three rows, and a release opening on each sends three links, with three deadlines,
+  that become three orders and three delivery fees. Letting other in-stock titles ride
+  along in one invite order covers the common case — the second book is usually on the
+  shelf — but not the case where both books are held for the same customer by two
+  different releases. The fix is a per-person invite session carrying one entitlement
+  per book; it moves the token off `waitlist_entries`, which means `reservations.ts`,
+  `waitlist-lane.ts`, the cart quote's holding lookup and four CHECK constraints move
+  with it.
 
 - **Conversion only closes for invited orders.** An order placed through a token links
   itself; an order from someone on the list who never used their link is still invisible

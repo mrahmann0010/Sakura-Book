@@ -145,7 +145,9 @@ export const placeOrderRequestSchema = z.object({
   /**
    * Present when this checkout came from a waitlist invite link — spent
    * atomically with the order by WaitlistInviteService.consume(). A LOCKED
-   * invite's `items` must match the reservation exactly; see the service.
+   * invite's `items` must include the book it reserved, at no more than the
+   * copies it held; other titles ride along as ordinary purchases. See
+   * CheckoutService.consumeInvite.
    */
   inviteToken: z.string().trim().min(1).optional(),
 });

@@ -367,10 +367,25 @@ export class CheckoutService {
    * `consume` throws `WaitlistInviteInvalidError` itself when the token is
    * wrong, expired, or already spent — nothing to add here. What this adds is
    * the LOCKED-mode check `WaitlistInviteService.consume`'s own comment
-   * documents as the caller's job: a LOCKED invite reserved one book, and an
-   * order for a different one — or for more copies than were held — is
-   * refused even though the token itself was genuine. An OPEN invite has
-   * nothing further to check: the token being spent is the whole requirement.
+   * documents as the caller's job. An OPEN invite has nothing further to
+   * check: the token being spent is the whole requirement.
+   *
+   * **What LOCKED constrains is the reserved book, not the whole basket.** The
+   * order must contain that book, and no more copies of it than were held;
+   * every other line is an ordinary purchase and is priced, stocked and
+   * refused by the ordinary rules a few lines further down. The rule used to be
+   * "one line, that book", and that was the shop refusing money. A customer
+   * invited for one title who also wants a title sitting in stock could not
+   * have both in one box: the invite refused the second line, and the plain
+   * cart refused the *first*, because public availability subtracts every live
+   * reservation including the customer's own. Two orders, two delivery fees,
+   * two bKash transfers to reconcile by hand — or, more often, one order and a
+   * forgotten book.
+   *
+   * The reserved book must still be present. An invite spent on a basket that
+   * does not contain what it reserved would mark the entry CONVERTED against
+   * an order for something else, and quietly hand the copies it was holding to
+   * nobody — the customer can buy those other books without a token.
    *
    * The reserved quantity is a **ceiling, not an exact match**. Someone who
    * asked for three and now wants two is still ordering the thing they were
@@ -381,6 +396,11 @@ export class CheckoutService {
    * this many copies are set aside, and a fourth copy was never part of it.
    * One is the floor because an order for zero books is not an order; the
    * cart schema refuses it before this runs.
+   *
+   * Copies of the reserved book are summed across lines rather than read off a
+   * single one. A cart may name the same book twice — `PricingService` merges
+   * duplicates before pricing — and checking only the first line would let
+   * `2 + 2` past a ceiling of three.
    *
    * @returns the waitlist entry the token belonged to, so `writeOrder` can
    * stamp the order onto it once the order exists, and the reservation's
@@ -397,11 +417,11 @@ export class CheckoutService {
     if (!reservation) throw new WaitlistInviteInvalidError();
 
     if (reservation.mode === "LOCKED") {
-      const matches =
-        request.items.length === 1 &&
-        request.items[0].bookId === reservation.bookId &&
-        request.items[0].quantity >= 1 &&
-        request.items[0].quantity <= reservation.quantity;
+      const reservedCopies = request.items
+        .filter((item) => item.bookId === reservation.bookId)
+        .reduce((total, item) => total + item.quantity, 0);
+
+      const matches = reservedCopies >= 1 && reservedCopies <= reservation.quantity;
 
       if (!matches) {
         throw new WaitlistInviteMismatchError(reservation.bookId ?? "", reservation.quantity);

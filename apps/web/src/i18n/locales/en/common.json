@@ -440,9 +440,7 @@
       },
       "refunds": {
         "title": "4. Cancellations & Refunds",
-        "body": [
-          "Cancellations, returns, and refunds are handled under our Refund Policy."
-        ]
+        "body": ["Cancellations, returns, and refunds are handled under our Refund Policy."]
       },
       "conduct": {
         "title": "5. Fair Use",
@@ -557,10 +555,14 @@
   "waitlistInvite": {
     "eyebrow": "Your turn to order",
     "title": "Complete your order",
-    "lockedNotice": "This link reserves {{quantity}} copy of the book below for you — the order can't be changed to something else.",
-    "lockedNoticeUpTo": "This link reserves up to {{quantity}} copies of the book below for you — you can order fewer, but not a different book.",
+    "lockedNotice": "This link reserves {{quantity}} copy of the book below for you. You can add other books to the same order.",
+    "lockedNoticeUpTo": "This link reserves up to {{quantity}} copies of the book below for you — take fewer if you like, and add other books to the same order.",
     "quantityLabel": "How many copies?",
     "quantityHint": "{{quantity}} reserved for you. You can take fewer.",
+    "alsoAvailable": {
+      "title": "Add more books",
+      "hint": "In stock now — they ship in the same parcel, so you pay delivery once."
+    },
     "expired": {
       "eyebrow": "Invite link",
       "title": "This invite link isn't valid",
