@@ -58,14 +58,27 @@ const NAV_GROUPS = [
   },
   {
     label: "Catalog",
-    /* Books is what a title *is* — cover, price, blurb. Stock is how many
-       there are and who they are owed to, which is a decision about one
-       restock rather than a property of the title, and it draws on the
-       waitlist as much as on the catalog. Neighbours, not one screen. */
-    items: [
-      { href: "/books", label: "Books" },
-      { href: "/stock", label: "Stock" },
-    ],
+    items: [{ href: "/books", label: "Books" }],
+  },
+  {
+    /**
+     * Its own section, not a second entry under Catalog.
+     *
+     * Catalog is what a title *is* — cover, price, blurb, SEO — and it is
+     * edited a handful of times in a book's life. Inventory is how many copies
+     * exist and who they are owed to, which changes every restock morning and
+     * every time somebody buys. Filing them together made the daily job a
+     * visitor inside the rare one, and it dragged the whole book form along
+     * with it: to correct a stock count you opened a page of fields you had no
+     * intention of touching, any one of which you could change by accident.
+     *
+     * The split is also what the numbers say. Inventory reads the waitlist as
+     * much as the catalog — a copy promised to someone waiting is not a fact
+     * about the title at all — so there was never one parent it belonged
+     * under.
+     */
+    label: "Inventory",
+    items: [{ href: "/stock", label: "Stock" }],
   },
   {
     label: "Waitlist",

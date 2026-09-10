@@ -8,7 +8,7 @@ import type { AdminStockRow } from "@sakura/contracts";
 
 import { AdminTableRows } from "@/components/admin/skeletons";
 import { StockReleaseDialog } from "@/components/admin/stock-release-dialog";
-import { Button, Input, LinkButton, Modal, Notice } from "@/components/ui";
+import { Button, Input, Modal, Notice } from "@/components/ui";
 import {
   AdminApiError,
   getAdminStock,
@@ -70,6 +70,7 @@ export default function AdminStockPage() {
   const [openRow, setOpenRow] = useState<AdminStockRow | null>(null);
   const [releaseFor, setReleaseFor] = useState<AdminStockRow | null>(null);
   const [receiveFor, setReceiveFor] = useState<AdminStockRow | null>(null);
+  const [correctFor, setCorrectFor] = useState<AdminStockRow | null>(null);
 
   useEffect(() => {
     void load();
@@ -95,11 +96,13 @@ export default function AdminStockPage() {
   }
 
   /**
-   * Set a book's stock count.
+   * Set a book's stock count — shared by receiving and by correcting.
    *
-   * Goes through the books endpoint, which is the only writer of
-   * `stock_quantity` — this screen is a better place to *decide* the number,
-   * not a second way to store it.
+   * Both arrive here as a final total, so the difference between "forty more
+   * came in" and "there are actually five" lives entirely in the dialog that
+   * asked. Goes through the books endpoint because that is the only writer of
+   * `stock_quantity`: this screen is a better place to *decide* the number,
+   * not a second place to store it.
    */
   async function saveStock(row: AdminStockRow, onHand: number) {
     setBusy(true);
@@ -108,6 +111,7 @@ export default function AdminStockPage() {
     try {
       await updateAdminBook(row.bookId, { stockQuantity: onHand });
       setReceiveFor(null);
+      setCorrectFor(null);
       setNotice(`${row.title} — now ${onHand} on hand.`);
       await load();
     } catch (err) {
@@ -285,15 +289,20 @@ export default function AdminStockPage() {
                 >
                   Books arrived
                 </Button>
-                {/* The count itself — a stocktake, damaged copies — stays on
-                    the book, where the rest of the title's record lives. */}
-                <LinkButton
+                {/* Corrections belong here too, not on the book form. Sending
+                    someone to a page of covers, prices and SEO fields to fix a
+                    number is how the wrong field gets edited on the way past —
+                    and it is the daily job being made a visitor inside the
+                    rare one. */}
+                <Button
+                  type="button"
                   variant="secondary"
                   size="sm"
-                  href={`/${locale}/admin/books/${openRow.bookId}`}
+                  disabled={busy}
+                  onClick={() => setCorrectFor(openRow)}
                 >
                   Correct the count
-                </LinkButton>
+                </Button>
               </div>
             </div>
 
@@ -328,6 +337,15 @@ export default function AdminStockPage() {
           busy={busy}
           onClose={() => setReceiveFor(null)}
           onSubmit={(onHand) => void saveStock(receiveFor, onHand)}
+        />
+      ) : null}
+
+      {correctFor ? (
+        <CorrectStockDialog
+          row={correctFor}
+          busy={busy}
+          onClose={() => setCorrectFor(null)}
+          onSubmit={(onHand) => void saveStock(correctFor, onHand)}
         />
       ) : null}
 
@@ -412,6 +430,82 @@ function ReceiveStockDialog({
         disabled={busy}
         onChange={(event) => setArrived(event.target.value)}
       />
+    </Modal>
+  );
+}
+
+/**
+ * "Actually there are five."
+ *
+ * A stocktake, breakages, a miscount found on the shelf. Absolute rather than
+ * additive, because a correction is a statement about what is there now and
+ * not about a movement — and separate from receiving for exactly that reason:
+ * the two are different claims, and one keypress apart is too close for a
+ * screen where one of them can strand a customer.
+ *
+ * Which is what the warning below is for. Lowering stock under copies already
+ * promised does not withdraw those invites — the links keep working and the
+ * holds keep standing — it just means the shop has promised more than it owns,
+ * and the storefront responds by refusing to sell the title to anybody until a
+ * person resolves it. That consequence is invisible from the number alone, so
+ * it is spelled out before the save rather than discovered afterwards on the
+ * Stock table's red row.
+ */
+function CorrectStockDialog({
+  row,
+  busy,
+  onClose,
+  onSubmit,
+}: {
+  row: AdminStockRow;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (onHand: number) => void;
+}) {
+  const [count, setCount] = useState(String(row.onHand));
+
+  const parsed = Number(count);
+  const valid = Number.isInteger(parsed) && parsed >= 0;
+  const shortfall = valid ? row.promised - parsed : 0;
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Correct the count"
+      description={`${row.title} — what is actually on the shelf? This replaces the count of ${row.onHand} rather than adding to it.`}
+      actions={
+        <>
+          <Button type="button" loading={busy} disabled={!valid} onClick={() => onSubmit(parsed)}>
+            {valid ? `Set it to ${parsed}` : "Save"}
+          </Button>
+          <Button type="button" variant="ghost" disabled={busy} onClick={onClose}>
+            Cancel
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <Input
+          type="number"
+          min={0}
+          autoFocus
+          label="Copies on hand"
+          hint={valid ? undefined : "A whole number, zero or more."}
+          value={count}
+          disabled={busy}
+          onChange={(event) => setCount(event.target.value)}
+        />
+
+        {shortfall > 0 ? (
+          <Notice tone="error" lead="This will over-issue the book.">
+            {row.promised} cop{row.promised === 1 ? "y is" : "ies are"} already promised to people
+            holding a live link. Their links keep working — but the website will refuse to sell this
+            title to anyone until you print more or withdraw {shortfall} invite
+            {shortfall === 1 ? "" : "s"}.
+          </Notice>
+        ) : null}
+      </div>
     </Modal>
   );
 }
