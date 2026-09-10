@@ -14,6 +14,7 @@ import { waitlistInviteModeEnum, waitlistInviteSmsStatusEnum, waitlistStatusEnum
 import { orders } from "../orders/order";
 import { timestamps } from "../timestamps";
 import { waitlistAllocations } from "./waitlist-allocation";
+import { waitlistInviteWaves } from "./waitlist-invite-wave";
 
 /**
  * "Notify me when it's back" — the catch-all for every restock/pre-order
@@ -114,6 +115,31 @@ export const waitlistEntries = pgTable(
     inviteAllocationId: uuid("invite_allocation_id").references(() => waitlistAllocations.id, {
       onDelete: "restrict",
     }),
+
+    // Which round of invites this token went out in. Same lifecycle as
+    // `inviteAllocationId` — set by `issue()`, cleared by `revoke()`, null for
+    // a hand-issued invite that belonged to no wave.
+    //
+    // Denormalised alongside the allocation rather than reached through this
+    // wave, deliberately. The budget query runs on the invite hot path and is
+    // the one place a join would cost something; the wave's own allocation is
+    // immutable, so the pair cannot drift.
+    inviteWaveId: uuid("invite_wave_id").references(() => waitlistInviteWaves.id, {
+      onDelete: "restrict",
+    }),
+
+    // How many links this entry has ever been sent. Never reset.
+    //
+    // Two jobs, and the first is the fairness rule the queue design turns on:
+    // ordering by this ascending puts everyone who has never had a turn ahead
+    // of anyone getting a second one, which is what "they go back in the
+    // queue, behind those who haven't had a turn yet" means in SQL. Signup
+    // order then decides among people on equal footing.
+    //
+    // The second is a guard rail: a phone that never answers would otherwise
+    // consume a slot in every wave forever, and this is what makes that
+    // visible — and one day, refusable — rather than invisible.
+    inviteAttempts: integer("invite_attempts").notNull().default(0),
 
     // When the token was actually spent placing an order. Null means
     // unused. This is what makes a token single-use: consuming it means
@@ -231,6 +257,19 @@ export const waitlistEntries = pgTable(
       sql`${table.inviteAllocationId} is null or ${table.inviteToken} is not null`,
     ),
 
+    /* Same rule, same reason: a wave reference with no token would go on
+       counting somebody towards a round of invites they are no longer part
+       of. */
+    check(
+      "waitlist_entries_wave_implies_token",
+      sql`${table.inviteWaveId} is null or ${table.inviteToken} is not null`,
+    ),
+
+    /* Attempts only ever go up, and a negative count would quietly win the
+       fairness sort — putting whoever it belongs to permanently at the front
+       of every wave. */
+    check("waitlist_entries_invite_attempts_nonnegative", sql`${table.inviteAttempts} >= 0`),
+
     index("waitlist_entries_invite_allocation_id_idx").on(table.inviteAllocationId),
   ],
 );
@@ -244,5 +283,9 @@ export const waitlistEntriesRelations = relations(waitlistEntries, ({ one }) => 
   inviteAllocation: one(waitlistAllocations, {
     fields: [waitlistEntries.inviteAllocationId],
     references: [waitlistAllocations.id],
+  }),
+  inviteWave: one(waitlistInviteWaves, {
+    fields: [waitlistEntries.inviteWaveId],
+    references: [waitlistInviteWaves.id],
   }),
 }));

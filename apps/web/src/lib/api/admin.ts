@@ -34,6 +34,8 @@ import {
   adminWaitlistNotifyRequestSchema,
   adminWaitlistNotifyResultSchema,
   adminWaitlistUpdateRequestSchema,
+  adminWaitlistWavePlanSchema,
+  adminWaitlistWaveRequestSchema,
   dashboardSchema,
   monthlyReportSchema,
   paymentBreakdownSchema,
@@ -77,6 +79,8 @@ import {
   type AdminWaitlistAllocationView,
   type AdminWaitlistQuery,
   type AdminWaitlistUpdateRequest,
+  type AdminWaitlistWavePlan,
+  type AdminWaitlistWaveRequest,
   type Dashboard,
   type MonthlyReport,
   type PaymentBreakdown,
@@ -786,6 +790,27 @@ export function inviteAdminWaitlist(
 ): Promise<AdminWaitlistInviteResult> {
   const validated = validate(adminWaitlistInviteRequestSchema, request);
   return adminFetch("/admin/waitlist/invite", adminWaitlistInviteResultSchema, {
+    method: "POST",
+    body: validated,
+  });
+}
+
+/** What the next wave would do, without doing it — the button's label and the
+ *  skip warning above it. */
+export function getAdminWaitlistWavePlan(bookId: string): Promise<AdminWaitlistWavePlan> {
+  return adminFetch(
+    `/admin/waitlist/wave-plan?bookId=${encodeURIComponent(bookId)}`,
+    adminWaitlistWavePlanSchema,
+  );
+}
+
+/** Send it. Who goes is decided on the server, against the release's budget
+ *  and the fairness order — never from the page of rows on screen. */
+export function sendAdminWaitlistWave(
+  request: AdminWaitlistWaveRequest,
+): Promise<AdminWaitlistInviteResult> {
+  const validated = validate(adminWaitlistWaveRequestSchema, request);
+  return adminFetch("/admin/waitlist/waves", adminWaitlistInviteResultSchema, {
     method: "POST",
     body: validated,
   });

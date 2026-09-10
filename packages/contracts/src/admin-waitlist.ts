@@ -23,8 +23,17 @@ import { waitlistInviteModes, waitlistLanes, waitlistStatuses } from "./waitlist
  * person who signed up first was promised, in the page's own words, to be
  * "first in line" — so the default order is the order stock should be offered
  * in. Newest-first is the exception here, not the rule.
+ *
+ * `fair` is `oldest` with one clause in front of it: everyone gets a first
+ * turn before anybody gets a second. It is the order a wave is filled in, and
+ * it differs from `oldest` only once somebody has been re-invited — at which
+ * point `oldest` would put that person ahead of a first-timer who joined a
+ * month later, which reads as the shop favouring the people it has already
+ * chased. Kept as a separate member rather than folded into `oldest`, because
+ * a staff member scrolling the list by signup date is asking a different
+ * question from the one the "Invite next N" button asks.
  */
-export const adminWaitlistSorts = ["oldest", "recent", "quantity-desc"] as const;
+export const adminWaitlistSorts = ["oldest", "fair", "recent", "quantity-desc"] as const;
 
 export type AdminWaitlistSort = (typeof adminWaitlistSorts)[number];
 
@@ -259,9 +268,67 @@ export type AdminWaitlistUpdateRequest = z.infer<typeof adminWaitlistUpdateReque
 
 export const adminWaitlistInviteRequestSchema = z.object({
   ids: z.array(z.string().uuid()).min(1, "Select at least one entry.").max(500),
+
+  /**
+   * The wave these invites belong to, when they were sent as one.
+   *
+   * Server-supplied, not something a panel fills in: `AdminWaitlistWaveService`
+   * opens the wave row and hands the id down. Absent for the hand-picked sends
+   * — the per-row "Invite" button, a re-invite from the Expired tab — which
+   * still charge a release but belong to no round.
+   */
+  waveId: z.string().uuid().optional(),
 });
 
 export type AdminWaitlistInviteRequest = z.infer<typeof adminWaitlistInviteRequestSchema>;
+
+/**
+ * Send the next wave for one book.
+ *
+ * No list of ids: choosing who is the entire job, and it is done on the server
+ * against the release's budget and the fairness order. A panel that sent ids
+ * would be deciding the queue's order in the browser, from one page of it.
+ */
+export const adminWaitlistWaveRequestSchema = z.object({
+  bookId: z.string().uuid(),
+
+  /**
+   * Send fewer than the release could fund — a first small wave to check the
+   * gateway is awake, say. Never more: the plan caps it either way.
+   */
+  count: z.number().int().positive().max(500).optional(),
+});
+
+export type AdminWaitlistWaveRequest = z.infer<typeof adminWaitlistWaveRequestSchema>;
+
+/** What the next wave would do, without doing it — what the button is labelled
+ *  from, and what the skip warning is drawn from. */
+export const adminWaitlistWavePlanSchema = z.object({
+  /** Copies this release can still hand out. The wave's ceiling. */
+  spendable: z.number().int().nonnegative(),
+  /** How many people the next wave would reach, and how many copies they hold. */
+  count: z.number().int().nonnegative(),
+  quantity: z.number().int().nonnegative(),
+  /** Candidates in the WAITING or EXPIRED lanes for this book. */
+  waiting: z.number().int().nonnegative(),
+  /**
+   * Entries passed over because they ask for more copies than remain.
+   *
+   * Skipped rather than blocking, so one person wanting five copies does not
+   * stall the four behind them who want one each — but reported, because an
+   * entry that keeps getting passed over needs a human rather than another
+   * wave.
+   */
+  skipped: z.array(
+    z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      quantity: z.number().int().positive(),
+    }),
+  ),
+});
+
+export type AdminWaitlistWavePlan = z.infer<typeof adminWaitlistWavePlanSchema>;
 
 /** One entry's outcome. `sent: false` covers both "not eligible" (already
  *  converted or cancelled) and "the gateway call failed" — `error` says which. */

@@ -7,6 +7,7 @@ import type {
   AdminWaitlistBook,
   AdminWaitlistCounts,
   AdminWaitlistEntry,
+  AdminWaitlistWavePlan,
   WaitlistLane,
   WaitlistStatus,
 } from "@sakura/contracts";
@@ -19,10 +20,12 @@ import {
   downloadAdminWaitlistCsv,
   getAdminWaitlistAllocations,
   getAdminWaitlistBooks,
+  getAdminWaitlistWavePlan,
   inviteAdminWaitlist,
   listAdminWaitlist,
   notifyAdminWaitlist,
   openAdminWaitlistAllocation,
+  sendAdminWaitlistWave,
   updateAdminWaitlistEntry,
 } from "@/lib/api/admin";
 
@@ -99,6 +102,11 @@ export default function AdminWaitlistPage() {
      "All books" has no single answer to show. */
   const [allocation, setAllocation] = useState<AdminWaitlistAllocationView | null>(null);
 
+  /* What the next wave would do. Fetched rather than derived from the release,
+     because "19 copies left" and "the next 19 people" stop being the same
+     number as soon as anybody in line wants two. */
+  const [wavePlan, setWavePlan] = useState<AdminWaitlistWavePlan | null>(null);
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /* Starts true: a load fires on mount, and the first thing this screen
@@ -152,15 +160,63 @@ export default function AdminWaitlistPage() {
 
     /* After the list, not alongside it, and deliberately not fatal. The
        release header is context for a decision; the list is the work. A
-       release lookup that fails should not blank the table staff came for. */
+       release lookup that fails should not blank the table staff came for.
+
+       The plan is fetched here too rather than derived from the release,
+       because "19 copies left" and "the next 19 people" are not the same
+       number the moment anybody in line wants more than one copy. */
     if (bookId) {
-      try {
-        setAllocation(await getAdminWaitlistAllocations(bookId));
-      } catch {
-        setAllocation(null);
-      }
+      const [nextAllocation, nextPlan] = await Promise.all([
+        getAdminWaitlistAllocations(bookId).catch(() => null),
+        getAdminWaitlistWavePlan(bookId).catch(() => null),
+      ]);
+      setAllocation(nextAllocation);
+      setWavePlan(nextPlan);
     } else {
       setAllocation(null);
+      setWavePlan(null);
+    }
+  }
+
+  /**
+   * Send the next wave.
+   *
+   * Posts a book, not a list of ids: who goes is decided on the server, in the
+   * fairness order, against the release's budget. A page of rows on screen is
+   * not enough to honour a queue's promise, and the browser should not be the
+   * thing that tries.
+   */
+  async function sendWave() {
+    if (!wavePlan || wavePlan.count === 0) return;
+
+    if (
+      !window.confirm(
+        `Text the next ${wavePlan.count} in line?\n\nThey hold ${wavePlan.quantity} cop${wavePlan.quantity === 1 ? "y" : "ies"} until their window closes. Nobody is invited beyond what this release can fund.`,
+      )
+    ) {
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const result = await sendAdminWaitlistWave({ bookId });
+      const sent = result.results.filter((row) => row.sent).length;
+      const failed = result.results.length - sent;
+
+      setNotice(
+        failed === 0
+          ? `Wave sent — ${sent} invite${sent === 1 ? "" : "s"}.`
+          : `Wave sent — ${sent} out, ${failed} failed. The failures are on the Invited tab, marked.`,
+      );
+
+      await load(tab, 1);
+    } catch (err) {
+      setError(err instanceof AdminApiError ? err.message : "Could not send that wave.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -425,16 +481,39 @@ export default function AdminWaitlistPage() {
                     — the storefront is refusing to sell it meanwhile.
                   </span>
                 ) : null}
+                {/* Never silent. An entry that keeps being passed over waits
+                    forever while every wave reports success. */}
+                {wavePlan && wavePlan.skipped.length > 0 ? (
+                  <span className="text-secondary mt-1 block">
+                    {wavePlan.skipped.length} skipped — they want more copies than remain (
+                    {wavePlan.skipped
+                      .slice(0, 3)
+                      .map((row) => `${row.name} ×${row.quantity}`)
+                      .join(", ")}
+                    {wavePlan.skipped.length > 3 ? "…" : ""}). Invite them by hand, or allocate
+                    more.
+                  </span>
+                ) : null}
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={busy}
-                onClick={() => void closeRelease(allocation.open!.id)}
-              >
-                Close release
-              </Button>
+              <div className="flex items-center gap-2">
+                {/* The whole flow in one button. Labelled with what it will
+                    actually do rather than "Send wave", because the number is
+                    the thing staff are deciding about. */}
+                {wavePlan && wavePlan.count > 0 ? (
+                  <Button type="button" loading={busy} onClick={() => void sendWave()}>
+                    {`Invite next ${wavePlan.count}`}
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void closeRelease(allocation.open!.id)}
+                >
+                  Close release
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-3">

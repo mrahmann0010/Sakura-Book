@@ -27,6 +27,7 @@ import {
   AdminWaitlistController,
   AdminWaitlistInviteService,
   AdminWaitlistService,
+  AdminWaitlistWaveService,
 } from "./waitlist";
 
 /**
@@ -129,6 +130,7 @@ import {
     AdminWaitlistService,
     AdminWaitlistInviteService,
     AdminWaitlistAllocationService,
+    AdminWaitlistWaveService,
     AdminReviewsService,
     AdminSmsService,
     { provide: APP_GUARD, useClass: AdminJwtGuard },

@@ -68,6 +68,7 @@ export class WaitlistInviteService {
     ttlHours: number,
     mode: WaitlistInviteMode,
     allocationId: string | null = null,
+    waveId: string | null = null,
   ): Promise<{ token: string; expiresAt: Date }> {
     const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
 
@@ -95,6 +96,12 @@ export class WaitlistInviteService {
                never allocated — and leaving it stale is worse than clearing
                it, because the number would still look like an answer. */
             inviteAllocationId: allocationId,
+            inviteWaveId: waveId,
+            /* Incremented in the same statement rather than read-then-written:
+               this is the fairness sort's key, and two concurrent issues
+               against one entry that both read 1 would both write 2, quietly
+               giving somebody a free turn at the front of the next wave. */
+            inviteAttempts: sql`${waitlistEntries.inviteAttempts} + 1`,
           })
           .where(eq(waitlistEntries.id, entryId));
 
@@ -147,6 +154,11 @@ export class WaitlistInviteService {
            live token, but the row would still point at a budget it no longer
            spends, and the table's own CHECK refuses that pairing anyway. */
         inviteAllocationId: null,
+        inviteWaveId: null,
+        /* `inviteAttempts` is deliberately *not* reset. Withdrawing a hold
+           returns the copies; it does not un-text the person. Zeroing it would
+           put someone who has already had a turn back at the front of the next
+           wave, ahead of people who have had none. */
         updatedAt: sql`now()`,
       })
       .where(and(eq(waitlistEntries.id, entryId), isNull(waitlistEntries.inviteUsedAt)));

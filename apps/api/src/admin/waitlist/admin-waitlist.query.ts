@@ -85,6 +85,27 @@ export function adminWaitlistFilters(
  */
 export function adminWaitlistOrder(sort: AdminWaitlistQuery["sort"]): SQL[] {
   switch (sort) {
+    /**
+     * Who a wave should go to next.
+     *
+     * `invite_attempts asc` first, and that clause is the whole fairness rule:
+     * everyone gets a first turn before anybody gets a second. Someone whose
+     * window lapsed does not lose their place permanently — they go back in
+     * the queue, behind the people who have not been asked yet — and this is
+     * what that sentence means in SQL.
+     *
+     * Signup order then decides among people on equal footing, because it is
+     * the one rule that never needs defending: it is the promise the signup
+     * form made. A plain `oldest` sort would put a re-invited customer ahead
+     * of a first-timer who joined a month later, which reads as the shop
+     * favouring the people it has already chased.
+     */
+    case "fair":
+      return [
+        asc(waitlistEntries.inviteAttempts),
+        asc(waitlistEntries.createdAt),
+        asc(waitlistEntries.id),
+      ];
     case "recent":
       return [desc(waitlistEntries.createdAt), asc(waitlistEntries.id)];
     case "quantity-desc":

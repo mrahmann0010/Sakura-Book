@@ -467,7 +467,7 @@ describe("AdminWaitlistInviteService.invite — never promises more copies than 
 
     await service.invite({ ids: ["1"] }, context);
 
-    expect(issue).toHaveBeenCalledWith("1", 48, "LOCKED", "alloc_book-a");
+    expect(issue).toHaveBeenCalledWith("1", 48, "LOCKED", "alloc_book-a", null);
   });
 
   it("excludes the batch's own entries from the budget it is measured against", async () => {
@@ -498,6 +498,6 @@ describe("AdminWaitlistInviteService.invite — never promises more copies than 
 
     expect(result.results.every((row) => row.error === undefined)).toBe(true);
     expect(sendInviteLink).toHaveBeenCalledTimes(3);
-    expect(issue).toHaveBeenCalledWith("1", 48, "OPEN", null);
+    expect(issue).toHaveBeenCalledWith("1", 48, "OPEN", null, null);
   });
 });

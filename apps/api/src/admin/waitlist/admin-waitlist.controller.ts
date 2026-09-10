@@ -6,11 +6,13 @@ import {
   adminWaitlistNotifyRequestSchema,
   adminWaitlistQuerySchema,
   adminWaitlistUpdateRequestSchema,
+  adminWaitlistWaveRequestSchema,
   type AdminWaitlistAllocationView,
   type AdminWaitlistEntry,
   type AdminWaitlistInviteResult,
   type AdminWaitlistList,
   type AdminWaitlistNotifyResult,
+  type AdminWaitlistWavePlan,
 } from "@sakura/contracts";
 import type { Request, Response } from "express";
 import { createZodDto } from "nestjs-zod";
@@ -19,6 +21,7 @@ import type { AccessClaims } from "../auth/tokens";
 import type { AdminContext } from "../orders";
 import { AdminWaitlistAllocationService } from "./admin-waitlist-allocation.service";
 import { AdminWaitlistInviteService } from "./admin-waitlist-invite.service";
+import { AdminWaitlistWaveService } from "./admin-waitlist-wave.service";
 import { AdminWaitlistService } from "./admin-waitlist.service";
 
 class AdminWaitlistQueryDto extends createZodDto(adminWaitlistQuerySchema) {}
@@ -26,6 +29,7 @@ class AdminWaitlistNotifyDto extends createZodDto(adminWaitlistNotifyRequestSche
 class AdminWaitlistUpdateDto extends createZodDto(adminWaitlistUpdateRequestSchema) {}
 class AdminWaitlistInviteDto extends createZodDto(adminWaitlistInviteRequestSchema) {}
 class AdminWaitlistAllocationOpenDto extends createZodDto(adminWaitlistAllocationOpenSchema) {}
+class AdminWaitlistWaveDto extends createZodDto(adminWaitlistWaveRequestSchema) {}
 
 /**
  * Who is waiting, over HTTP.
@@ -45,6 +49,7 @@ export class AdminWaitlistController {
     private readonly adminWaitlistService: AdminWaitlistService,
     private readonly adminWaitlistInviteService: AdminWaitlistInviteService,
     private readonly adminWaitlistAllocationService: AdminWaitlistAllocationService,
+    private readonly adminWaitlistWaveService: AdminWaitlistWaveService,
   ) {}
 
   /**
@@ -119,6 +124,50 @@ export class AdminWaitlistController {
     @Req() request: Request,
   ): Promise<AdminWaitlistInviteResult> {
     return this.adminWaitlistInviteService.invite(body, contextOf(admin, request));
+  }
+
+  /**
+   * What the next wave for this book would do, without doing it.
+   *
+   * A read, so it carries no `@Roles` and no side effects — the panel calls it
+   * to label the button ("Invite next 19") and to warn about entries too large
+   * to fit. Deciding *who* happens here rather than in the browser: the queue's
+   * order is a promise the shop made, and a page of the list is not enough to
+   * honour it.
+   */
+  @Get("wave-plan")
+  @ApiOperation({ summary: "Preview the next wave: how many would be invited, and who is skipped." })
+  async wavePlan(
+    @Query("bookId", ParseUUIDPipe) bookId: string,
+  ): Promise<AdminWaitlistWavePlan> {
+    const plan = await this.adminWaitlistWaveService.plan(bookId);
+
+    return {
+      spendable: plan.spendable,
+      count: plan.ids.length,
+      quantity: plan.quantity,
+      waiting: plan.waiting,
+      skipped: plan.skipped,
+    };
+  }
+
+  /**
+   * Send the next wave.
+   *
+   * Not `@Roles("ADMIN")`, unlike the release it spends: deciding the split is
+   * the owner's call, but working down the queue on a restock morning is
+   * exactly the staff task this whole panel exists for — and the budget those
+   * invites come out of has already been set by someone who could.
+   */
+  @Post("waves")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Invite the next N in line, capped by the open release's budget." })
+  async sendWave(
+    @Body() body: AdminWaitlistWaveDto,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminWaitlistInviteResult> {
+    return this.adminWaitlistWaveService.send(body, contextOf(admin, request));
   }
 
   /* ------------------------------------------------------------------------

@@ -246,6 +246,10 @@ export class AdminWaitlistInviteService {
         ttlHours,
         mode,
         allocationId,
+        /* Null for a hand-picked send — the per-row button, a re-invite off
+           the Expired tab. Those charge a release but belong to no round, and
+           saying so is more honest than inventing a wave of one. */
+        request.waveId ?? null,
       );
       // Kept in step with web's `routes().waitlistInvite` — short because
       // every character here is billed SMS.
