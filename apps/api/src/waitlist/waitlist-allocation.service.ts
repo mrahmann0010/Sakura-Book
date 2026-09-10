@@ -173,6 +173,72 @@ export class WaitlistAllocationService {
   }
 
   /**
+   * Change an open release's size without ending it.
+   *
+   * The missing third verb. A release could be opened and closed but never
+   * corrected, so "I gave the queue fifty and meant thirty" had no safe path:
+   * closing and reopening looks like the obvious workaround and is the one
+   * thing that must not happen, because `committed` is counted per allocation
+   * id. A fresh row starts at zero committed and would hand out copies the
+   * closed one had already promised — the same copies, twice.
+   *
+   * Keeping the row is what makes this safe. Every invite charged here stays
+   * charged, `remaining` recomputes against the new number, and the history
+   * still shows one release per restock rather than one per correction.
+   *
+   * The floor is what the release has already spent. Below that the budget
+   * would open overdrawn: the copies are gone — texted to people holding live
+   * links, or sold — and a smaller number could not un-promise them. It would
+   * only make `remaining` read zero while the holds carried on existing, which
+   * is a lie the panel would have no way to show. Withdrawing invites is the
+   * real operation for that, and it is a different decision.
+   *
+   * `stockSnapshot` is deliberately left alone. It records what the original
+   * decision was a share *of* — "50 of 60" — and a correction two hours later
+   * is still a correction to that same restock, not a new one.
+   */
+  async resize(
+    id: string,
+    copies: number,
+    tx: Transaction,
+    note?: string | null,
+  ): Promise<AllocationBudget> {
+    const [row] = await tx
+      .select({ bookId: waitlistAllocations.bookId, committed: this.committedSql(id) })
+      .from(waitlistAllocations)
+      .where(and(eq(waitlistAllocations.id, id), eq(waitlistAllocations.status, "OPEN")));
+
+    if (!row) throw new ResourceNotFoundError("Open stock release", id);
+
+    if (copies < row.committed) {
+      throw new InvalidInputError(
+        `This release has already promised ${row.committed} cop${
+          row.committed === 1 ? "y" : "ies"
+        }, so it cannot be cut to ${copies}. Withdraw invites first, or wait for windows to lapse.`,
+        { allocationId: id, committed: row.committed },
+      );
+    }
+
+    await tx
+      .update(waitlistAllocations)
+      .set({
+        copies,
+        ...(note === undefined ? {} : { note: note?.trim() || null }),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(waitlistAllocations.id, id), eq(waitlistAllocations.status, "OPEN")));
+
+    /* Re-read rather than patching the row above: `spendable` is the smaller
+       of this number and physical stock, and the caller acts on that rather
+       than on `copies`. Recomputing is the only way to answer it honestly. */
+    const budget = await this.describe(row.bookId, tx);
+
+    if (!budget) throw new ResourceNotFoundError("Open stock release", id);
+
+    return budget;
+  }
+
+  /**
    * Stop charging new invites to this release.
    *
    * Deliberately does not touch the invites already issued against it. A

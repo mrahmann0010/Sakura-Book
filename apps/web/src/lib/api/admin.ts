@@ -29,6 +29,7 @@ import {
   adminWaitlistInviteSettingsSchema,
   adminWaitlistInviteSettingsUpdateSchema,
   adminWaitlistAllocationOpenSchema,
+  adminWaitlistAllocationResizeSchema,
   adminWaitlistAllocationViewSchema,
   adminWaitlistListSchema,
   adminWaitlistNotifyRequestSchema,
@@ -76,6 +77,7 @@ import {
   type AdminWaitlistNotifyRequest,
   type AdminWaitlistNotifyResult,
   type AdminWaitlistAllocationOpen,
+  type AdminWaitlistAllocationResize,
   type AdminWaitlistAllocationView,
   type AdminWaitlistQuery,
   type AdminWaitlistUpdateRequest,
@@ -820,9 +822,7 @@ export function sendAdminWaitlistWave(
    Stock releases — how many copies of a restock the waitlist may be promised.
    -------------------------------------------------------------------------- */
 
-export function getAdminWaitlistAllocations(
-  bookId: string,
-): Promise<AdminWaitlistAllocationView> {
+export function getAdminWaitlistAllocations(bookId: string): Promise<AdminWaitlistAllocationView> {
   return adminFetch(
     `/admin/waitlist/allocations?bookId=${encodeURIComponent(bookId)}`,
     adminWaitlistAllocationViewSchema,
@@ -837,6 +837,22 @@ export function openAdminWaitlistAllocation(
     method: "POST",
     body: validated,
   });
+}
+
+/** Correct an open release's size. Never close-then-reopen to do this: the
+ *  replacement starts at zero committed and re-promises copies the closed one
+ *  already gave away. */
+export function resizeAdminWaitlistAllocation(
+  id: string,
+  bookId: string,
+  request: AdminWaitlistAllocationResize,
+): Promise<AdminWaitlistAllocationView> {
+  const validated = validate(adminWaitlistAllocationResizeSchema, request);
+  return adminFetch(
+    `/admin/waitlist/allocations/${id}?bookId=${encodeURIComponent(bookId)}`,
+    adminWaitlistAllocationViewSchema,
+    { method: "PATCH", body: validated },
+  );
 }
 
 /** `bookId` rides along so the response is the same view the panel renders —
@@ -878,9 +894,7 @@ export function getAdminSmsSettings(): Promise<AdminSmsSettings> {
   return adminFetch("/admin/settings/sms", adminSmsSettingsSchema);
 }
 
-export function updateAdminSmsSettings(
-  request: AdminSmsSettingsUpdate,
-): Promise<AdminSmsSettings> {
+export function updateAdminSmsSettings(request: AdminSmsSettingsUpdate): Promise<AdminSmsSettings> {
   const validated = validate(adminSmsSettingsUpdateSchema, request);
   return adminFetch("/admin/settings/sms", adminSmsSettingsSchema, {
     method: "PATCH",

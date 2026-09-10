@@ -303,3 +303,82 @@ describe("what a spent invite costs its release", () => {
     expect(params).toEqual([]);
   });
 });
+
+/**
+ * Correcting a release that is already open.
+ *
+ * The verb that was missing, and the one whose absence had a trap where it
+ * should have been: with only open and close, "I gave the queue fifty and
+ * meant thirty" is answered by closing and reopening, which is the single
+ * operation that silently over-issues. `committed` is counted per allocation
+ * id, so the replacement row starts at zero and promises the same copies a
+ * second time. Keeping the row is the whole point of the method, and the floor
+ * below is what stops it becoming a quieter version of the same bug.
+ */
+function resizeService(row: Record<string, unknown> | undefined, budget?: Record<string, unknown>) {
+  const update = vi.fn().mockReturnValue({
+    set: () => ({ where: () => Promise.resolve() }),
+  });
+
+  const select = vi
+    .fn()
+    // The committed read, then `describe`'s re-read through the same stub.
+    .mockReturnValueOnce({
+      from: () => ({ where: () => Promise.resolve(row ? [row] : []) }),
+    })
+    .mockReturnValue({
+      from: () => ({
+        innerJoin: () => ({ where: () => Promise.resolve(budget ? [budget] : []) }),
+      }),
+    });
+
+  const tx = { select, update } as never;
+
+  return { service: new WaitlistAllocationService({ db: {} } as never), tx, update };
+}
+
+describe("WaitlistAllocationService.resize — changing a share without ending it", () => {
+  it("refuses to cut a release below what it has already promised", async () => {
+    // Those copies are gone — texted to people holding live links, or sold. A
+    // smaller number cannot un-promise them; it would only make `remaining`
+    // read zero while the holds carried on existing, which is a lie the panel
+    // has no way to show. Withdrawing invites is the real operation for this.
+    const { service, tx } = resizeService({ bookId: "book-1", committed: 18 });
+
+    await expect(service.resize("alloc-1", 12, tx)).rejects.toThrow(/already promised 18/);
+  });
+
+  it("allows a cut to exactly what is promised, which is a release fully spent", async () => {
+    // The boundary is inclusive on purpose: `copies === committed` is a
+    // coherent state meaning "no more from this release", not an error.
+    const { service, tx, update } = resizeService(
+      { bookId: "book-1", committed: 18 },
+      allocationRow({ copies: 18, committed: 18, physicalSpare: 42 }),
+    );
+
+    const budget = await service.resize("alloc-1", 18, tx);
+
+    expect(update).toHaveBeenCalled();
+    expect(budget.remaining).toBe(0);
+  });
+
+  it("raises the share without touching what the release has already charged", async () => {
+    const { service, tx } = resizeService(
+      { bookId: "book-1", committed: 18 },
+      allocationRow({ copies: 80, committed: 18, stockQuantity: 100, physicalSpare: 82 }),
+    );
+
+    const budget = await service.resize("alloc-1", 80, tx);
+
+    expect(budget.committed).toBe(18);
+    expect(budget.remaining).toBe(62);
+  });
+
+  it("refuses an id that names no open release rather than resizing a closed one", async () => {
+    // A closed release's number is a historical record. Editing it would
+    // rewrite what was decided at a restock that has already happened.
+    const { service, tx } = resizeService(undefined);
+
+    await expect(service.resize("alloc-1", 30, tx)).rejects.toThrow(/Open stock release/);
+  });
+});

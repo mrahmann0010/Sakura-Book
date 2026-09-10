@@ -27,6 +27,7 @@ import {
   listAdminWaitlist,
   notifyAdminWaitlist,
   openAdminWaitlistAllocation,
+  resizeAdminWaitlistAllocation,
   sendAdminWaitlistWave,
   updateAdminWaitlistEntry,
 } from "@/lib/api/admin";
@@ -279,21 +280,31 @@ export default function AdminWaitlistPage() {
   }
 
   /**
-   * Commit the split chosen in the dialog.
+   * Commit the split chosen in the dialog — opening a release, or correcting
+   * one that is already open.
    *
-   * Opening only. Changing an open release's size is deliberately not offered
-   * here: `WaitlistAllocationService.open` refuses a second open release, and
-   * the close-then-reopen workaround would be actively wrong — `committed` is
-   * counted per allocation id, so a fresh release starts at zero and would
-   * hand out copies the closed one had already promised. Resizing needs an
-   * endpoint that keeps the row, and until it exists the honest UI is one that
-   * does not pretend.
+   * Two endpoints behind one dialog, chosen by whether a release exists rather
+   * than by which button was pressed. The distinction matters underneath and
+   * not at all on screen: a correction PATCHes the release in place, because
+   * closing and reopening resets `committed` to zero and re-promises copies
+   * the closed one already gave away.
    */
   async function saveRelease(copies: number, note: string) {
+    const open = allocation?.open;
+
     setBusy(true);
     setError(null);
     try {
-      setAllocation(await openAdminWaitlistAllocation({ bookId, copies, note: note || undefined }));
+      setAllocation(
+        open
+          ? await resizeAdminWaitlistAllocation(open.id, bookId, {
+              copies,
+              // Absent leaves the existing note alone; the dialog only sends
+              // one when staff actually wrote something.
+              note: note || undefined,
+            })
+          : await openAdminWaitlistAllocation({ bookId, copies, note: note || undefined }),
+      );
       setNotice(`The queue may be promised ${copies} cop${copies === 1 ? "y" : "ies"}.`);
       setReleaseOpen(false);
       /* The plan is a function of the budget just changed — leaving the old
@@ -579,6 +590,19 @@ export default function AdminWaitlistPage() {
                     {`Invite next ${wavePlan.count}`}
                   </Button>
                 ) : null}
+                {/* Correcting the number is a different act from ending the
+                    release, and the panel used to offer only the second — so
+                    "I meant thirty" was answered by closing and reopening,
+                    which re-promises everything already given out. */}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => setReleaseOpen(true)}
+                >
+                  Change share
+                </Button>
                 <Button
                   type="button"
                   variant="secondary"
@@ -872,6 +896,7 @@ export default function AdminWaitlistPage() {
           bookTitle={selectedBook.title}
           stockQuantity={selectedBook.stockQuantity}
           committed={allocation?.open?.committed ?? 0}
+          currentCopies={allocation?.open?.copies}
           busy={busy}
           onSubmit={saveRelease}
         />

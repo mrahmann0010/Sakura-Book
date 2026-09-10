@@ -1,7 +1,21 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  Req,
+  Res,
+} from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   adminWaitlistAllocationOpenSchema,
+  adminWaitlistAllocationResizeSchema,
   adminWaitlistInviteRequestSchema,
   adminWaitlistNotifyRequestSchema,
   adminWaitlistQuerySchema,
@@ -29,6 +43,7 @@ class AdminWaitlistNotifyDto extends createZodDto(adminWaitlistNotifyRequestSche
 class AdminWaitlistUpdateDto extends createZodDto(adminWaitlistUpdateRequestSchema) {}
 class AdminWaitlistInviteDto extends createZodDto(adminWaitlistInviteRequestSchema) {}
 class AdminWaitlistAllocationOpenDto extends createZodDto(adminWaitlistAllocationOpenSchema) {}
+class AdminWaitlistAllocationResizeDto extends createZodDto(adminWaitlistAllocationResizeSchema) {}
 class AdminWaitlistWaveDto extends createZodDto(adminWaitlistWaveRequestSchema) {}
 
 /**
@@ -136,10 +151,10 @@ export class AdminWaitlistController {
    * honour it.
    */
   @Get("wave-plan")
-  @ApiOperation({ summary: "Preview the next wave: how many would be invited, and who is skipped." })
-  async wavePlan(
-    @Query("bookId", ParseUUIDPipe) bookId: string,
-  ): Promise<AdminWaitlistWavePlan> {
+  @ApiOperation({
+    summary: "Preview the next wave: how many would be invited, and who is skipped.",
+  })
+  async wavePlan(@Query("bookId", ParseUUIDPipe) bookId: string): Promise<AdminWaitlistWavePlan> {
     const plan = await this.adminWaitlistWaveService.plan(bookId);
 
     return {
@@ -205,6 +220,28 @@ export class AdminWaitlistController {
     @Req() request: Request,
   ): Promise<AdminWaitlistAllocationView> {
     return this.adminWaitlistAllocationService.open(body, contextOf(admin, request));
+  }
+
+  /**
+   * Correct an open release's size. **ADMIN only**, like opening it.
+   *
+   * A PATCH rather than a second POST to `allocations`, and the distinction is
+   * load-bearing: this edits the release that exists. Closing and reopening is
+   * what staff reach for otherwise, and it over-issues silently — `committed`
+   * is counted per allocation id, so the replacement starts at zero and
+   * promises the same copies again.
+   */
+  @Patch("allocations/:id")
+  @Roles("ADMIN")
+  @ApiOperation({ summary: "Change how many copies an open release gives the waitlist." })
+  async resizeAllocation(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Query("bookId", ParseUUIDPipe) bookId: string,
+    @Body() body: AdminWaitlistAllocationResizeDto,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminWaitlistAllocationView> {
+    return this.adminWaitlistAllocationService.resize(id, bookId, body, contextOf(admin, request));
   }
 
   /**

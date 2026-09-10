@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import type {
   AdminWaitlistAllocationOpen,
+  AdminWaitlistAllocationResize,
   AdminWaitlistAllocationView,
 } from "@sakura/contracts";
 import { AuditService } from "../../audit";
@@ -94,6 +95,44 @@ export class AdminWaitlistAllocationService {
     });
 
     return this.view(request.bookId);
+  }
+
+  /**
+   * Change how many copies an open release gives the queue.
+   *
+   * Audited as an UPDATE carrying both numbers, because "who cut the queue's
+   * share from fifty to thirty, and when" is the question the morning after —
+   * and the release row itself cannot answer it, holding only the number it
+   * ended at.
+   */
+  async resize(
+    id: string,
+    bookId: string,
+    request: AdminWaitlistAllocationResize,
+    context: AdminContext,
+  ): Promise<AdminWaitlistAllocationView> {
+    const before = await this.waitlistAllocationService.describe(bookId);
+
+    await this.dbService.db.transaction((tx) =>
+      this.waitlistAllocationService.resize(id, request.copies, tx, request.note),
+    );
+
+    await this.auditService.recordDetached({
+      actor: { sub: context.actor.sub, email: context.actor.email },
+      action: "UPDATE",
+      entityType: "waitlist_allocation",
+      entityId: id,
+      before: before ? { copies: before.copies } : undefined,
+      after: { copies: request.copies },
+      note:
+        before && before.copies !== request.copies
+          ? `Changed the waitlist's share from ${before.copies} to ${request.copies}.`
+          : `Set the waitlist's share to ${request.copies}.`,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
+
+    return this.view(bookId);
   }
 
   /**
