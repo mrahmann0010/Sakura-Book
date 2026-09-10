@@ -108,15 +108,109 @@ export function reservedQuantitySql(
 }
 
 /**
- * What a member of the public may buy: the print run, less what is owed.
+ * What one invite costs its release: promised while live, taken once spent.
+ *
+ * Two different questions wearing the same word. While a hold is live the
+ * charge is what was *promised* — `quantity`, the copies nobody else may be
+ * offered. Once the invite is spent the charge is what was *taken*, and those
+ * are not the same number: an invite's quantity is a ceiling, not an exact
+ * match (see `CheckoutService.consumeInvite`), so somebody invited for two who
+ * ordered one has returned a copy to the shop.
+ *
+ * Summing `quantity` in both cases is what this replaces, and it leaked in one
+ * direction only: the unbought copy went back on the public shelf the instant
+ * the token was spent — `reservedQuantitySql` stops counting a spent invite —
+ * while the release went on being charged for it until it was closed. The
+ * shelf and the budget disagreed about the same copy, and the budget was the
+ * one nobody could see was wrong. On a restock where a third of invitees take
+ * fewer than they asked for, that is the release quietly running short of its
+ * own number.
+ *
+ * The fallback is the deleted-order case. `converted_order_id` is `set null` on
+ * delete, so an order removed after the fact would otherwise turn a real charge
+ * into zero and hand the release copies that were genuinely sold. Falling back
+ * to `quantity` keeps the pre-existing (conservative) answer for a row whose
+ * order is gone.
+ *
+ * Lives here rather than beside the release arithmetic that reads it, because
+ * the ringfence below needs the same definition and this file is where "what a
+ * copy costs" is settled once. Raw `we.` / `oi.` identifiers throughout, for
+ * the aliasing reason `reservedQuantitySql` sets out.
+ */
+export function chargedQuantitySql(): SQL<number> {
+  return sql<number>`case
+    when we.invite_used_at is null then we.quantity
+    else coalesce((
+      select sum(oi.quantity)
+      from order_items oi
+      where oi.order_id = we.converted_order_id
+        and oi.book_id = we.book_id
+    ), we.quantity)
+  end`;
+}
+
+/**
+ * Copies set aside for the queue that have not been handed to anyone yet.
+ *
+ * The open release's own budget, less what it has spent: `copies − committed`,
+ * which is the same `remaining` the admin panel renders. Zero when the book
+ * has no open release, which is what makes this safe to subtract everywhere
+ * unconditionally.
+ *
+ * This is the fix for a gap that made the whole feature a half-promise. A
+ * release used to be a cap on what *staff* could hand out and nothing more —
+ * it appeared nowhere in what the public could buy. So a shop that set aside
+ * fifty copies for the queue at nine o'clock could sell all sixty to walk-ins
+ * by eleven, and every invite issued afterwards would be refused for lack of
+ * physical stock. The manager had been shown a number that read like a
+ * reservation and behaved like a note-to-self.
+ *
+ * Subtracting it here makes the set-aside real: the copies leave the public
+ * shelf when the decision is made, not when the texts go out.
+ *
+ * An invited customer is still admitted, and by arithmetic rather than by an
+ * exemption — the same property `InventoryService.decrement` already relied on.
+ * Spending their token moves their copy out of `reservedQuantitySql` and into
+ * the spent half of `committed`, which leaves `copies − committed` unchanged.
+ * The copy they take comes out of the ringfence they were always inside, and
+ * the two terms never double-count it.
+ */
+export function ringfencedQuantitySql(bookId: PgColumn | SQL): SQL<number> {
+  /* Raw `wa.` and `we.` identifiers for the aliasing reason above: this is read
+     from inside `db.query.books.findMany({ extras })`, which rewrites every
+     column object it can see to the outer query's alias. `${bookId}` stays a
+     real reference because that correlation is the point. */
+  return sql<number>`coalesce((
+    select greatest(wa.copies - coalesce((
+      select sum(${chargedQuantitySql()})
+      from waitlist_entries we
+      where we.invite_allocation_id = wa.id
+        and (we.invite_used_at is not null or we.invite_expires_at > now())
+    ), 0), 0)
+    from waitlist_allocations wa
+    where wa.book_id = ${bookId} and wa.status = 'OPEN'
+  ), 0)::int`;
+}
+
+/**
+ * What a member of the public may buy: the print run, less what is owed and
+ * less what is set aside.
+ *
+ * Three terms, and each answers a different question about the same copy —
+ * is somebody already holding it, is it being kept for the queue, and does it
+ * exist at all.
  *
  * Floored at zero so an over-issued book — more invites out than copies in,
  * which an admin lowering the stock count can create at any time — reads as
  * "sold out" rather than as a negative allowance that some later `>=` accepts
  * by accident. The over-issue itself is a real problem, but it is the
  * waitlist's to report and an admin's to resolve; the storefront's only
- * correct behaviour is to sell nobody anything.
+ * correct behaviour is to sell nobody anything. The ringfence reaches zero the
+ * same way and for a gentler reason: a shop that gives the queue its whole
+ * print run has said the public gets none of it, and that is not an error.
  */
 export function publicAvailableSql(stock: PgColumn | SQL, bookId: PgColumn | SQL): SQL<number> {
-  return sql<number>`greatest(${stock} - ${reservedQuantitySql(bookId)}, 0)`;
+  return sql<number>`greatest(${stock} - ${reservedQuantitySql(bookId)} - ${ringfencedQuantitySql(
+    bookId,
+  )}, 0)`;
 }

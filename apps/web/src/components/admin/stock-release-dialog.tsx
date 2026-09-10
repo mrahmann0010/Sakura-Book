@@ -180,13 +180,14 @@ export function StockReleaseDialog({
           </p>
         ) : null}
 
-        {/* Honest about what a release is today: a cap on what staff may hand
-            out, not a hold against the storefront. Copies only leave the public
-            shelf when an invite is actually sent. Worth saying out loud, since
-            the bar above otherwise reads as a reservation. */}
+        {/* The bar reads as a reservation, and now it is one. Said out loud
+            because it is the consequence staff are least likely to predict:
+            the shelf drops the moment this is saved, before anybody is
+            texted. */}
         <p className="text-caption text-muted">
-          Reserved copies are not held back from the website yet — a copy leaves the shelf when its
-          invite is sent, not when it is set aside here.
+          These copies leave the website as soon as you save — walk-in customers will see{" "}
+          {shelf === 0 ? "the book as sold out" : `only ${shelf} available`} until invites are spent
+          or their windows lapse.
         </p>
 
         <Textarea

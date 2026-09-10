@@ -4,7 +4,7 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import { DbService } from "../db/db.service";
 import type { Executor, Transaction } from "../db/db.types";
 import { books, waitlistAllocations, waitlistEntries } from "../db/schema";
-import { reservedQuantitySql } from "../inventory";
+import { chargedQuantitySql, reservedQuantitySql } from "../inventory";
 import { InvalidInputError, ResourceNotFoundError } from "../common/errors";
 
 /**
@@ -349,45 +349,6 @@ export type AllocationBudget = {
   openedAt: Date;
   openedByEmail: string | null;
 };
-
-/**
- * What one entry costs the release it is charged to, as a per-row expression.
- *
- * Two different questions wearing the same word. While a hold is live the
- * charge is what was *promised* — `quantity`, the copies nobody else may be
- * offered. Once the invite is spent the charge is what was *taken*, and those
- * are not the same number: an invite's quantity is a ceiling, not an exact
- * match (see `CheckoutService.consumeInvite`), so somebody invited for two who
- * ordered one has returned a copy to the shop.
- *
- * Summing `quantity` in both cases is what this replaces, and it leaked in one
- * direction only: the unbought copy went back on the public shelf the instant
- * the token was spent — `reservations.ts` stops counting a spent invite — while
- * the release went on being charged for it until it was closed. The shelf and
- * the budget disagreed about the same copy, and the budget was the one nobody
- * could see was wrong. On a restock where a third of invitees take fewer than
- * they asked for, that is the release quietly running short of its own number.
- *
- * The fallback is the deleted-order case. `converted_order_id` is `set null` on
- * delete, so an order removed after the fact would otherwise turn a real charge
- * into zero and hand the release copies that were genuinely sold. Falling back
- * to `quantity` keeps the pre-existing (conservative) answer for a row whose
- * order is gone.
- *
- * Raw `we.` / `oi.` identifiers throughout, for the aliasing reason
- * `reservedQuantitySql` sets out.
- */
-function chargedQuantitySql(): SQL<number> {
-  return sql<number>`case
-    when we.invite_used_at is null then we.quantity
-    else coalesce((
-      select sum(oi.quantity)
-      from order_items oi
-      where oi.order_id = we.converted_order_id
-        and oi.book_id = we.book_id
-    ), we.quantity)
-  end`;
-}
 
 /**
  * `and we.id not in (...)`, or nothing.
