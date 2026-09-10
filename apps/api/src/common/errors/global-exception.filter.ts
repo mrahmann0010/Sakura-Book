@@ -11,7 +11,7 @@ import type { Request, Response } from "express";
 import { ZodError, type ZodIssue } from "zod";
 import { DomainError } from "./domain.error";
 import type { ErrorBodyDto, ErrorResponseDto, FieldErrorDto } from "./error-response";
-import { isPostgresError, mapPostgresError } from "./postgres-error.mapper";
+import { mapPostgresError, toPostgresError } from "./postgres-error.mapper";
 
 /**
  * The one place an exception becomes an HTTP response.
@@ -70,17 +70,27 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       };
     }
 
-    if (isPostgresError(exception)) {
-      const mapped = mapPostgresError(exception);
+    const postgresError = toPostgresError(exception);
+    if (postgresError) {
+      const mapped = mapPostgresError(postgresError);
       if (mapped) {
         return {
           status: mapped.status,
           body: { code: mapped.code, message: mapped.message, details: mapped.details },
         };
       }
-      // Unmapped driver error: a bug on our side, not the caller's. Fall
-      // through to the opaque 500 rather than guessing at a 4xx.
-      return { status: HttpStatus.INTERNAL_SERVER_ERROR, body: INTERNAL_ERROR_BODY };
+
+      /* Unmapped driver error: a bug on our side, not the caller's, so a 500.
+         The SQLSTATE rides along because it is the one fact that makes such a
+         500 actionable from outside the container — this database is only
+         reachable from its own host, so "42501 on POST /waitlist" quoted from
+         a browser is often all the diagnosis anyone can get. Five characters
+         from a fixed vocabulary: no SQL, no message, no connection string,
+         which is what the opaque branch below is actually protecting. */
+      return {
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        body: { ...INTERNAL_ERROR_BODY, details: { sqlState: postgresError.code } },
+      };
     }
 
     // Nest's own throws (unmatched route, throttler, body-size limits) plus any

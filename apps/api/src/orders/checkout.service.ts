@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import type { Order, PlaceOrderRequest } from "@sakura/contracts";
 import { eq, type SQL } from "drizzle-orm";
-import { isPostgresError } from "../common/errors";
+import { toPostgresError } from "../common/errors";
 import { CouponsService } from "../coupons";
 import { DbService } from "../db/db.service";
 import type { Transaction } from "../db/db.types";
@@ -524,9 +524,7 @@ const UNIQUE_VIOLATION = "23505";
  * already makes tempting.
  */
 function isUniqueViolationOn(error: unknown, constraint: string): boolean {
-  return (
-    isPostgresError(error) &&
-    error.code === UNIQUE_VIOLATION &&
-    error.constraint_name === constraint
-  );
+  const cause = toPostgresError(error);
+
+  return cause?.code === UNIQUE_VIOLATION && cause.constraint_name === constraint;
 }

@@ -26,8 +26,41 @@ const EXCLUSION_VIOLATION = "23P01";
 const SERIALIZATION_FAILURE = "40001";
 const DEADLOCK_DETECTED = "40P01";
 
-export function isPostgresError(error: unknown): error is PostgresError {
-  return error instanceof PostgresError;
+/**
+ * The driver error inside whatever threw, or undefined if there isn't one.
+ *
+ * Not `instanceof PostgresError` on the thrown value, which is what this used
+ * to be and what made every rule below unreachable in practice. Since drizzle
+ * 0.44 every statement that fails is re-thrown as `DrizzleQueryError` with the
+ * driver's error hung off `cause` — so the value a service catches, and the
+ * value the global filter sees, is the wrapper. `instanceof` said no to all of
+ * them, and the entire mapper was dead code: a unique violation came back as an
+ * opaque 500 instead of a 409, and so did every constraint this schema has
+ * spent five migrations adding.
+ *
+ * That is not a theoretical loss. It is why joining a waitlist answered 500
+ * — the storefront's own copy of the constraint check can only ever be a
+ * pre-check, and the database's answer was the half being thrown away.
+ *
+ * Walking `cause` rather than special-casing `DrizzleQueryError` keeps this
+ * from breaking again the next time something wraps: `AggregateError`, a
+ * transaction helper, a future drizzle. The depth cap is only there so a
+ * self-referencing cause chain cannot hang the error path.
+ */
+export function toPostgresError(error: unknown): PostgresError | undefined {
+  for (let current = error, depth = 0; depth < 5; depth += 1) {
+    if (current instanceof PostgresError) return current;
+    if (!(current instanceof Error) || current.cause === undefined) return undefined;
+
+    current = current.cause;
+  }
+
+  return undefined;
+}
+
+/** True when a driver error is in there somewhere — see `toPostgresError`. */
+export function isPostgresError(error: unknown): boolean {
+  return toPostgresError(error) !== undefined;
 }
 
 /**
