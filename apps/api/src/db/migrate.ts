@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -44,7 +44,108 @@ import * as schema from "./schema";
  */
 const MIGRATION_LOCK_KEY = 6_120_240_913n;
 
+/* --------------------------------------------------------------------------
+   Saying what happened, loudly enough to find later.
+
+   This script's output is read in exactly one place — a deploy log, scrolling
+   past, interleaved with Nest's own startup chatter — and usually by somebody
+   who came looking because the site is wrong. It used to say three sentences,
+   all of them lowercase, one of which ("migrations up to date on …") was the
+   line that spent weeks reporting success about a database nobody was using.
+
+   So every line is prefixed with a fixed marker, and the phases are bracketed
+   by rules. The marker is what makes `grep MIGRATE` a complete answer, and the
+   rules are what make the block findable by eye at scrolling speed. Deliberately
+   no ANSI colour: it renders as garbage in half the places these logs get
+   forwarded to, and the point is to be legible everywhere rather than pretty in
+   one terminal.
+   -------------------------------------------------------------------------- */
+
+const MARKER = "MIGRATE │";
+const RULE = "─".repeat(68);
+
+/** A phase heading — the lines you should be able to find by eye. */
+function phase(text: string): void {
+  console.log(`${MARKER} ${RULE}`);
+  console.log(`${MARKER} ${text}`);
+  console.log(`${MARKER} ${RULE}`);
+}
+
+/** One detail under the current phase. */
+function detail(text: string): void {
+  console.log(`${MARKER}   ${text}`);
+}
+
+/** A step's outcome. `ok` reads as a tick, so a scan down the column is enough. */
+function result(status: "OK" | "SKIP" | "WARN", text: string): void {
+  console.log(`${MARKER} [${status.padEnd(4)}] ${text}`);
+}
+
+/** Whole seconds are useless here and three decimals are noise. */
+function elapsed(since: number): string {
+  return `${((Date.now() - since) / 1000).toFixed(2)}s`;
+}
+
+/**
+ * Postgres NOTICEs, in this block's format rather than as dumped objects.
+ *
+ * postgres.js prints the whole notice structure — severity, file, line number
+ * of the C source that raised it — straight to stdout, which lands a
+ * nine-line object in the middle of the phases every time a guarded
+ * `create … if not exists` skips. Drizzle's own bookkeeping raises two of
+ * those on every single run.
+ *
+ * Kept rather than silenced: the guarded statements in 0037-style repair
+ * migrations report what they skipped this way, and that is worth reading. It
+ * is only the shape that was wrong.
+ */
+function reportNotice(notice: postgres.Notice): void {
+  detail(`notice: ${notice.message}`);
+}
+
+/**
+ * Which migrations are about to run, named, before they run.
+ *
+ * `migrate()` reports nothing at all — not what it applied, not whether it
+ * applied anything — so a deploy log could never answer "did 0038 land here?"
+ * except by inference from the absence of a crash. That is precisely the
+ * question the last three weeks were spent on.
+ *
+ * Mirrors drizzle's own selection rule rather than inventing one: the journal
+ * is ordered, each entry carries a `when`, and a migration is pending when its
+ * `when` is newer than the newest `created_at` in the bookkeeping table. Read
+ * only for reporting — `migrate()` still decides what it actually applies, so a
+ * disagreement here can mislabel the log but can never migrate the wrong thing.
+ */
+async function pendingMigrations(client: postgres.Sql, folder: string): Promise<string[]> {
+  type JournalEntry = { when: number; tag: string };
+
+  let journal: { entries?: JournalEntry[] };
+  try {
+    journal = JSON.parse(readFileSync(join(folder, "meta", "_journal.json"), "utf8")) as {
+      entries?: JournalEntry[];
+    };
+  } catch {
+    // Not fatal: `migrate()` is about to fail on the same folder and its error
+    // will be the better one. Reporting "unknown" beats inventing a list.
+    return [];
+  }
+
+  const entries = journal.entries ?? [];
+
+  const [{ latest }] = await client<{ latest: string | null }[]>`
+    select max(created_at)::text as latest
+      from drizzle.__drizzle_migrations
+     where to_regclass('drizzle.__drizzle_migrations') is not null
+  `.catch(() => [{ latest: null }] as { latest: string | null }[]);
+
+  const applied = latest === null ? -1 : Number(latest);
+
+  return entries.filter((entry) => entry.when > applied).map((entry) => entry.tag);
+}
+
 async function main(): Promise<void> {
+  const startedAt = Date.now();
   /* Present in development, absent in the container, where Coolify injects the
      environment directly. Loading it unconditionally would throw in exactly
      the place this script matters most. */
@@ -79,14 +180,19 @@ async function main(): Promise<void> {
     throw new Error("DATABASE_URL is not set — the migrator has no database to migrate.");
   }
 
+  phase("STARTED — applying database migrations before the server boots");
+  detail(`target:  ${describe(url)}`);
+  detail(`ssl:     ${process.env.DATABASE_SSL === "disable" ? "disabled" : "required"}`);
+
   const override = process.env.DIRECT_DATABASE_URL;
   if (override && describe(override) !== describe(url)) {
+    result("WARN", `ignoring DIRECT_DATABASE_URL, which names ${describe(override)}`);
     console.warn(
       [
-        `warning: DIRECT_DATABASE_URL names ${describe(override)}, which is not the`,
-        `database the application connects to (${describe(url)}). Ignoring it and`,
-        "migrating the application's own database. Delete the variable — a second",
-        "database that only migrations can see is how a schema silently splits in two.",
+        `${MARKER}   That is not the database the application connects to`,
+        `${MARKER}   (${describe(url)}). Migrating the application's own database.`,
+        `${MARKER}   Delete the variable — a second database that only migrations`,
+        `${MARKER}   can see is how a schema silently splits in two.`,
       ].join("\n"),
     );
   }
@@ -97,28 +203,50 @@ async function main(): Promise<void> {
   const client = postgres(url, {
     max: 1,
     ssl: process.env.DATABASE_SSL === "disable" ? false : "require",
+    onnotice: reportNotice,
   });
 
   const db = drizzle(client);
 
   try {
+    detail("waiting for the migration advisory lock…");
     await db.execute(sql`select pg_advisory_lock(${MIGRATION_LOCK_KEY})`);
+    result("OK", "advisory lock held — this container is the one migrating");
 
     await assertBaselined(client, url);
 
     /* Resolves to apps/api/drizzle from both `dist/db` in the image and
        `src/db` under tsx, so the same script serves a deploy and a local
        `npm run db:migrate:deploy` without a second path to keep in step. */
-    await migrate(db, { migrationsFolder: join(__dirname, "../../drizzle") });
+    const folder = join(__dirname, "../../drizzle");
 
-    console.log(`migrations up to date on ${describe(url)}`);
+    const pending = await pendingMigrations(client, folder);
+
+    if (pending.length === 0) {
+      phase("APPLYING — nothing pending, the database is already current");
+    } else {
+      phase(`APPLYING — ${pending.length} pending migration(s)`);
+      for (const tag of pending) detail(`→ ${tag}`);
+    }
+
+    const appliedAt = Date.now();
+    await migrate(db, { migrationsFolder: folder });
+
+    if (pending.length === 0) {
+      result("SKIP", `no migrations to apply (${elapsed(appliedAt)})`);
+    } else {
+      for (const tag of pending) result("OK", `applied ${tag}`);
+      result("OK", `${pending.length} migration(s) applied in ${elapsed(appliedAt)}`);
+    }
 
     /* The same connection that was just migrated, checked independently of
        having migrated it. Bookkeeping saying a migration ran is not evidence
        that its objects are there — that is the whole reason this exists. */
+    phase("VERIFYING — does the live schema match the code this build ships?");
     await assertNoDrift(url);
+    result("OK", `schema verified on ${describe(url)}`);
 
-    console.log(`schema verified on ${describe(url)}`);
+    phase(`SUCCESSFUL — database ready in ${elapsed(startedAt)}, handing over to the server`);
   } finally {
     /* Best-effort: if the migration threw, its error is the one worth
        reporting, and the lock dies with the session anyway. */
@@ -141,14 +269,18 @@ async function main(): Promise<void> {
  * instead of the cascade — and to say it while the database is still untouched.
  */
 async function assertBaselined(client: postgres.Sql, url: string): Promise<void> {
+  phase("CHECKING — is this database safe to migrate?");
+
   const [{ present }] = await client<{ present: boolean }[]>`
     select to_regclass('drizzle.__drizzle_migrations') is not null as present
   `;
 
   const applied = present
-    ? (await client<{ count: number }[]>`
+    ? (
+        await client<{ count: number }[]>`
         select count(*)::int as count from drizzle.__drizzle_migrations
-      `)[0].count
+      `
+      )[0].count
     : 0;
 
   const [{ tables }] = await client<{ tables: number }[]>`
@@ -171,7 +303,7 @@ async function assertBaselined(client: postgres.Sql, url: string): Promise<void>
     );
   }
 
-  console.log(`${describe(url)}: ${applied} migration(s) recorded, ${tables} table(s)`);
+  result("OK", `baseline sane — ${applied} migration(s) recorded, ${tables} table(s) present`);
 }
 
 /**
@@ -192,10 +324,7 @@ function expectedColumns(): Map<string, Set<string>> {
     if (!is(exported, PgTable)) continue;
 
     const config = getTableConfig(exported as PgTable);
-    expected.set(
-      config.name,
-      new Set(config.columns.map((column) => column.name)),
-    );
+    expected.set(config.name, new Set(config.columns.map((column) => column.name)));
   }
 
   return expected;
@@ -220,6 +349,7 @@ async function assertNoDrift(runtimeUrl: string): Promise<void> {
   const client = postgres(runtimeUrl, {
     max: 1,
     ssl: process.env.DATABASE_SSL === "disable" ? false : "require",
+    onnotice: reportNotice,
   });
 
   try {
@@ -282,7 +412,23 @@ function describe(url: string): string {
 }
 
 main().catch((error: unknown) => {
-  console.error("migration failed:", error);
+  /* On stderr, and shaped like the phases above so the failure is found by the
+     same scan that finds the success. The message goes on its own lines rather
+     than after a colon: these errors are deliberately several sentences long —
+     see `assertBaselined` and `assertNoDrift` — and a multi-line string tacked
+     onto a prefix loses its shape in most log viewers. */
+  const message = error instanceof Error ? error.message : String(error);
+
+  console.error(`${MARKER} ${RULE}`);
+  console.error(`${MARKER} FAILED — migrations did not complete. The server will NOT start.`);
+  console.error(`${MARKER} ${RULE}`);
+  for (const line of message.split("\n")) console.error(`${MARKER}   ${line}`);
+  console.error(`${MARKER} ${RULE}`);
+
+  /* The stack, unprefixed and last. Nobody greps for it, and wrapping the
+     frames would only make them harder to read in the one case they matter. */
+  if (error instanceof Error && error.stack) console.error(error.stack);
+
   // Non-zero, so the `&&` in the container's start command stops here and the
   // deploy fails loudly instead of booting against a schema it cannot trust.
   process.exit(1);
