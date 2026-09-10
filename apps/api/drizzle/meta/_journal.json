@@ -260,6 +260,13 @@
       "when": 1789015246693,
       "tag": "0036_waitlist_invite_waves",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1789101646693,
+      "tag": "0037_waitlist_queue_repair",
+      "breakpoints": true
     }
   ]
 }
