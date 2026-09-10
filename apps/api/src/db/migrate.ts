@@ -51,14 +51,44 @@ async function main(): Promise<void> {
   const envFile = join(__dirname, "../../.env");
   if (existsSync(envFile)) process.loadEnvFile(envFile);
 
-  /* Same precedence and the same reasoning as drizzle.config.ts: the direct
-     connection, never a transaction pooler. A pooler hands consecutive
-     statements to different backends, and both the advisory lock below and
-     drizzle's own migration bookkeeping are session state. */
-  const url = process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL;
+  /* `DATABASE_URL`, and deliberately not `DIRECT_DATABASE_URL` — which this
+     used to prefer, and which is how the waitlist queue's tables came to exist
+     nowhere the application could see them.
+
+     That preference was written for Supabase, where `DATABASE_URL` was the
+     transaction pooler and only the direct connection could hold the session
+     state a migration needs. The shop has since moved to the self-hosted
+     Postgres beside it, where `DATABASE_URL` *is* a direct connection and
+     `DIRECT_DATABASE_URL` was left behind still naming the Supabase pooler. So
+     every deploy since the move has faithfully migrated the old database and
+     reported success, while the one being served fell further behind. Nothing
+     was wrong with either value; the bug is that the migrator was allowed to
+     migrate a database the application does not use.
+
+     The rule that replaces it: migrate the connection the server is about to
+     open. A stale override is then survivable — warned about below, and
+     ignored — rather than silently authoritative.
+
+     If `DATABASE_URL` is ever a transaction pooler again, this needs the old
+     split back, and it will say so loudly: the advisory lock is session state,
+     and a pooler that hands the unlock to a different backend fails here rather
+     than quietly. */
+  const url = process.env.DATABASE_URL;
 
   if (!url) {
     throw new Error("DATABASE_URL is not set — the migrator has no database to migrate.");
+  }
+
+  const override = process.env.DIRECT_DATABASE_URL;
+  if (override && describe(override) !== describe(url)) {
+    console.warn(
+      [
+        `warning: DIRECT_DATABASE_URL names ${describe(override)}, which is not the`,
+        `database the application connects to (${describe(url)}). Ignoring it and`,
+        "migrating the application's own database. Delete the variable — a second",
+        "database that only migrations can see is how a schema silently splits in two.",
+      ].join("\n"),
+    );
   }
 
   // `max: 1` is required rather than tidy: the lock is held on a session, so a
@@ -74,6 +104,8 @@ async function main(): Promise<void> {
   try {
     await db.execute(sql`select pg_advisory_lock(${MIGRATION_LOCK_KEY})`);
 
+    await assertBaselined(client, url);
+
     /* Resolves to apps/api/drizzle from both `dist/db` in the image and
        `src/db` under tsx, so the same script serves a deploy and a local
        `npm run db:migrate:deploy` without a second path to keep in step. */
@@ -81,20 +113,65 @@ async function main(): Promise<void> {
 
     console.log(`migrations up to date on ${describe(url)}`);
 
-    /* The application's own connection, which is the one that has to be right.
-       Same string in every environment today; deliberately re-read rather than
-       reusing `url`, because the day they differ is the day this check earns
-       its keep. */
-    const runtimeUrl = process.env.DATABASE_URL ?? url;
-    await assertNoDrift(runtimeUrl);
+    /* The same connection that was just migrated, checked independently of
+       having migrated it. Bookkeeping saying a migration ran is not evidence
+       that its objects are there — that is the whole reason this exists. */
+    await assertNoDrift(url);
 
-    console.log(`schema verified on ${describe(runtimeUrl)}`);
+    console.log(`schema verified on ${describe(url)}`);
   } finally {
     /* Best-effort: if the migration threw, its error is the one worth
        reporting, and the lock dies with the session anyway. */
     await db.execute(sql`select pg_advisory_unlock(${MIGRATION_LOCK_KEY})`).catch(() => undefined);
     await client.end();
   }
+}
+
+/**
+ * Refuse to replay history onto a database that already has most of it.
+ *
+ * A database restored from somewhere else arrives with the tables but not
+ * necessarily with `drizzle.__drizzle_migrations`, and to the migrator an empty
+ * bookkeeping table is indistinguishable from an empty database: it starts at
+ * 0000 and dies on the first `CREATE TYPE` that already exists. The error it
+ * gives for that is about a duplicate object, which sends whoever reads it
+ * looking at the wrong migration entirely.
+ *
+ * Checked before migrating rather than after, because the point is to say this
+ * instead of the cascade — and to say it while the database is still untouched.
+ */
+async function assertBaselined(client: postgres.Sql, url: string): Promise<void> {
+  const [{ present }] = await client<{ present: boolean }[]>`
+    select to_regclass('drizzle.__drizzle_migrations') is not null as present
+  `;
+
+  const applied = present
+    ? (await client<{ count: number }[]>`
+        select count(*)::int as count from drizzle.__drizzle_migrations
+      `)[0].count
+    : 0;
+
+  const [{ tables }] = await client<{ tables: number }[]>`
+    select count(*)::int as tables
+      from information_schema.tables
+     where table_schema = 'public' and table_type = 'BASE TABLE'
+  `;
+
+  if (applied === 0 && tables > 0) {
+    throw new Error(
+      [
+        `${describe(url)} has ${tables} table(s) but no migration history.`,
+        "",
+        "Migrating would replay every migration from the beginning onto objects that",
+        "already exist. This database was almost certainly restored from another one",
+        "without its `drizzle.__drizzle_migrations` table; it needs baselining — the",
+        "rows for the migrations its schema already reflects — before a deploy can",
+        "carry it forward.",
+      ].join("\n"),
+    );
+  }
+
+  console.log(`${describe(url)}: ${applied} migration(s) recorded, ${tables} table(s)`);
 }
 
 /**
