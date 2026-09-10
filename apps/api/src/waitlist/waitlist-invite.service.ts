@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type { WaitlistInvite, WaitlistInviteMode } from "@sakura/contracts";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { isPostgresError } from "../common/errors";
+import { toPostgresError } from "../common/errors";
 import { DbService } from "../db/db.service";
 import * as schema from "../db/schema";
 import { waitlistEntries } from "../db/schema";
@@ -18,11 +18,9 @@ const INVITE_TOKEN_CONSTRAINT = "waitlist_entries_invite_token_idx";
  * constraints, and retrying with a fresh token would not fix those.
  */
 function isTokenCollision(error: unknown): boolean {
-  return (
-    isPostgresError(error) &&
-    error.code === "23505" &&
-    error.constraint_name === INVITE_TOKEN_CONSTRAINT
-  );
+  const cause = toPostgresError(error);
+
+  return cause?.code === "23505" && cause.constraint_name === INVITE_TOKEN_CONSTRAINT;
 }
 
 /* An invite entitles its holder to exactly the quantity their entry asked

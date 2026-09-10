@@ -26,13 +26,13 @@ export class WaitlistService {
    * person joins the same book's list twice — which is exactly the duplicate
    * this index exists to stop.
    *
-   * The duplicate check is a query, not a caught constraint violation: the
-   * Postgres driver here wraps every error in `DrizzleQueryError`, which is
-   * not a `PostgresError` itself, so `mapPostgresError`'s `instanceof` check
-   * never fires and a unique-index hit would otherwise surface as an opaque
-   * 500 — see `orders/transaction-id-claim.ts` for the same tradeoff made the
-   * same way on the checkout path. The index remains the backstop for the
-   * race this query cannot close.
+   * The duplicate check is a query rather than a caught constraint violation
+   * because it can say "you're already on this list" without a failed write,
+   * and because the message it produces names the thing the customer did. The
+   * index remains the backstop for the race this query cannot close, and a hit
+   * on it is now a 409 like this one rather than an opaque 500 — `common/
+   * errors/postgres-error.mapper.ts` unwraps the `DrizzleQueryError` the
+   * driver's errors arrive inside.
    */
   async subscribe(request: WaitlistSubscribeRequest): Promise<WaitlistEntry> {
     const book = await this.findBook(request.bookId);

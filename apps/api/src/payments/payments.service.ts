@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { and, eq, sql } from "drizzle-orm";
-import { isPostgresError, ResourceNotFoundError } from "../common/errors";
+import { ResourceNotFoundError, toPostgresError } from "../common/errors";
 import { DbService } from "../db/db.service";
 import type { Transaction } from "../db/db.types";
 import { payments } from "../db/schema";
@@ -160,7 +160,7 @@ export class PaymentsService {
       // checkout's idempotency catch is: an insert can violate other unique
       // constraints, and treating those as "already handled" would swallow a
       // real failure.
-      if (isPostgresError(error) && error.code === "23505") {
+      if (toPostgresError(error)?.code === "23505") {
         return false;
       }
 
