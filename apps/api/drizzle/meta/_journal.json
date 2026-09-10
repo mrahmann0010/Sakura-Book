@@ -267,6 +267,13 @@
       "when": 1789101646693,
       "tag": "0037_waitlist_queue_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1789067685999,
+      "tag": "0038_waitlist_rejoin_after_purchase",
+      "breakpoints": true
     }
   ]
 }
