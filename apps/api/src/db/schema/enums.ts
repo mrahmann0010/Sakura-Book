@@ -115,6 +115,32 @@ export const waitlistStatusEnum = pgEnum("waitlist_status", [
   "CANCELLED",
 ]);
 
+/* There is deliberately no EXPIRED member above, and adding one would be a
+   mistake rather than an omission. An invite lapses because time passed, not
+   because anybody wrote a row; storing that would mean writing it, and between
+   a window closing and whatever job noticed, this table would say a copy is
+   held while the storefront says it is free. The panel's Expired tab is
+   computed — see `waitlist/waitlist-lane.ts`. */
+
+/**
+ * Whether a stock release is still handing out invites.
+ *
+ * Two values because a release only ever answers one question: may staff
+ * charge new invites to this budget. CLOSED stops that and nothing else — in
+ * particular it does not touch the invites already issued against it, which
+ * run out their own windows. A customer holding a valid link should never have
+ * it die because staff tidied up the panel.
+ *
+ * Releases are closed, never deleted, and the FK from an entry is `restrict`
+ * for the same reason: deleting a release with live invites against it would
+ * strand copies that no query could then account for, which is the one thing
+ * the whole allocation design exists to make impossible.
+ */
+export const waitlistAllocationStatusEnum = pgEnum("waitlist_allocation_status", [
+  "OPEN",
+  "CLOSED",
+]);
+
 /**
  * What an invite link lets its holder do at checkout.
  *

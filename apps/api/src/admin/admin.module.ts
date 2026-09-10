@@ -22,7 +22,13 @@ import { AdminPaymentsController, AdminPaymentsService } from "./payments";
 import { AdminReviewsController, AdminReviewsService } from "./reviews";
 import { AdminSettingsController, AdminSettingsService } from "./settings";
 import { AdminSmsController, AdminSmsService } from "./sms";
-import { AdminWaitlistController, AdminWaitlistInviteService, AdminWaitlistService } from "./waitlist";
+import {
+  AdminWaitlistAllocationService,
+  AdminWaitlistController,
+  AdminWaitlistInviteService,
+  AdminWaitlistService,
+  AdminWaitlistWaveService,
+} from "./waitlist";
 
 /**
  * Everything behind a credential.
@@ -123,6 +129,8 @@ import { AdminWaitlistController, AdminWaitlistInviteService, AdminWaitlistServi
     AdminBooksService,
     AdminWaitlistService,
     AdminWaitlistInviteService,
+    AdminWaitlistAllocationService,
+    AdminWaitlistWaveService,
     AdminReviewsService,
     AdminSmsService,
     { provide: APP_GUARD, useClass: AdminJwtGuard },

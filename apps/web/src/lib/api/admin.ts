@@ -28,10 +28,14 @@ import {
   adminWaitlistInviteResultSchema,
   adminWaitlistInviteSettingsSchema,
   adminWaitlistInviteSettingsUpdateSchema,
+  adminWaitlistAllocationOpenSchema,
+  adminWaitlistAllocationViewSchema,
   adminWaitlistListSchema,
   adminWaitlistNotifyRequestSchema,
   adminWaitlistNotifyResultSchema,
   adminWaitlistUpdateRequestSchema,
+  adminWaitlistWavePlanSchema,
+  adminWaitlistWaveRequestSchema,
   dashboardSchema,
   monthlyReportSchema,
   paymentBreakdownSchema,
@@ -71,8 +75,12 @@ import {
   type AdminWaitlistList,
   type AdminWaitlistNotifyRequest,
   type AdminWaitlistNotifyResult,
+  type AdminWaitlistAllocationOpen,
+  type AdminWaitlistAllocationView,
   type AdminWaitlistQuery,
   type AdminWaitlistUpdateRequest,
+  type AdminWaitlistWavePlan,
+  type AdminWaitlistWaveRequest,
   type Dashboard,
   type MonthlyReport,
   type PaymentBreakdown,
@@ -746,11 +754,11 @@ export function uploadAdminPdf(file: File): Promise<AdminUploadResult> {
 function waitlistSearch(query: Partial<AdminWaitlistQuery>): string {
   const search = new URLSearchParams();
   for (const status of query.status ?? []) search.append("status", status);
+  for (const lane of query.lane ?? []) search.append("lane", lane);
   if (query.q) search.set("q", query.q);
   if (query.source) search.set("source", query.source);
   if (query.locale) search.set("locale", query.locale);
   if (query.bookId) search.set("bookId", query.bookId);
-  if (query.inviteState) search.set("inviteState", query.inviteState);
   if (query.signedFrom) search.set("signedFrom", query.signedFrom);
   if (query.signedTo) search.set("signedTo", query.signedTo);
   if (query.sort) search.set("sort", query.sort);
@@ -785,6 +793,63 @@ export function inviteAdminWaitlist(
     method: "POST",
     body: validated,
   });
+}
+
+/** What the next wave would do, without doing it — the button's label and the
+ *  skip warning above it. */
+export function getAdminWaitlistWavePlan(bookId: string): Promise<AdminWaitlistWavePlan> {
+  return adminFetch(
+    `/admin/waitlist/wave-plan?bookId=${encodeURIComponent(bookId)}`,
+    adminWaitlistWavePlanSchema,
+  );
+}
+
+/** Send it. Who goes is decided on the server, against the release's budget
+ *  and the fairness order — never from the page of rows on screen. */
+export function sendAdminWaitlistWave(
+  request: AdminWaitlistWaveRequest,
+): Promise<AdminWaitlistInviteResult> {
+  const validated = validate(adminWaitlistWaveRequestSchema, request);
+  return adminFetch("/admin/waitlist/waves", adminWaitlistInviteResultSchema, {
+    method: "POST",
+    body: validated,
+  });
+}
+
+/* --------------------------------------------------------------------------
+   Stock releases — how many copies of a restock the waitlist may be promised.
+   -------------------------------------------------------------------------- */
+
+export function getAdminWaitlistAllocations(
+  bookId: string,
+): Promise<AdminWaitlistAllocationView> {
+  return adminFetch(
+    `/admin/waitlist/allocations?bookId=${encodeURIComponent(bookId)}`,
+    adminWaitlistAllocationViewSchema,
+  );
+}
+
+export function openAdminWaitlistAllocation(
+  request: AdminWaitlistAllocationOpen,
+): Promise<AdminWaitlistAllocationView> {
+  const validated = validate(adminWaitlistAllocationOpenSchema, request);
+  return adminFetch("/admin/waitlist/allocations", adminWaitlistAllocationViewSchema, {
+    method: "POST",
+    body: validated,
+  });
+}
+
+/** `bookId` rides along so the response is the same view the panel renders —
+ *  closing a release and seeing the book's new state is one round trip. */
+export function closeAdminWaitlistAllocation(
+  id: string,
+  bookId: string,
+): Promise<AdminWaitlistAllocationView> {
+  return adminFetch(
+    `/admin/waitlist/allocations/${id}/close?bookId=${encodeURIComponent(bookId)}`,
+    adminWaitlistAllocationViewSchema,
+    { method: "POST" },
+  );
 }
 
 export function getAdminWaitlistInviteSettings(): Promise<AdminWaitlistInviteSettings> {

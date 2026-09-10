@@ -13,6 +13,8 @@ import { books } from "../catalog/book";
 import { waitlistInviteModeEnum, waitlistInviteSmsStatusEnum, waitlistStatusEnum } from "../enums";
 import { orders } from "../orders/order";
 import { timestamps } from "../timestamps";
+import { waitlistAllocations } from "./waitlist-allocation";
+import { waitlistInviteWaves } from "./waitlist-invite-wave";
 
 /**
  * "Notify me when it's back" — the catch-all for every restock/pre-order
@@ -93,6 +95,51 @@ export const waitlistEntries = pgTable(
     // When the invite stops being redeemable. Set alongside inviteToken —
     // never one without the other.
     inviteExpiresAt: timestamp("invite_expires_at", { withTimezone: true }),
+
+    // Which stock release this invite's copies were charged to.
+    //
+    // Cleared with the other invite columns by `revoke()`, but deliberately
+    // *not* part of the all-or-nothing CHECK they share, because there are two
+    // legitimate ways to hold a token and owe no release. Invites issued
+    // before releases existed are one; those still count against physical
+    // stock — `reservedQuantitySql` reads the token columns and knows nothing
+    // about this one — but against no budget, which is the honest reading. An
+    // OPEN invite on a book-less entry is the other: it names no book, so it
+    // reserves nothing and there is no budget to charge.
+    //
+    // What *is* enforced below is the half that always holds: an allocation
+    // reference with no token is a charge against a hold that does not exist.
+    //
+    // `restrict` on delete: see the allocation table. A release is closed,
+    // never deleted, precisely so this reference can never dangle.
+    inviteAllocationId: uuid("invite_allocation_id").references(() => waitlistAllocations.id, {
+      onDelete: "restrict",
+    }),
+
+    // Which round of invites this token went out in. Same lifecycle as
+    // `inviteAllocationId` — set by `issue()`, cleared by `revoke()`, null for
+    // a hand-issued invite that belonged to no wave.
+    //
+    // Denormalised alongside the allocation rather than reached through this
+    // wave, deliberately. The budget query runs on the invite hot path and is
+    // the one place a join would cost something; the wave's own allocation is
+    // immutable, so the pair cannot drift.
+    inviteWaveId: uuid("invite_wave_id").references(() => waitlistInviteWaves.id, {
+      onDelete: "restrict",
+    }),
+
+    // How many links this entry has ever been sent. Never reset.
+    //
+    // Two jobs, and the first is the fairness rule the queue design turns on:
+    // ordering by this ascending puts everyone who has never had a turn ahead
+    // of anyone getting a second one, which is what "they go back in the
+    // queue, behind those who haven't had a turn yet" means in SQL. Signup
+    // order then decides among people on equal footing.
+    //
+    // The second is a guard rail: a phone that never answers would otherwise
+    // consume a slot in every wave forever, and this is what makes that
+    // visible — and one day, refusable — rather than invisible.
+    inviteAttempts: integer("invite_attempts").notNull().default(0),
 
     // When the token was actually spent placing an order. Null means
     // unused. This is what makes a token single-use: consuming it means
@@ -192,6 +239,38 @@ export const waitlistEntries = pgTable(
       "waitlist_entries_invite_used_implies_token",
       sql`${table.inviteUsedAt} is null or ${table.inviteToken} is not null`,
     ),
+
+    /**
+     * A release is only ever charged for a hold that exists.
+     *
+     * The same shape as the used-implies-token rule above, and the same job:
+     * it makes `revoke()` clearing this column structural rather than a thing
+     * the one method happens to remember. A revoked invite that kept its
+     * allocation reference would go on consuming that release's budget — the
+     * row has no live token, so `committed` would not count it as held, but
+     * every future reader tempted to sum by allocation alone would. Better
+     * that the wrong write fails than that two correct-looking queries
+     * disagree about how many copies a release has left.
+     */
+    check(
+      "waitlist_entries_allocation_implies_token",
+      sql`${table.inviteAllocationId} is null or ${table.inviteToken} is not null`,
+    ),
+
+    /* Same rule, same reason: a wave reference with no token would go on
+       counting somebody towards a round of invites they are no longer part
+       of. */
+    check(
+      "waitlist_entries_wave_implies_token",
+      sql`${table.inviteWaveId} is null or ${table.inviteToken} is not null`,
+    ),
+
+    /* Attempts only ever go up, and a negative count would quietly win the
+       fairness sort — putting whoever it belongs to permanently at the front
+       of every wave. */
+    check("waitlist_entries_invite_attempts_nonnegative", sql`${table.inviteAttempts} >= 0`),
+
+    index("waitlist_entries_invite_allocation_id_idx").on(table.inviteAllocationId),
   ],
 );
 
@@ -200,5 +279,13 @@ export const waitlistEntriesRelations = relations(waitlistEntries, ({ one }) => 
   convertedOrder: one(orders, {
     fields: [waitlistEntries.convertedOrderId],
     references: [orders.id],
+  }),
+  inviteAllocation: one(waitlistAllocations, {
+    fields: [waitlistEntries.inviteAllocationId],
+    references: [waitlistAllocations.id],
+  }),
+  inviteWave: one(waitlistInviteWaves, {
+    fields: [waitlistEntries.inviteWaveId],
+    references: [waitlistInviteWaves.id],
   }),
 }));

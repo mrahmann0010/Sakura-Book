@@ -1,6 +1,6 @@
 import { bdDivisions } from "@sakura/contracts";
 import type { ShippingAddress } from "../../db/schema";
-import { toLatin, withLatinDigits } from "./bangla-latin";
+import { toLatin, withLatinDigits } from "../../common/bangla-latin";
 
 /* --------------------------------------------------------------------------
    The Pathao bulk-order CSV.

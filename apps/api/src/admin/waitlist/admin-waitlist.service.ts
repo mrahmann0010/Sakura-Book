@@ -13,7 +13,7 @@ import { AuditService } from "../../audit";
 import { ResourceNotFoundError } from "../../common/errors";
 import { DbService } from "../../db/db.service";
 import { orders, waitlistEntries } from "../../db/schema";
-import { WaitlistInviteService } from "../../waitlist";
+import { WaitlistInviteService, waitlistLaneSql } from "../../waitlist";
 import type { AdminContext } from "../orders";
 import { toAdminWaitlistEntry, toWaitlistCsv, type WaitlistRow } from "./admin-waitlist.mapper";
 import { adminWaitlistFilters, adminWaitlistOrder } from "./admin-waitlist.query";
@@ -66,6 +66,10 @@ export class AdminWaitlistService {
       locale: waitlistEntries.locale,
       source: waitlistEntries.source,
       status: waitlistEntries.status,
+      /* Computed by Postgres in the same statement that reads the row, so the
+         tab a row renders under and the tab it was counted under are the same
+         answer from the same clock. See `waitlist/waitlist-lane.ts`. */
+      lane: waitlistLaneSql(),
       notifiedAt: waitlistEntries.notifiedAt,
       internalNote: waitlistEntries.internalNote,
       inviteSmsStatus: waitlistEntries.inviteSmsStatus,
@@ -105,7 +109,7 @@ export class AdminWaitlistService {
         .from(waitlistEntries)
         .where(where),
 
-      this.statusCounts(query),
+      this.laneCounts(query),
       this.distinctSources(),
     ]);
 
@@ -121,22 +125,34 @@ export class AdminWaitlistService {
   }
 
   /**
-   * How many entries sit in each status under the *current* filters, ignoring
-   * the status filter itself — so the tabs count the search rather than the
-   * table. One grouped query rather than four counts.
+   * How many entries sit in each lane under the *current* filters, ignoring
+   * the lane filter itself — so the tabs count the search rather than the
+   * table. One grouped query rather than five counts.
+   *
+   * Grouped by the lane expression itself rather than by `status`, which is
+   * the whole reason this changed: every expired entry is `NOTIFIED`, so a
+   * status-keyed group could not put a number on the Expired tab at all.
    */
-  private async statusCounts(query: AdminWaitlistQuery): Promise<AdminWaitlistCounts> {
-    const rows = await this.dbService.db
-      .select({ status: waitlistEntries.status, count: sql<number>`count(*)::int` })
-      .from(waitlistEntries)
-      .where(adminWaitlistFilters(query, { skipStatus: true }))
-      .groupBy(waitlistEntries.status);
+  private async laneCounts(query: AdminWaitlistQuery): Promise<AdminWaitlistCounts> {
+    const lane = waitlistLaneSql();
 
-    /* Zeroed first: a status with no rows is absent from a GROUP BY result,
-       and a tab that renders "undefined" for an empty state is worse than one
+    const rows = await this.dbService.db
+      .select({ lane, count: sql<number>`count(*)::int` })
+      .from(waitlistEntries)
+      .where(adminWaitlistFilters(query, { skipLane: true }))
+      .groupBy(lane);
+
+    /* Zeroed first: a lane with no rows is absent from a GROUP BY result, and
+       a tab that renders "undefined" for an empty state is worse than one
        that renders 0. */
-    const counts: AdminWaitlistCounts = { PENDING: 0, NOTIFIED: 0, CONVERTED: 0, CANCELLED: 0 };
-    for (const row of rows) counts[row.status] = row.count;
+    const counts: AdminWaitlistCounts = {
+      WAITING: 0,
+      INVITED: 0,
+      EXPIRED: 0,
+      CONVERTED: 0,
+      CANCELLED: 0,
+    };
+    for (const row of rows) counts[row.lane] = row.count;
 
     return counts;
   }

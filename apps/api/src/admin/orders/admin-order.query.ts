@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import { districtsFor, type AdminOrderQuery } from "@sakura/contracts";
 import { orderStatusHistory, orders } from "../../db/schema";
-import { ORDER_NUMBER_PREFIX } from "../../orders/order-number";
+import { ORDER_NUMBER_PREFIX } from "../../orders";
 
 /**
  * `where` and `order by` for the order queue, built from validated params.

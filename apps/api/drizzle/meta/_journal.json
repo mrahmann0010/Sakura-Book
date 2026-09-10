@@ -246,6 +246,20 @@
       "when": 1788927891209,
       "tag": "0034_waitlist_invite_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1789013895432,
+      "tag": "0035_waitlist_allocations",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1789015246693,
+      "tag": "0036_waitlist_invite_waves",
+      "breakpoints": true
     }
   ]
 }

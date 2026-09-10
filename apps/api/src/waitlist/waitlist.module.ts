@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { RestockScheduleService } from "./restock-schedule.service";
+import { WaitlistAllocationService } from "./waitlist-allocation.service";
 import { WaitlistBooksService } from "./waitlist-books.service";
 import { WaitlistInviteSettingsService } from "./waitlist-invite-settings.service";
 import { WaitlistInviteService } from "./waitlist-invite.service";
@@ -22,6 +23,7 @@ import { WaitlistService } from "./waitlist.service";
     WaitlistBooksService,
     WaitlistInviteService,
     WaitlistInviteSettingsService,
+    WaitlistAllocationService,
   ],
   // RestockScheduleService is exported for AdminSettingsModule, which owns the
   // editing half of the same setting — the storefront read and the admin write
@@ -32,12 +34,17 @@ import { WaitlistService } from "./waitlist.service";
   // WaitlistInviteSettingsService is exported for the same reason as
   // RestockScheduleService: AdminSettingsModule owns editing the TTL, this
   // module owns reading it when an invite is issued.
+  // WaitlistAllocationService is exported for the same reason
+  // WaitlistInviteService is: the admin panel opens and closes releases and
+  // the invite path spends them, and a second idea of how much a release has
+  // left is exactly the drift the whole design is built to avoid.
   exports: [
     WaitlistService,
     RestockScheduleService,
     WaitlistBooksService,
     WaitlistInviteService,
     WaitlistInviteSettingsService,
+    WaitlistAllocationService,
   ],
 })
 export class WaitlistModule {}

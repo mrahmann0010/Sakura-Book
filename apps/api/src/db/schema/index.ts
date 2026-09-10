@@ -21,6 +21,8 @@ export * from "./admin/audit-log";
 export * from "./settings/shop-settings";
 
 export * from "./marketing/coupon";
+export * from "./marketing/waitlist-allocation";
+export * from "./marketing/waitlist-invite-wave";
 export * from "./marketing/waitlist-entry";
 export * from "./marketing/platform-review";
 

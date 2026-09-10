@@ -140,12 +140,15 @@ function makeService(entries: Entry[], sendInviteLink: SmsService["sendInviteLin
     dbService as never,
     inviteService as never,
     { ttlHours: async () => 48, language: async () => "customer" } as never,
+    /* No book on these entries, so nothing consults a release. The empty map
+       is what the real service returns for an empty book list. */
+    { spendableByBook: async () => new Map() } as never,
     { sendInviteLink } as never,
     { recordDetached: vi.fn().mockResolvedValue(undefined) } as never,
     { get: () => "https://shop.example" } as never,
   );
 
-  return { service, writes };
+  return { service, writes, issue: inviteService.issue };
 }
 
 const context = {
@@ -246,59 +249,65 @@ describe("AdminWaitlistInviteService.invite — durable outcomes", () => {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Promises are capped by copies.
+ * Promises are capped by the release, not by the print run.
  *
  * A print run smaller than its waitlist is the normal case here, not an edge
  * one — sixty copies against three hundred people waiting — so "who gets a
  * link" is a rationing decision, and it has to be made before the texts go out
  * rather than discovered by the two hundred and fortieth person at checkout.
  *
- * `spare` in these fakes is what the real query computes: stock, less the
- * copies held by live invites belonging to entries outside this batch.
+ * `spendable` in these fakes is what `WaitlistAllocationService` computes: the
+ * smaller of what this release has left and what physically exists unheld,
+ * with the entries in this batch excluded from both. A book **absent** from
+ * the record has no open release, which is a refusal rather than a zero — the
+ * distinction the last test in this block pins down.
  */
 function makeCappedService(
   entries: Entry[],
-  spare: Record<string, number>,
+  spendable: Record<string, number>,
   holding: string[] = [],
 ) {
   const { dbService } = fakeDeps(entries);
   const sendInviteLink = vi.fn().mockResolvedValue(undefined);
 
-  /* Two different reads go through `select` here, and they have to answer
-     differently: the books query asks for each title's spare capacity, and
-     the holders query asks which of these entries already has a live invite.
-     The projection is what tells them apart, as it does in the real code. */
+  /* Only one read still goes through `select` in this path: which of these
+     entries is already holding a live invite. The capacity question moved to
+     the allocation service below. */
   Object.assign(dbService.db, {
-    select: (fields: Record<string, unknown>) => ({
-      from: () => ({
-        where: () =>
-          Promise.resolve(
-            "spare" in fields
-              ? Object.entries(spare).map(([id, value]) => ({ id, spare: value }))
-              : holding.map((id) => ({ id })),
-          ),
-      }),
+    select: () => ({
+      from: () => ({ where: () => Promise.resolve(holding.map((id) => ({ id }))) }),
     }),
   });
 
+  const issue = vi.fn().mockImplementation(async (id: string) => ({
+    token: `tok_${id}`,
+    expiresAt: new Date(Date.now() + 3_600_000),
+  }));
+
+  const spendableByBook = vi.fn().mockImplementation(
+    async () =>
+      new Map(
+        Object.entries(spendable).map(([bookId, value]) => [
+          bookId,
+          { allocationId: `alloc_${bookId}`, spendable: value },
+        ]),
+      ),
+  );
+
   const service = new AdminWaitlistInviteService(
     dbService as never,
-    {
-      issue: vi.fn().mockImplementation(async (id: string) => ({
-        token: `tok_${id}`,
-        expiresAt: new Date(Date.now() + 3_600_000),
-      })),
-    } as never,
+    { issue } as never,
     { ttlHours: async () => 48, language: async () => "customer" } as never,
+    { spendableByBook } as never,
     { sendInviteLink } as never,
     { recordDetached: vi.fn().mockResolvedValue(undefined) } as never,
     { get: () => "https://shop.example" } as never,
   );
 
-  return { service, sendInviteLink };
+  return { service, sendInviteLink, issue, spendableByBook };
 }
 
-describe("AdminWaitlistInviteService.invite — never promises more copies than exist", () => {
+describe("AdminWaitlistInviteService.invite — never promises more copies than the release holds", () => {
   it("refuses the entries past the last unreserved copy, and texts nobody about them", async () => {
     const { service, sendInviteLink } = makeCappedService(
       ["1", "2", "3"].map((id) => entry(id, { bookId: "book-a" })),
@@ -309,7 +318,7 @@ describe("AdminWaitlistInviteService.invite — never promises more copies than 
 
     expect(result.results[0]!.error).toBeUndefined();
     expect(result.results[1]!.error).toBeUndefined();
-    expect(result.results[2]!.error).toMatch(/No unreserved copies left/);
+    expect(result.results[2]!.error).toMatch(/fully spoken for/);
 
     // The refusal is worth nothing if the SMS still went — that is the cost
     // this cap exists to avoid, on top of the false promise.
@@ -339,7 +348,7 @@ describe("AdminWaitlistInviteService.invite — never promises more copies than 
     const result = await service.invite({ ids: ["1", "2"] }, context);
 
     expect(result.results[0]!.error).toBeUndefined();
-    expect(result.results[1]!.error).toMatch(/Only 1 unreserved copy left/);
+    expect(result.results[1]!.error).toMatch(/Only 1 copy left in this release/);
   });
 
   it("caps each title separately rather than sharing one budget", async () => {
@@ -381,8 +390,8 @@ describe("AdminWaitlistInviteService.invite — never promises more copies than 
 
     const result = await service.invite({ ids: ["1", "2"] }, context);
 
-    expect(result.results[0]!.error).toMatch(/Only 5 unreserved copies left/);
-    expect(result.results[1]!.error).toMatch(/No unreserved copies left/);
+    expect(result.results[0]!.error).toMatch(/Only 5 copies left in this release/);
+    expect(result.results[1]!.error).toMatch(/fully spoken for/);
     expect(sendInviteLink).not.toHaveBeenCalled();
   });
 
@@ -424,9 +433,63 @@ describe("AdminWaitlistInviteService.invite — never promises more copies than 
     expect(sendInviteLink).not.toHaveBeenCalled();
   });
 
-  it("leaves OPEN invites uncapped, since they reserve no particular book", async () => {
-    // bookId null — the general restock list. There is nothing to run out of.
+  /**
+   * No open release is a refusal, not a fallback.
+   *
+   * This is the whole point of allocations. Before them the budget was the
+   * print run, so a long queue could hold every copy and a walk-in customer
+   * saw "sold out" for the length of the window. If an absent release quietly
+   * meant "use physical stock", that behaviour would come straight back — and
+   * silently, because the batch would send, the copies would go, and nothing
+   * would say which budget paid for them.
+   */
+  it("refuses a book with no open release rather than falling back to stock", async () => {
     const { service, sendInviteLink } = makeCappedService(
+      ["1", "2"].map((id) => entry(id, { bookId: "book-a" })),
+      // book-a absent: plenty of physical stock, but nobody has decided how
+      // much of it is the waitlist's.
+      {},
+    );
+
+    const result = await service.invite({ ids: ["1", "2"] }, context);
+
+    expect(result.results.every((row) => row.error?.match(/No open stock release/))).toBe(true);
+    expect(sendInviteLink).not.toHaveBeenCalled();
+  });
+
+  it("charges each issued invite to the release that funded it", async () => {
+    // Without this the hold exists and no release accounts for it, so the
+    // budget it was checked against reports the copies as still available and
+    // hands them out again.
+    const { service, issue } = makeCappedService([entry("1", { bookId: "book-a" })], {
+      "book-a": 5,
+    });
+
+    await service.invite({ ids: ["1"] }, context);
+
+    expect(issue).toHaveBeenCalledWith("1", 48, "LOCKED", "alloc_book-a", null);
+  });
+
+  it("excludes the batch's own entries from the budget it is measured against", async () => {
+    // A re-invite rewrites the token on the existing row rather than adding
+    // one. Counting the old reservation and then charging for the new one
+    // would bill the same person's copies twice and refuse a batch that fits.
+    const { service, spendableByBook } = makeCappedService(
+      ["1", "2"].map((id) => entry(id, { bookId: "book-a" })),
+      { "book-a": 2 },
+    );
+
+    await service.invite({ ids: ["1", "2"] }, context);
+
+    expect(spendableByBook).toHaveBeenCalledWith(["book-a"], { excludeEntryIds: ["1", "2"] });
+  });
+
+  it("leaves OPEN invites uncapped and charged to no release", async () => {
+    // bookId null — the general restock list. An OPEN invite names no book, so
+    // it reserves nothing, there is nothing to run out of, and there is no
+    // release to charge. Note this is the one case where an absent entry in
+    // the budget record is *not* a refusal: these never reach that check.
+    const { service, sendInviteLink, issue } = makeCappedService(
       ["1", "2", "3"].map((id) => entry(id)),
       {},
     );
@@ -435,5 +498,6 @@ describe("AdminWaitlistInviteService.invite — never promises more copies than 
 
     expect(result.results.every((row) => row.error === undefined)).toBe(true);
     expect(sendInviteLink).toHaveBeenCalledTimes(3);
+    expect(issue).toHaveBeenCalledWith("1", 48, "OPEN", null, null);
   });
 });

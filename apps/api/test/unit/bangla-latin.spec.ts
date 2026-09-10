@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toLatin, withLatinDigits } from "../../src/admin/orders/bangla-latin";
+import { toLatin, withLatinDigits } from "../../src/common/bangla-latin";
 
 /**
  * Bengali → Latin, for the Pathao export.

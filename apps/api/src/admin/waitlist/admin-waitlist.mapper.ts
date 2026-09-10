@@ -19,6 +19,8 @@ export type WaitlistRow = {
   locale: string;
   source: string;
   status: AdminWaitlistEntry["status"];
+  /** Computed by `waitlistLaneSql()` in the select — never derived here. */
+  lane: AdminWaitlistEntry["lane"];
   notifiedAt: Date | null;
   internalNote: string | null;
   createdAt: Date;
@@ -42,6 +44,7 @@ export function toAdminWaitlistEntry(row: WaitlistRow): AdminWaitlistEntry {
     locale: row.locale,
     source: row.source,
     status: row.status,
+    lane: row.lane,
     notifiedAt: row.notifiedAt?.toISOString() ?? null,
     convertedOrderNumber: row.convertedOrderNumber,
     internalNote: row.internalNote,
@@ -84,6 +87,7 @@ const CSV_COLUMNS = [
   "Language",
   "Book",
   "Source",
+  "Lane",
   "Status",
   "Notified at",
   "Invite SMS",
@@ -127,6 +131,11 @@ export function toWaitlistCsv(entries: AdminWaitlistEntry[]): string {
         cell(entry.locale),
         cell(entry.bookTitle ?? "General waitlist"),
         cell(entry.source),
+        /* Ahead of `status`, because the lane is what the screen this file
+           exports was read from — an export whose leading answer disagrees
+           with the tab it was taken from is how staff end up trusting a
+           spreadsheet over the app. */
+        cell(entry.lane),
         cell(entry.status),
         cell(entry.notifiedAt),
         cell(entry.inviteSms?.status ?? null),

@@ -9,35 +9,41 @@ This is the design document for that system — states, invariants, and what has
 built. It supersedes nothing: [waitlist-invite-flow.md](./waitlist-invite-flow.md) still
 describes the token mechanism accurately and is the reference for how a link is minted,
 redeemed and spent. This one describes the machine that decides *who gets a link and
-when*, which is the part that does not exist yet.
+when*.
 
 Companion to [backend-architecture.md](./backend-architecture.md).
 
 ---
 
+> **Status:** phases 1–3 are built. Phase 4 is not. Section 6 marks what
+> landed; the design below is what was built from, and still describes the
+> system as it now stands.
+
 ## 1. The five steps, and where we actually are
 
-| #   | Step                                   | Today                                                             | Verdict            |
-| --- | -------------------------------------- | ----------------------------------------------------------------- | ------------------ |
-| 1   | Join the queue                         | `waitlist_entries`, `PENDING`, ordered `created_at asc`            | **Done**           |
-| 2   | Decide how much of the stock the queue gets | Nothing. The invite budget is the entire `stock_quantity`      | **Missing**        |
-| 3   | Allocate — invite in waves             | Manual multi-select; capacity capped at *all* stock, no wave record | **Half**           |
-| 4   | The hold, with a deadline              | `invite_expires_at` + TTL setting; reservation subquery honours it | **Done**           |
-| 5   | Recycle                                | Copies return automatically at expiry, but the person is stranded in `NOTIFIED` with a dead link and no Expired lane, and nothing pulls the next person up | **Half** |
+| #   | Step                                   | Now                                                                                   | Verdict  |
+| --- | -------------------------------------- | ------------------------------------------------------------------------------------- | -------- |
+| 1   | Join the queue                         | `waitlist_entries`, ordered `created_at asc`                                            | **Done** |
+| 2   | Decide how much of the stock the queue gets | `waitlist_allocations` — one open release per book, opened from the panel            | **Done** |
+| 3   | Allocate — invite in waves             | "Invite next N" fills a wave from the fairness order, capped by the release             | **Done** |
+| 4   | The hold, with a deadline              | `invite_expires_at` + TTL setting; reservation subquery honours it                      | **Done** |
+| 5   | Recycle                                | Budget refills at expiry with no job; the lapsed land in the Expired lane, behind first-timers in the next wave | **Done** |
 
-Two things are genuinely absent, and they are the two the flow hinges on:
+What was originally absent, and what the build did about it:
 
-**There is no allocation.** `refuseBeyondStock` in `admin-waitlist-invite.service.ts`
-computes an invite budget of `stock_quantity − reserved_elsewhere`. That is the whole
+**There was no allocation.** `refuseBeyondStock` in `admin-waitlist-invite.service.ts`
+computed an invite budget of `stock_quantity − reserved_elsewhere`. That is the whole
 print run. A shop with 60 copies and 300 people waiting can invite until all 60 are
 held, and a walk-in customer sees `sold out` for the entire window. Step 2 of the flow
-exists precisely to stop that, and the code has no place to put the number.
+exists precisely to stop that, and the code had no place to put the number. It does
+now: `waitlist_allocations`, and the method is `refuseBeyondAllocation`.
 
-**Expiry is invisible.** The clock releases the copies — that part is right and is the
-best thing about the current design — but the entry itself stays `NOTIFIED` forever,
-holding a token that resolves to a 404. There is no Expired tab, the status counts don't
-know the state exists, and the person is neither reachable-again by an obvious action nor
-back in line. Everything about step 5 after "the copies come back" is unbuilt.
+**Expiry was invisible.** The clock releases the copies — that part was already right,
+and is the best thing about the original design — but the entry itself stayed
+`NOTIFIED` forever, holding a token that resolves to a 404. There was no Expired tab,
+the counts did not know the state existed, and the person was neither reachable-again by
+an obvious action nor back in line. Lanes fixed the first half; `invite_attempts` and
+the `fair` sort fixed the second.
 
 The rest is in better shape than it looks. The hold is real, single-use, atomically
 spendable, and already subtracted from what the public may buy
@@ -82,9 +88,16 @@ its entry is in the `INVITED` lane.** That single sentence is what makes the who
 auditable: the admin panel's Invited tab and the storefront's availability number are
 answering the same question with the same expression.
 
-This belongs in one file the way `reservations.ts` owns its expression — `waitlist-lane.ts`
-exporting `laneSql()` and a matching `laneOf()` for rows already in memory. Two
-hand-written copies of that condition is how the panel and the shelf start disagreeing.
+This lives in one file the way `reservations.ts` owns its expression —
+`waitlist/waitlist-lane.ts`, exporting `waitlistLaneSql()` for the selection and
+`waitlistLaneFilterSql()` for the WHERE. Two hand-written copies of that condition is
+how the panel and the shelf start disagreeing.
+
+Note there is no in-memory `laneOf()` companion, which the first draft of this design
+called for. The lane is selected *by Postgres in the same statement that reads the row*,
+so the mapper only passes it through. Deriving it in Node would mean a second clock, and
+the rows where the two disagree are exactly the ones sitting on a window boundary — the
+rows this whole mechanism exists to get right.
 
 ### 2.2 The lanes
 
@@ -391,13 +404,14 @@ discovers the gateway is offline.
 
 Ordered so each phase is independently shippable and useful on its own.
 
-### Phase 1 — Lanes (no new tables)
+### Phase 1 — Lanes (no new tables) — **built**
 
 The whole of §2, and it is worth doing alone: it turns expiry from an invisible state
 into a tab, which is half the complaint.
 
-- `apps/api/src/waitlist/waitlist-lane.ts` — `laneSql()` and `laneOf()`, single
-  definition, mirroring `liveInviteConditions` deliberately and saying so in a comment.
+- `apps/api/src/waitlist/waitlist-lane.ts` — `waitlistLaneSql()` and
+  `waitlistLaneFilterSql()`, single definition, mirroring `liveInviteConditions`
+  deliberately and saying so in a comment.
 - `packages/contracts/src/admin-waitlist.ts` — `waitlistLanes` const, `lane` on the entry
   schema, `lane` filter replacing/absorbing `inviteState`, counts keyed by lane.
 - `admin-waitlist.query.ts` — filter and order by lane; counts skip the lane clause the
@@ -407,7 +421,7 @@ into a tab, which is half the complaint.
   `POST /admin/waitlist/invite`.
 - Keep `status` and its filter exactly as they are. Nothing migrates, nothing backfills.
 
-### Phase 2 — Allocations
+### Phase 2 — Allocations — **built**
 
 - Migration: `waitlist_allocations`, partial unique index on `(book_id) where status = 'OPEN'`,
   `check (copies > 0)`.
@@ -422,7 +436,7 @@ into a tab, which is half the complaint.
   first" error. Falling back to "the whole print run" is how the current behaviour comes
   back through the side door.
 
-### Phase 3 — Waves and fairness
+### Phase 3 — Waves and fairness — **built**
 
 - Migration: `waitlist_invite_waves`; `invite_wave_id` and `invite_attempts` on
   `waitlist_entries`; extend `waitlist_entries_invite_columns_together` to include
@@ -439,7 +453,7 @@ into a tab, which is half the complaint.
   physical stock — correct — but not against any release, which is the honest reading:
   they were issued before releases existed.
 
-### Phase 4 — Optional
+### Phase 4 — Optional, not built
 
 Auto-advance a wave when the previous one closes (needs a job runner — the same one the
 "bulk invites still send inside the request" gap in the invite doc has been waiting for).

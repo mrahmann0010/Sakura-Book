@@ -16,7 +16,7 @@ export { toOrderResponse, type OrderRow } from "./order.mapper";
 // The shared read shape, so the admin detail view cannot assemble an order
 // differently from the way checkout and guest lookup assemble theirs.
 export { findOrder } from "./order.query";
-export { generateOrderNumber, ORDER_NUMBER_ATTEMPTS } from "./order-number";
+export { generateOrderNumber, ORDER_NUMBER_ATTEMPTS, ORDER_NUMBER_PREFIX } from "./order-number";
 // The reuse guard, shared with the admin desk so the panel cannot confirm a
 // receipt that checkout and auto-verify would both have refused.
 export {

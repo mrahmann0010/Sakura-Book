@@ -80,7 +80,7 @@ function request(items = [{ bookId: "book-1", quantity: 2 }]): PlaceOrderRequest
       address: "12 Road 4",
       city: "Dhaka",
       region: "dhaka",
-      method: "COD",
+      method: "cash-on-delivery",
     },
     inviteToken: "tok_abc",
   } as PlaceOrderRequest;

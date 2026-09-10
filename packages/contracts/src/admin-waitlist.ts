@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { paginated, pageQuerySchema } from "./pagination";
-import { waitlistInviteModes, waitlistStatuses } from "./waitlist";
+import { waitlistInviteModes, waitlistLanes, waitlistStatuses } from "./waitlist";
 
 /* --------------------------------------------------------------------------
    The waitlist, as staff see it.
@@ -23,33 +23,19 @@ import { waitlistInviteModes, waitlistStatuses } from "./waitlist";
  * person who signed up first was promised, in the page's own words, to be
  * "first in line" — so the default order is the order stock should be offered
  * in. Newest-first is the exception here, not the rule.
+ *
+ * `fair` is `oldest` with one clause in front of it: everyone gets a first
+ * turn before anybody gets a second. It is the order a wave is filled in, and
+ * it differs from `oldest` only once somebody has been re-invited — at which
+ * point `oldest` would put that person ahead of a first-timer who joined a
+ * month later, which reads as the shop favouring the people it has already
+ * chased. Kept as a separate member rather than folded into `oldest`, because
+ * a staff member scrolling the list by signup date is asking a different
+ * question from the one the "Invite next N" button asks.
  */
-export const adminWaitlistSorts = ["oldest", "recent", "quantity-desc"] as const;
+export const adminWaitlistSorts = ["oldest", "fair", "recent", "quantity-desc"] as const;
 
 export type AdminWaitlistSort = (typeof adminWaitlistSorts)[number];
-
-/**
- * Narrow the list by what happened to the entry's invite token, rather than
- * by its status.
- *
- * `status` cannot answer this on its own. A NOTIFIED entry is one that was
- * *reached*, which says nothing about whether the link it was sent has been
- * spent — and the entries staff most need to find after a restock are exactly
- * the ones where those two diverge: texted, never ordered. Reading it off
- * `inviteUsedAt`/`inviteExpiresAt` makes that a filter instead of a manual
- * scan.
- *
- *   unused    a token was issued and has not been redeemed. Includes links
- *             that are still live.
- *   expired   the same, narrowed to links whose window has already closed —
- *             the ones where re-inviting is the only way back in.
- *
- * There is deliberately no "used" member: an entry whose token was spent is
- * already CONVERTED, and the status filter says that more plainly.
- */
-export const adminWaitlistInviteStates = ["unused", "expired"] as const;
-
-export type AdminWaitlistInviteState = (typeof adminWaitlistInviteStates)[number];
 
 export const adminWaitlistQuerySchema = pageQuerySchema({ defaultPageSize: 50 }).extend({
   /**
@@ -78,9 +64,22 @@ export const adminWaitlistQuerySchema = pageQuerySchema({ defaultPageSize: 50 })
    *  language at a time rather than needing a translator per batch. */
   locale: z.string().trim().min(2).max(12).optional(),
 
-  /** See `adminWaitlistInviteStates`. Absent means "don't filter on the
-   *  token at all", which is every screen except the re-invite tab. */
-  inviteState: z.enum(adminWaitlistInviteStates).optional(),
+  /**
+   * The panel's tabs. See `waitlistLanes` for what each one means and why
+   * this is not just another way of spelling `status`.
+   *
+   * Repeatable for the same reason `status` is, and because the one screen
+   * that needs two lanes at once — the invite batch, which works "texted and
+   * still not ordered" — needs `INVITED` and `EXPIRED` together. That used to
+   * be a separate `inviteState=unused` flag; it is the same question asked
+   * once, in the vocabulary the rest of the panel already uses.
+   */
+  lane: z
+    .preprocess(
+      (value) => (value === undefined ? undefined : Array.isArray(value) ? value : [value]),
+      z.array(z.enum(waitlistLanes)),
+    )
+    .optional(),
 
   /** Inclusive date bounds on when they signed up. ISO-8601 dates. */
   signedFrom: z.iso.date().optional(),
@@ -115,6 +114,19 @@ export const adminWaitlistEntrySchema = z.object({
   source: z.string(),
 
   status: z.enum(waitlistStatuses),
+
+  /**
+   * Where this entry stands right now — see `waitlistLanes`.
+   *
+   * Computed by the database in the same statement that selected the row, not
+   * derived in the client from the fields below it. A browser reading
+   * `invite.expiresAt` against its own clock would disagree with the server
+   * about who is holding a copy on exactly the rows where it matters, and a
+   * tab that says "Invited" over a link that stopped working an hour ago is
+   * worse than no tab.
+   */
+  lane: z.enum(waitlistLanes),
+
   /** When the restock alert actually went out. Null until it has. */
   notifiedAt: z.string().nullable(),
   /** The order this signup became, if it has. Null otherwise — nothing sets
@@ -168,17 +180,23 @@ export const adminWaitlistEntrySchema = z.object({
 export type AdminWaitlistEntry = z.infer<typeof adminWaitlistEntrySchema>;
 
 /**
- * How many entries sit in each status.
+ * How many entries sit in each lane.
  *
- * Computed against every active filter *except* `status`, so the tabs read as
- * "how many of my current search are pending" rather than as a table-wide
+ * Computed against every active filter *except* `lane`, so the tabs read as
+ * "how many of my current search are waiting" rather than as a table-wide
  * constant that ignores the search box above it. With no filters applied it
- * is the whole-table answer, which is the "234 pending, 40 notified" line the
+ * is the whole-table answer, which is the "234 waiting, 40 invited" line the
  * screen leads with.
+ *
+ * Keyed by lane rather than by status because the tabs are lanes: a
+ * status-keyed count could not put a number on the Expired tab at all, since
+ * every expired entry is `NOTIFIED` and indistinguishable there from someone
+ * whose link is still live.
  */
 export const adminWaitlistCountsSchema = z.object({
-  PENDING: z.number().int().nonnegative(),
-  NOTIFIED: z.number().int().nonnegative(),
+  WAITING: z.number().int().nonnegative(),
+  INVITED: z.number().int().nonnegative(),
+  EXPIRED: z.number().int().nonnegative(),
   CONVERTED: z.number().int().nonnegative(),
   CANCELLED: z.number().int().nonnegative(),
 });
@@ -250,9 +268,67 @@ export type AdminWaitlistUpdateRequest = z.infer<typeof adminWaitlistUpdateReque
 
 export const adminWaitlistInviteRequestSchema = z.object({
   ids: z.array(z.string().uuid()).min(1, "Select at least one entry.").max(500),
+
+  /**
+   * The wave these invites belong to, when they were sent as one.
+   *
+   * Server-supplied, not something a panel fills in: `AdminWaitlistWaveService`
+   * opens the wave row and hands the id down. Absent for the hand-picked sends
+   * — the per-row "Invite" button, a re-invite from the Expired tab — which
+   * still charge a release but belong to no round.
+   */
+  waveId: z.string().uuid().optional(),
 });
 
 export type AdminWaitlistInviteRequest = z.infer<typeof adminWaitlistInviteRequestSchema>;
+
+/**
+ * Send the next wave for one book.
+ *
+ * No list of ids: choosing who is the entire job, and it is done on the server
+ * against the release's budget and the fairness order. A panel that sent ids
+ * would be deciding the queue's order in the browser, from one page of it.
+ */
+export const adminWaitlistWaveRequestSchema = z.object({
+  bookId: z.string().uuid(),
+
+  /**
+   * Send fewer than the release could fund — a first small wave to check the
+   * gateway is awake, say. Never more: the plan caps it either way.
+   */
+  count: z.number().int().positive().max(500).optional(),
+});
+
+export type AdminWaitlistWaveRequest = z.infer<typeof adminWaitlistWaveRequestSchema>;
+
+/** What the next wave would do, without doing it — what the button is labelled
+ *  from, and what the skip warning is drawn from. */
+export const adminWaitlistWavePlanSchema = z.object({
+  /** Copies this release can still hand out. The wave's ceiling. */
+  spendable: z.number().int().nonnegative(),
+  /** How many people the next wave would reach, and how many copies they hold. */
+  count: z.number().int().nonnegative(),
+  quantity: z.number().int().nonnegative(),
+  /** Candidates in the WAITING or EXPIRED lanes for this book. */
+  waiting: z.number().int().nonnegative(),
+  /**
+   * Entries passed over because they ask for more copies than remain.
+   *
+   * Skipped rather than blocking, so one person wanting five copies does not
+   * stall the four behind them who want one each — but reported, because an
+   * entry that keeps getting passed over needs a human rather than another
+   * wave.
+   */
+  skipped: z.array(
+    z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      quantity: z.number().int().positive(),
+    }),
+  ),
+});
+
+export type AdminWaitlistWavePlan = z.infer<typeof adminWaitlistWavePlanSchema>;
 
 /** One entry's outcome. `sent: false` covers both "not eligible" (already
  *  converted or cancelled) and "the gateway call failed" — `error` says which. */

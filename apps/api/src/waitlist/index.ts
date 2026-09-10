@@ -10,3 +10,5 @@ export { WaitlistBooksService } from "./waitlist-books.service";
 export { WaitlistInviteService } from "./waitlist-invite.service";
 export { WaitlistInviteSettingsService } from "./waitlist-invite-settings.service";
 export { WaitlistInviteInvalidError } from "./waitlist-invite.errors";
+export { waitlistLaneFilterSql, waitlistLaneSql } from "./waitlist-lane";
+export { WaitlistAllocationService, type AllocationBudget } from "./waitlist-allocation.service";

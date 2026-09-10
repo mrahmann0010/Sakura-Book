@@ -20,21 +20,31 @@ const TABS = [
     blurb:
       "Pull the earliest pending sign-ups, in the order they joined, and text them the order link.",
     countHint: "earliest sign-ups first",
-    empty: "No pending sign-ups.",
-    query: { status: ["PENDING"] },
+    empty: "Nobody is waiting without a link.",
+    /* The WAITING lane rather than PENDING status. They differ on exactly one
+       row and it is the one that matters: a first send whose SMS failed left
+       a token issued and the status at PENDING, so a status filter offers
+       that person up again as a first-timer while they are already holding a
+       copy. The lane knows they hold a live link and files them under
+       Re-invite, where the failure is visible and the retry is deliberate. */
+    query: { lane: ["WAITING"] },
   },
   {
     key: "reinvite",
     label: "Re-invite",
     heading: "Re-invite the ones who never ordered",
     blurb:
-      "Everyone who was already sent a link and has not used it. Sending again mints a fresh token and retires the old one. Expired links are pre-selected; anyone whose link is still live is listed but left unchecked.",
+      "Everyone holding a link they have not used. Sending again mints a fresh token and retires the old one. Lapsed links are pre-selected, and so are the ones whose text never left the gateway; anyone holding a live link that did send is listed but left unchecked.",
     countHint: "longest-waiting first",
     empty: "Nobody is holding an unused invite.",
-    /* PENDING as well as NOTIFIED: a first send whose SMS failed leaves the
-       token issued but the status untouched, and that person is every bit as
-       much "invited, never ordered" as the ones we did reach. */
-    query: { status: ["PENDING", "NOTIFIED"], inviteState: "unused" },
+    /* Both lanes, not just EXPIRED: someone whose link is still live has not
+       declined anything yet and is listed unchecked, but a link staff know
+       never arrived is re-sent from here too. The lanes are computed from the
+       token, so a first send whose SMS failed — token issued, status
+       untouched at PENDING — lands in INVITED exactly like the ones we did
+       reach, which is the right answer and is what the old status-plus-flag
+       pair of filters needed a comment to get right. */
+    query: { lane: ["INVITED", "EXPIRED"] },
   },
 ] as const satisfies readonly {
   key: string;
@@ -48,11 +58,29 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
-/** A link whose window has already closed. The server has its own `expired`
- *  filter for this; here it only decides what a row *says* and whether it
- *  starts out checked, so a clock skew of seconds is immaterial. */
+/** A link whose window has already closed — read off the lane the server
+ *  computed, not off `expiresAt` against the browser's clock. The two used to
+ *  be able to disagree by however far the two machines had drifted, on
+ *  precisely the rows sitting on the boundary. */
 function isExpired(entry: AdminWaitlistEntry): boolean {
-  return entry.invite !== null && new Date(entry.invite.expiresAt).getTime() <= Date.now();
+  return entry.lane === "EXPIRED";
+}
+
+/**
+ * Should this row start out checked on the re-invite tab?
+ *
+ * Two cases, and they are different rescues. A lapsed link is the one in the
+ * flow: the window closed, the copies went back, and re-inviting is the only
+ * way back in. A *live* link whose SMS failed is the other: the token is fine
+ * and nobody has declined anything, but the customer never received the text
+ * that carried it, so they are holding a copy they cannot see.
+ *
+ * Everyone else — live link, text delivered — is listed and left unchecked.
+ * They have not declined anything yet, and a second SMS is a nag rather than
+ * a rescue.
+ */
+function needsAnotherLink(entry: AdminWaitlistEntry): boolean {
+  return isExpired(entry) || entry.inviteSms?.status === "FAILED";
 }
 
 /* --------------------------------------------------------------------------
@@ -79,16 +107,14 @@ function isExpired(entry: AdminWaitlistEntry): boolean {
    live and would happily let staff text a second link over a working first
    one.
 
-   The `inviteState=unused` filter is the exact question instead — a token was
-   issued and has not been spent — and "expired" narrows it to the ones where
+   The INVITED and EXPIRED lanes are the exact question instead — a token was
+   issued and has not been spent — with EXPIRED narrowing it to the ones where
    re-inviting is the only way back in. Both tabs post to the same endpoint;
    only the query above them differs.
 
-   Selection on this tab defaults to the *expired* rows rather than to
-   everything shown, which is the one place the two tabs behave differently.
-   Someone holding a link that still works has not declined anything yet, and
-   a second SMS to them is a nag rather than a rescue. They are still listed,
-   and still checkable by hand.
+   Selection on this tab defaults to the rows that need another link rather
+   than to everything shown, which is the one place the two tabs behave
+   differently. See `needsAnotherLink`.
 
    Issuing a new token silently invalidates the old one (see
    `WaitlistInviteService.issue`), so nobody ends up holding two live links —
@@ -96,11 +122,12 @@ function isExpired(entry: AdminWaitlistEntry): boolean {
 
    ## Recovering a partial send
 
-   A successful send moves its entry to NOTIFIED, so it drops out of this
-   PENDING-only list; a failed one stays put and reappears on the next
-   refresh. That alone makes "click Send again" roughly right — but only
-   roughly, because the refreshed list backfills to N with people who were
-   never attempted. The `inviteSms` column is what makes it exact: it records
+   Any send that issues a token — succeeded or not — moves its entry out of
+   the WAITING lane, so refreshing this tab backfills to N with people who
+   were never attempted rather than re-offering the ones just tried. That
+   makes "click Send again" the wrong recovery, and the failures are on the
+   Re-invite tab now, pre-checked. The `inviteSms` column is what makes it
+   exact wherever staff are standing when they notice: it records
    each attempt in the database rather than only in the response, so after a
    dropped connection or a closed tab the failures are still identifiable,
    and "Select failed" re-sends to precisely those. Nobody who already got
@@ -145,7 +172,7 @@ export default function AdminWaitlistInviteBatchPage() {
          a difference: on the re-invite tab a still-live link means the
          customer has not declined anything yet, so texting them again is a
          nag. They stay listed and stay checkable — just not by default. */
-      const preselect = key === "reinvite" ? list.items.filter(isExpired) : list.items;
+      const preselect = key === "reinvite" ? list.items.filter(needsAnotherLink) : list.items;
 
       setSelected(new Set(preselect.map((entry) => entry.id)));
       setLoaded(true);

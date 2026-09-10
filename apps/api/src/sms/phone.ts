@@ -1,4 +1,4 @@
-import { withLatinDigits } from "../admin/orders/bangla-latin";
+import { withLatinDigits } from "../common/bangla-latin";
 
 /**
  * A phone number in the `+8801XXXXXXXXX` form the SMS gateway requires.
