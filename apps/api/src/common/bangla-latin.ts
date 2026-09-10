@@ -1,10 +1,16 @@
 /* --------------------------------------------------------------------------
    Bengali script → Latin letters.
 
-   Written for the Pathao export and used nowhere else, which is why it lives
-   here rather than in a utilities package. It exists because that file has to
-   survive a trip through someone else's CSV importer, and two independent
-   things go wrong when Bangla makes that trip:
+   Written for the Pathao export, and it lived next to that file until the SMS
+   gateway needed the same digit conversion to dial a number someone typed in
+   Bangla numerals. Two callers in two feature modules is what moved it here:
+   `sms` reaching into `admin/orders` for a pure string function is a module
+   boundary violation and an odd dependency to boot, and the answer to both is
+   that this was never domain code.
+
+   It exists because the Pathao export has to survive a trip through someone
+   else's CSV importer, and two independent things go wrong when Bangla makes
+   that trip:
 
    - Their importer reads the bytes as Latin-1 whatever we send. A UTF-8 BOM
      was tried and changed nothing, so "হাসপাতাল" arrives as "à¦¹à¦¾à¦¸...".
