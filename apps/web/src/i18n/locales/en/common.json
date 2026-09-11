@@ -258,7 +258,12 @@
       "orderId": "Order ID",
       "copyPrompt": "Save this somewhere — you'll need it to track your order.",
       "action": "Continue shopping",
-      "track": "Track this order"
+      "track": "Track this order",
+      "itemsHeading": "Books · {{count}}",
+      "discount": "Discount",
+      "payment": "Payment",
+      "downloadReceipt": "Download receipt",
+      "downloadFailed": "Could not generate the receipt. Please try again."
     },
     "reassurance": "Nothing is charged online — you settle up with the courier or by transfer."
   },

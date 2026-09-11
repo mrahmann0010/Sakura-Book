@@ -256,7 +256,12 @@
       "orderId": "注文ID",
       "copyPrompt": "こちらを保存しておいてください — 注文の追跡に必要です。",
       "action": "買い物を続ける",
-      "track": "注文を追跡する"
+      "track": "注文を追跡する",
+      "itemsHeading": "書籍 · {{count}}点",
+      "discount": "割引",
+      "payment": "お支払い",
+      "downloadReceipt": "領収書をダウンロード",
+      "downloadFailed": "領収書を作成できませんでした。もう一度お試しください。"
     },
     "reassurance": "オンラインでの決済はありません — 配達時または振込でお支払いください。"
   },
