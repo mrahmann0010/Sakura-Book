@@ -5,20 +5,12 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useForm, useWatch, type FieldErrors } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import type { Order } from "@sakura/contracts";
 
 import { CollapsibleOrderRecap, OrderRecap, SummaryRow, type RecapLine } from "@/components/domain";
 import { CheckoutProgress, PageHeader, RailLayout, Shell, StickyBar } from "@/components/layout";
-import {
-  Button,
-  Card,
-  CopyButton,
-  LinkButton,
-  Notice,
-  OrderId,
-  Skeleton,
-  Stepper,
-  Toast,
-} from "@/components/ui";
+import { OrderPlaced } from "@/components/orders/order-placed";
+import { Button, Notice, Skeleton, Stepper, Toast } from "@/components/ui";
 import type { Locale } from "@/i18n/settings";
 import { trackPurchase } from "@/lib/analytics";
 import { ApiError } from "@/lib/api/client";
@@ -32,7 +24,6 @@ import {
 } from "@/lib/checkout";
 import { cartFromQuote, emptyCart, summaryLines } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
-import { routes } from "@/lib/routes";
 
 import { PaymentSection } from "./payment-section";
 import {
@@ -106,12 +97,14 @@ export function InviteCheckoutView({
   alsoAvailable?: AlsoAvailableBook[];
 }) {
   const { t } = useTranslation();
-  const path = routes(locale);
 
-  const [placedOrder, setPlacedOrder] = useState<{ id: string; email: string } | null>(null);
+  /* The whole Order, not just its number: the confirmation screen draws the
+     full receipt from it. placeOrder already returns it — this used to keep
+     the number alone and throw the rest away. */
+  const [placedOrder, setPlacedOrder] = useState<{ order: Order; email: string } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [verification, setVerification] = useState<PaymentVerificationStatus | null>(null);
-  const [pendingOrder, setPendingOrder] = useState<{ id: string; email: string } | null>(null);
+  const [pendingOrder, setPendingOrder] = useState<{ order: Order; email: string } | null>(null);
   const [step, setStep] = useState<"delivery" | "payment">("delivery");
   /* Starts at everything the invite held — the common case is ordering all of
      it, so the shopper only touches this to take fewer. */
@@ -226,7 +219,7 @@ export function InviteCheckoutView({
         crypto.randomUUID(),
       );
 
-      setPendingOrder({ id: order.orderNumber, email: values.email });
+      setPendingOrder({ order, email: values.email });
       setVerification(order.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");
       trackPurchase(order);
     } catch (err) {
@@ -245,35 +238,7 @@ export function InviteCheckoutView({
   if (isLoading && !quote) return <InviteCheckoutSkeleton />;
 
   if (placedOrder) {
-    return (
-      <Shell className="py-14 lg:py-20">
-        <div className="max-w-measure">
-          <p className="eyebrow">{t("checkout.placed.eyebrow")}</p>
-          <h1 className="text-36 lg:text-44 text-ink mt-4 font-serif leading-tight">
-            {t("checkout.placed.title")}
-          </h1>
-          <p className="text-body mt-5">
-            {t("checkout.placed.description", { email: placedOrder.email })}
-          </p>
-
-          <Card variant="tint" padding="roomy" className="mt-8">
-            <div className="flex items-baseline justify-between gap-4">
-              <p className="eyebrow">{t("checkout.placed.orderId")}</p>
-              <CopyButton value={placedOrder.id} />
-            </div>
-            <OrderId className="mt-2.5 block">{placedOrder.id}</OrderId>
-            <p className="text-caption text-secondary mt-2.5">{t("checkout.placed.copyPrompt")}</p>
-          </Card>
-
-          <div className="mt-8 flex flex-wrap gap-3">
-            <LinkButton href={path.catalog}>{t("checkout.placed.action")}</LinkButton>
-            <LinkButton href={path.order(placedOrder.id)} variant="secondary">
-              {t("checkout.placed.track")}
-            </LinkButton>
-          </div>
-        </div>
-      </Shell>
-    );
+    return <OrderPlaced order={placedOrder.order} email={placedOrder.email} locale={locale} />;
   }
 
   const money = intlLocale(locale);

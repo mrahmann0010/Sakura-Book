@@ -15,6 +15,7 @@ import {
   type RecapLine,
 } from "@/components/domain";
 import { CheckoutProgress, PageHeader, RailLayout, Shell, StickyBar } from "@/components/layout";
+import { OrderPlaced } from "@/components/orders/order-placed";
 import { Button, LinkButton, Notice, Skeleton, Toast } from "@/components/ui";
 import { useCart } from "@/hooks/use-cart";
 import { useCartStepEvent } from "@/hooks/use-cart-step-event";
@@ -33,7 +34,6 @@ import { summaryLines } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 
-import { OrderReceipt } from "./order-receipt";
 import { PaymentSection } from "./payment-section";
 import {
   PaymentVerificationModal,
@@ -247,30 +247,7 @@ export function CheckoutView({
      checked before the empty-cart guard below or placing an order would bounce
      the shopper straight to "there is nothing to check out". */
   if (placedOrder) {
-    return (
-      <Shell className="py-14 lg:py-20">
-        <div className="max-w-measure">
-          <p className="eyebrow">{t("checkout.placed.eyebrow")}</p>
-          <h1 className="text-36 lg:text-44 text-ink mt-4 font-serif leading-tight">
-            {t("checkout.placed.title")}
-          </h1>
-          <p className="text-body mt-5">
-            {t("checkout.placed.description", { email: placedOrder.email })}
-          </p>
-
-          <div className="mt-8">
-            <OrderReceipt order={placedOrder.order} locale={locale} />
-          </div>
-
-          <div className="mt-3 flex flex-wrap gap-3">
-            <LinkButton href={path.catalog}>{t("checkout.placed.action")}</LinkButton>
-            <LinkButton href={path.order(placedOrder.order.orderNumber)} variant="secondary">
-              {t("checkout.placed.track")}
-            </LinkButton>
-          </div>
-        </div>
-      </Shell>
-    );
+    return <OrderPlaced order={placedOrder.order} email={placedOrder.email} locale={locale} />;
   }
 
   if (cart.isEmpty) {
