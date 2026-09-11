@@ -192,6 +192,44 @@ export default function AdminStockPage() {
     }
   }
 
+  /**
+   * End a book's release, from the same panel that set it.
+   *
+   * Lived only on the waitlist page, behind a book filter, so the screen where
+   * the stock decision is made could open a release and change it but never
+   * end one — and ending one is half of "start over for this restock".
+   *
+   * The confirmation spells out what closing does *not* do, because that is
+   * the misreading that makes staff hesitate: anyone holding an invite keeps
+   * it, their copies stay held, and nothing is sent to them. What stops is new
+   * invites being charged to this release. Once closed, the panel offers "Set
+   * the share", which opens the next one in the same place.
+   */
+  async function closeShare(row: AdminStockRow) {
+    if (!row.allocationId) return;
+
+    if (
+      !window.confirm(
+        `Close the release for ${row.title}?\n\nNo new invites will be charged to it. Anyone already holding an invite keeps it, with their copy and their window — nothing is sent to them.\n\nThe copies it was keeping for the queue go back on the shelf until you set a new share.`,
+      )
+    ) {
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await closeAdminWaitlistAllocation(row.allocationId, row.bookId);
+      setNotice(`${row.title} — release closed. Set a new share whenever you are ready.`);
+      await load();
+    } catch (err) {
+      setError(err instanceof AdminApiError ? err.message : "Could not close that release.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const needingAttention = items.filter((row) => rowFlag(row) !== null).length;
 
   return (
@@ -364,6 +402,20 @@ export default function AdminStockPage() {
                       ? "Change share"
                       : "Set the share"}
                 </Button>
+                {/* Only while there is something to end. After closing, the
+                    button beside it becomes "Set the share" — the re-release
+                    happens in the same place, which is the point. */}
+                {openRow.allocationId ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void closeShare(openRow)}
+                  >
+                    Close release
+                  </Button>
+                ) : null}
                 {openRow.waiting > 0 ? (
                   <Link
                     href={`/${locale}/admin/waitlist?bookId=${openRow.bookId}`}
