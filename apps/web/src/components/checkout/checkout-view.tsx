@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useForm, useWatch, type FieldErrors } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import type { Order } from "@sakura/contracts";
 
 import {
   CollapsibleOrderRecap,
@@ -14,16 +15,7 @@ import {
   type RecapLine,
 } from "@/components/domain";
 import { CheckoutProgress, PageHeader, RailLayout, Shell, StickyBar } from "@/components/layout";
-import {
-  Button,
-  Card,
-  CopyButton,
-  LinkButton,
-  Notice,
-  OrderId,
-  Skeleton,
-  Toast,
-} from "@/components/ui";
+import { Button, LinkButton, Notice, Skeleton, Toast } from "@/components/ui";
 import { useCart } from "@/hooks/use-cart";
 import { useCartStepEvent } from "@/hooks/use-cart-step-event";
 import type { Locale } from "@/i18n/settings";
@@ -41,6 +33,7 @@ import { summaryLines } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 
+import { OrderReceipt } from "./order-receipt";
 import { PaymentSection } from "./payment-section";
 import {
   PaymentVerificationModal,
@@ -82,7 +75,7 @@ export function CheckoutView({
   const { t } = useTranslation();
   const path = routes(locale);
 
-  const [placedOrder, setPlacedOrder] = useState<{ id: string; email: string } | null>(null);
+  const [placedOrder, setPlacedOrder] = useState<{ order: Order; email: string } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   /* Held apart from `submitError` because this one refusal has somewhere to
      send the shopper. The order number is the whole point: the usual cause of
@@ -95,7 +88,7 @@ export function CheckoutView({
      clicking "See order info" — the modal's result is the only thing on
      screen until then, so the confirmation page and the cart clear wait for
      that click rather than firing themselves. */
-  const [pendingOrder, setPendingOrder] = useState<{ id: string; email: string } | null>(null);
+  const [pendingOrder, setPendingOrder] = useState<{ order: Order; email: string } | null>(null);
 
   const [step, setStep] = useState<"delivery" | "payment">("delivery");
 
@@ -212,7 +205,7 @@ export function CheckoutView({
          request — a manual-transfer order comes back PAYMENT_CONFIRMED when
          the transaction was matched against the gateway, PENDING otherwise.
          This is just reading that result, not triggering a second check. */
-      setPendingOrder({ id: order.orderNumber, email: values.email });
+      setPendingOrder({ order, email: values.email });
       setVerification(order.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");
 
       /* Revenue is reported here, from the order the API returned, and not
@@ -265,18 +258,13 @@ export function CheckoutView({
             {t("checkout.placed.description", { email: placedOrder.email })}
           </p>
 
-          <Card variant="tint" padding="roomy" className="mt-8">
-            <div className="flex items-baseline justify-between gap-4">
-              <p className="eyebrow">{t("checkout.placed.orderId")}</p>
-              <CopyButton value={placedOrder.id} />
-            </div>
-            <OrderId className="mt-2.5 block">{placedOrder.id}</OrderId>
-            <p className="text-caption text-secondary mt-2.5">{t("checkout.placed.copyPrompt")}</p>
-          </Card>
+          <div className="mt-8">
+            <OrderReceipt order={placedOrder.order} locale={locale} />
+          </div>
 
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="mt-3 flex flex-wrap gap-3">
             <LinkButton href={path.catalog}>{t("checkout.placed.action")}</LinkButton>
-            <LinkButton href={path.order(placedOrder.id)} variant="secondary">
+            <LinkButton href={path.order(placedOrder.order.orderNumber)} variant="secondary">
               {t("checkout.placed.track")}
             </LinkButton>
           </div>

@@ -96,8 +96,8 @@ export function OrderLine({ book, quantity, amount, size = "xs", className }: Or
       <BookCover src={book.coverUrl} title={book.title} author={book.author} radius="xs" />
       <p
         className={cn(
-          "min-w-0 truncate",
-          isSmall ? "text-13 text-ink" : "text-17 text-ink font-serif",
+          "min-w-0",
+          isSmall ? "truncate text-13 text-ink" : "text-17 text-ink font-serif",
         )}
       >
         {book.title}
