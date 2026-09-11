@@ -165,18 +165,49 @@ export const topSellerSchema = z.object({
 export type TopSeller = z.infer<typeof topSellerSchema>;
 
 /**
- * Revenue over a window.
+ * One window's totals, on one dating rule.
  *
  * `orderCount` travels with every total because a revenue figure on its own is
  * unreadable: ৳48,000 is a good day or a bad week depending on how many orders
  * made it, and a panel that shows only the money invites the wrong conclusion.
  *
- * These count *confirmed* orders only — see the service for which statuses
- * qualify and why PENDING is excluded.
+ * `unitsSold` is here for the same reason one step further down. This shop
+ * sells books, and copies — not taka — are what stock, print runs and courier
+ * weight are all denominated in. Two orders worth the same money are not the
+ * same event if one of them is a single boxed set and the other is eleven
+ * paperbacks, and every operational decision downstream cares which.
  */
-export const revenueWindowSchema = z.object({
+export const windowTotalsSchema = z.object({
   totalCents: z.number().int().nonnegative(),
   orderCount: z.number().int().nonnegative(),
+  unitsSold: z.number().int().nonnegative(),
+});
+
+export type WindowTotals = z.infer<typeof windowTotalsSchema>;
+
+/**
+ * A window, counted both ways — because for a cash-on-delivery shop the two
+ * ways disagree, and the disagreement is the useful part.
+ *
+ * `ordered` dates an order by when the customer placed it. `collected` dates
+ * it by when its money was actually recognised — the transition into
+ * PAYMENT_CONFIRMED. For a prepaid order these land within minutes of each
+ * other. For COD they are days apart, because the money does not exist until
+ * the courier hands it over.
+ *
+ * Reporting only one of them is what makes a dashboard lie. Dating by
+ * placement while gating on confirmed status (which is what this page used to
+ * do) is the worst of both: today's figure is near zero because today's orders
+ * have not settled yet, and last week's figures keep growing as couriers pay
+ * in — so the chart silently rewrites its own history between two viewings.
+ *
+ * Both are honest questions. "What did we take today" is `collected`; "what
+ * did customers buy today" is `ordered`. The panel shows both and says which
+ * is which.
+ */
+export const revenueWindowSchema = z.object({
+  collected: windowTotalsSchema,
+  ordered: windowTotalsSchema,
 });
 
 export type RevenueWindow = z.infer<typeof revenueWindowSchema>;

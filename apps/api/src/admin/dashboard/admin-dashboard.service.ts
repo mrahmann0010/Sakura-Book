@@ -13,7 +13,7 @@ import type {
 import { and, asc, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import type { Env } from "../../config/env.schema";
 import { DbService } from "../../db/db.service";
-import { books, orders } from "../../db/schema";
+import { books, orderItems, orders, orderStatusHistory } from "../../db/schema";
 import { ShippingTermsService } from "../../shipping";
 
 /**
@@ -31,6 +31,23 @@ import { ShippingTermsService } from "../../shipping";
  * shop sees revenue appear only when an order is marked delivered, since that
  * is when COD reaches PAYMENT_CONFIRMED. That is the honest reading — the
  * money genuinely does not exist until the courier hands it over.
+ *
+ * ## Which date a confirmed order counts on
+ *
+ * Two dates, and they are not interchangeable. `recognisedAt` is when the
+ * order entered PAYMENT_CONFIRMED — when the money became real. `createdAt` is
+ * when the customer placed it.
+ *
+ * Every window is reported on both (`collected` and `ordered`), because for a
+ * COD shop they are days apart and each answers a question somebody asks.
+ * What is *not* offered is the combination this file used to compute: dating
+ * by `createdAt` while filtering on confirmed status. That reads as neither
+ * question and misleads as both — today's total sits near zero while today's
+ * orders are still PENDING, and every past day keeps climbing as its couriers
+ * settle, so the same chart shows a different history each time it is opened.
+ *
+ * The month series take `recognisedAt` alone. A trend has to be a fixed
+ * history or it is not a trend, and only the collection date is fixed.
  *
  * ## Day boundaries are the shop's, not UTC's
  *
@@ -97,7 +114,8 @@ export class AdminDashboardService {
     const terms = await this.shippingTermsService.current();
 
     const result = (await this.dbService.db.execute(sql`
-      with bounds as (
+      ${this.scopedOrders(timezone)},
+      bounds as (
         select to_date(${month}, 'YYYY-MM') as month_start
       ),
       days as (
@@ -109,24 +127,30 @@ export class AdminDashboardService {
       )
       select
         to_char(d.day, 'YYYY-MM-DD') as day,
-        coalesce(count(${orders.id}), 0)::int as order_count,
-        coalesce(sum(${orders.totalCents}), 0)::int as revenue_cents
+        (count(scoped.collected_on))::int as order_count,
+        coalesce(sum(scoped.total_cents), 0)::int as revenue_cents,
+        coalesce(sum(scoped.units), 0)::int as units_sold
       from days d
-      left join ${orders}
-        on (${orders.createdAt} at time zone ${timezone})::date = d.day
-        and ${inArray(orders.status, REVENUE_STATUSES)}
+      left join scoped on scoped.collected_on = d.day
       group by d.day
       order by d.day
-    `)) as unknown as { day: string; order_count: number; revenue_cents: number }[];
+    `)) as unknown as {
+      day: string;
+      order_count: number;
+      revenue_cents: number;
+      units_sold: number;
+    }[];
 
     const daily = (Array.isArray(result) ? result : []).map((row) => ({
       date: row.day,
       orderCount: Number(row.order_count),
       revenueCents: Number(row.revenue_cents),
+      unitsSold: Number(row.units_sold),
     }));
 
     const totalOrders = daily.reduce((sum, point) => sum + point.orderCount, 0);
     const totalRevenueCents = daily.reduce((sum, point) => sum + point.revenueCents, 0);
+    const totalUnitsSold = daily.reduce((sum, point) => sum + point.unitsSold, 0);
 
     return {
       month,
@@ -134,6 +158,7 @@ export class AdminDashboardService {
       timezone,
       totalOrders,
       totalRevenueCents,
+      totalUnitsSold,
       averageOrderValueCents: totalOrders > 0 ? Math.round(totalRevenueCents / totalOrders) : 0,
       daily,
     };
@@ -150,7 +175,8 @@ export class AdminDashboardService {
    */
   private async monthlyTrend(timezone: string): Promise<MonthlyTrendPoint[]> {
     const result = (await this.dbService.db.execute(sql`
-      with months as (
+      ${this.scopedOrders(timezone)},
+      months as (
         select generate_series(
           date_trunc('month', (now() at time zone ${timezone})) - interval '11 months',
           date_trunc('month', (now() at time zone ${timezone})),
@@ -159,25 +185,30 @@ export class AdminDashboardService {
       )
       select
         to_char(m.month_start, 'YYYY-MM') as month,
-        coalesce(count(${orders.id}), 0)::int as order_count,
-        coalesce(sum(${orders.totalCents}), 0)::int as revenue_cents
+        (count(scoped.collected_on))::int as order_count,
+        coalesce(sum(scoped.total_cents), 0)::int as revenue_cents,
+        coalesce(sum(scoped.units), 0)::int as units_sold
       from months m
-      left join ${orders}
-        on date_trunc('month', (${orders.createdAt} at time zone ${timezone}))::date = m.month_start
-        and ${inArray(orders.status, REVENUE_STATUSES)}
+      left join scoped on date_trunc('month', scoped.collected_on)::date = m.month_start
       group by m.month_start
       order by m.month_start
-    `)) as unknown as { month: string; order_count: number; revenue_cents: number }[];
+    `)) as unknown as {
+      month: string;
+      order_count: number;
+      revenue_cents: number;
+      units_sold: number;
+    }[];
 
     return (Array.isArray(result) ? result : []).map((row) => ({
       month: row.month,
       orderCount: Number(row.order_count),
       revenueCents: Number(row.revenue_cents),
+      unitsSold: Number(row.units_sold),
     }));
   }
 
   /**
-   * Revenue over a window ending today, inclusive.
+   * Revenue over a window ending today, inclusive — counted on both dates.
    *
    * `daysBack` is an offset in whole shop-days, so 0 is today and 6 is "the
    * last seven days including today" — which is what a panel labelled "7 days"
@@ -185,23 +216,113 @@ export class AdminDashboardService {
    * than a timestamp keeps the boundary on a day edge: a rolling 168-hour
    * window would make this morning's figure include half of the same weekday a
    * week ago, and the number would move for reasons nobody could explain.
+   *
+   * One query rather than two. The two halves differ only in which date column
+   * they test, and `filter (where ...)` expresses exactly that — issuing this
+   * twice would scan the same rows twice to ask the same question about a
+   * different column of each.
    */
   private async revenueSince(daysBack: number, timezone: string): Promise<RevenueWindow> {
-    const [row] = await this.dbService.db
-      .select({
-        totalCents: sql<number>`coalesce(sum(${orders.totalCents}), 0)::int`,
-        orderCount: sql<number>`count(*)::int`,
-      })
-      .from(orders)
-      .where(
-        and(
-          inArray(orders.status, REVENUE_STATUSES),
-          sql`(${orders.createdAt} at time zone ${timezone})::date
-              >= ((now() at time zone ${timezone})::date - ${daysBack}::int)`,
-        ),
-      );
+    const cutoff = sql`((now() at time zone ${timezone})::date - ${daysBack}::int)`;
 
-    return { totalCents: row.totalCents, orderCount: row.orderCount };
+    const result = (await this.dbService.db.execute(sql`
+      ${this.scopedOrders(timezone)}
+      select
+        coalesce(sum(total_cents) filter (where collected_on >= ${cutoff}), 0)::int
+          as collected_cents,
+        (count(*) filter (where collected_on >= ${cutoff}))::int as collected_orders,
+        coalesce(sum(units) filter (where collected_on >= ${cutoff}), 0)::int as collected_units,
+        coalesce(sum(total_cents) filter (where ordered_on >= ${cutoff}), 0)::int as ordered_cents,
+        (count(*) filter (where ordered_on >= ${cutoff}))::int as ordered_orders,
+        coalesce(sum(units) filter (where ordered_on >= ${cutoff}), 0)::int as ordered_units
+      from scoped
+    `)) as unknown as {
+      collected_cents: number;
+      collected_orders: number;
+      collected_units: number;
+      ordered_cents: number;
+      ordered_orders: number;
+      ordered_units: number;
+    }[];
+
+    const row = (Array.isArray(result) ? result : [])[0];
+
+    return {
+      collected: {
+        totalCents: Number(row?.collected_cents ?? 0),
+        orderCount: Number(row?.collected_orders ?? 0),
+        unitsSold: Number(row?.collected_units ?? 0),
+      },
+      ordered: {
+        totalCents: Number(row?.ordered_cents ?? 0),
+        orderCount: Number(row?.ordered_orders ?? 0),
+        unitsSold: Number(row?.ordered_units ?? 0),
+      },
+    };
+  }
+
+  /**
+   * The `scoped` CTE every money query here selects from: one row per
+   * countable order, carrying both of its dates and its copy count.
+   *
+   * ## Why both dependencies arrive pre-aggregated
+   *
+   * `order_items` has a row per title, so joining it directly would multiply
+   * each order's `total_cents` by the number of distinct titles on it — a
+   * three-title order would contribute its full value three times, and the
+   * revenue figures would be silently, unreproducibly too high. Summing
+   * quantity per order *first* keeps the join one-to-one, so the money stays
+   * correct while the copies come along for free.
+   *
+   * `confirmed_at` is folded the same way, and for a second reason on top of
+   * that one. An order can hold more than one PAYMENT_CONFIRMED row — a
+   * reconfirmation after a correction — so it has to collapse to `min()`
+   * before it is joined, or a single order would count twice. Written as a
+   * correlated subquery instead, it would also re-scan `order_status_history`
+   * once per order: neither `order_id` column here carries an index, because
+   * Postgres does not create one for a foreign key. Aggregating once and
+   * joining the result asks for a single pass regardless of what is indexed.
+   *
+   * ## Why `recognised_at` falls back to `created_at`
+   *
+   * The fallback covers orders confirmed before the status log existed, and
+   * any seeded row written straight to a confirmed status without a history
+   * entry. Those orders would otherwise drop out of `collected` entirely —
+   * money the shop definitely took, vanishing from the dashboard because of
+   * how its row happened to be created. Dating them by placement is imprecise;
+   * omitting them is wrong.
+   *
+   * No alias on `orders`: the Drizzle column references interpolated below
+   * render as `"orders"."…"`, which an alias would put out of scope.
+   */
+  private scopedOrders(timezone: string) {
+    return sql`
+      with copies_per_order as (
+        select ${orderItems.orderId} as order_id, sum(${orderItems.quantity})::int as units
+        from ${orderItems}
+        group by ${orderItems.orderId}
+      ),
+      confirmed_at as (
+        select
+          ${orderStatusHistory.orderId} as order_id,
+          min(${orderStatusHistory.createdAt}) as recognised_at
+        from ${orderStatusHistory}
+        where ${orderStatusHistory.status} = 'PAYMENT_CONFIRMED'
+        group by ${orderStatusHistory.orderId}
+      ),
+      scoped as (
+        select
+          ${orders.totalCents} as total_cents,
+          (${orders.createdAt} at time zone ${timezone})::date as ordered_on,
+          (coalesce(confirmed_at.recognised_at, ${orders.createdAt})
+            at time zone ${timezone})::date as collected_on,
+          coalesce(copies_per_order.units, 0) as units
+        from ${orders}
+        left join copies_per_order on copies_per_order.order_id = ${orders.id}
+        left join confirmed_at on confirmed_at.order_id = ${orders.id}
+        where ${inArray(orders.status, REVENUE_STATUSES)}
+      )
+    `;
   }
 
   /**
