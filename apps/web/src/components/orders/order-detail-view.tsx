@@ -1,8 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import type { Order } from "@sakura/contracts";
 
 import { Card, Notice, Skeleton } from "@/components/ui";
+import type { Locale } from "@/i18n/settings";
 import { lookupOrder } from "@/lib/api/orders";
 
 import { OrderDetailCard } from "./order-detail-card";
@@ -28,11 +31,33 @@ import { OrderDetailCard } from "./order-detail-card";
    decision and not this component's to make.
    -------------------------------------------------------------------------- */
 
-export function OrderDetailView({ orderNumber }: { orderNumber: string }) {
+/**
+ * How often a live order re-checks itself, in ms.
+ *
+ * Ninety seconds against a ten-a-minute limit leaves the customer's own
+ * refresh button most of the budget — the poll exists so that someone who
+ * leaves the tab open sees the status change without touching anything, not
+ * so the page can race the shop's staff. Terminal orders poll not at all;
+ * nothing is going to happen to them.
+ */
+const LIVE_POLL_MS = 90_000;
+
+const TERMINAL_STATUSES: ReadonlySet<Order["status"]> = new Set([
+  "DELIVERED",
+  "CANCELLED",
+  "REFUNDED",
+]);
+
+export function OrderDetailView({ orderNumber, locale }: { orderNumber: string; locale: Locale }) {
+  const { t } = useTranslation();
+
   const {
     data: order,
     isPending,
     isError,
+    isFetching,
+    dataUpdatedAt,
+    refetch,
   } = useQuery({
     queryKey: ["order", orderNumber],
     queryFn: async () => (await lookupOrder({ orderNumber }))[0] ?? null,
@@ -44,6 +69,15 @@ export function OrderDetailView({ orderNumber }: { orderNumber: string }) {
        that the limit is per-visitor, and retrying into a rate limit is how a
        client turns a slow minute into a blocked one. */
     retry: 1,
+    refetchInterval: (query) => {
+      const current = query.state.data;
+      if (!current || TERMINAL_STATUSES.has(current.status)) return false;
+      return LIVE_POLL_MS;
+    },
+    /* Only while the tab is actually being looked at. A phone left in a pocket
+       on this page would otherwise spend the customer's rate limit, and their
+       data, on an answer nobody is reading. */
+    refetchIntervalInBackground: false,
   });
 
   if (isPending) return <OrderDetailSkeleton />;
@@ -55,13 +89,20 @@ export function OrderDetailView({ orderNumber }: { orderNumber: string }) {
   if (isError || !order) {
     return (
       <Notice tone="error" className="mt-10">
-        We couldn&apos;t find that order. Check the order ID from your confirmation, or try again in
-        a moment.
+        {t("orders.notFound")}
       </Notice>
     );
   }
 
-  return <OrderDetailCard order={order} />;
+  return (
+    <OrderDetailCard
+      order={order}
+      locale={locale}
+      updatedAt={dataUpdatedAt}
+      onRefresh={() => void refetch()}
+      refreshing={isFetching}
+    />
+  );
 }
 
 function OrderDetailSkeleton() {
@@ -69,9 +110,10 @@ function OrderDetailSkeleton() {
     <Card variant="tint" padding="roomy" className="mt-10" aria-busy="true">
       <Skeleton className="h-3 w-16" />
       <Skeleton className="mt-3 h-7 w-40" />
-      <div className="mt-9 flex flex-col gap-4">
-        {Array.from({ length: 3 }, (_, stage) => (
-          <Skeleton key={stage} index={stage} className="h-12" />
+      <Skeleton className="mt-6 h-6 w-56" />
+      <div className="mt-8 flex flex-col gap-4">
+        {Array.from({ length: 4 }, (_, stage) => (
+          <Skeleton key={stage} index={stage} className="h-11" />
         ))}
       </div>
     </Card>

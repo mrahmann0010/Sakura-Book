@@ -19,11 +19,18 @@ import { localizeLinks, routes } from "@/lib/routes";
    sees the visitor rather than this server. See that component for why that
    distinction had teeth. */
 
-export const metadata: Metadata = {
-  title: "Order details · Nihonova Books",
-  /* A personal view of one shopper's order — nothing here belongs in an index. */
-  robots: { index: false, follow: true },
-};
+export async function generateMetadata({
+  params,
+}: PageProps<"/[locale]/orders/[orderNumber]">): Promise<Metadata> {
+  const { locale } = (await params) as { locale: Locale };
+  const { t } = await getTranslation(locale);
+
+  return {
+    title: `${t("orders.metaTitle")} · Nihonova Books`,
+    /* A personal view of one shopper's order — nothing here belongs in an index. */
+    robots: { index: false, follow: true },
+  };
+}
 
 export default async function OrderDetailPage({
   params,
@@ -45,9 +52,9 @@ export default async function OrderDetailPage({
     >
       <Shell className="max-w-measure py-14 lg:py-20">
         <LinkButton href={path.orders} variant="secondary">
-          ← Track another order
+          ← {t("orders.trackAnother")}
         </LinkButton>
-        <OrderDetailView orderNumber={orderNumber} />
+        <OrderDetailView orderNumber={orderNumber} locale={locale} />
       </Shell>
     </PageShell>
   );
