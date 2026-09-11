@@ -53,11 +53,12 @@ Yes — the system is complete and the code is in place. Work down this list
 once, in order. Nothing here needs a developer.
 
 **1. The book must exist and be sellable.**
-Admin → Books → the title. Set **stock quantity** to what actually landed, and
-check **availability** is `in_stock`. A `coming_soon` book is forced to zero
-stock and can never be ordered, invite or no invite — so if the title has been
-sitting as "coming soon" while people joined the list, you must flip it to
-`in_stock` in the same edit.
+Admin → Stock → **Manage** → **Books arrived**, and type how many came in — it
+adds to the count rather than replacing it. Then check the title's
+**availability** is `in_stock` on its Books page. A `coming_soon` book can never
+be ordered, invite or no invite, however many copies it has — so if the title
+has been sitting as "coming soon" while people joined the list, flip it to
+`in_stock` as well. Either order is fine: the copies you recorded are kept.
 
 **2. The title must be on the waitlist picker** (only matters for new signups).
 Admin → Settings → Notify books.
@@ -93,51 +94,60 @@ waves and the invite columns are live on the server the site actually talks to.
 > waitlist's to spend. Sixty came in, fifty go to the queue, ten stay for
 > whoever walks in or calls.
 
-Admin → Waitlist → filter by the book. The release header appears only when a
-book is filtered, because a release is a decision about one title.
+Everything for one title happens in one place: **Admin → Stock → Manage**.
 
-Press **Open release** and enter the number of copies. Add a note — _"Sept
-restock, 10 held for the counter"_ — because in four months the number alone
-will not tell you why.
+Press **Set the share**. The dialog splits what is on hand into three:
 
-**Opening a release requires the ADMIN role.** Working the queue does not. That
+```
+Held by invites · Kept for the queue · On the shelf
+```
+
+You choose the middle one — how many of the copies _nobody is holding_ the
+queue may be promised. Held copies belong to people with a live link, so they
+are shown but are not yours to move. Add a note — _"Sept restock, 10 held for
+the counter"_ — because in four months the number alone will not tell you why.
+
+**Setting the share requires the ADMIN role.** Working the queue does not. That
 split is on purpose: sending texts is staff work, deciding how much of the
 shop's stock is given away through the queue is the owner's.
 
-### What the header tells you
+### The queue's copies leave the website the moment you save
+
+Before a single text goes out. Keep 8 of 10 for the queue and the storefront
+shows 2, straight away — otherwise walk-ins could buy the queue's copies before
+the wave was sent. So **On the shelf** in the dialog is exactly what the public
+will see.
+
+### Reading the Stock row
 
 ```
-JLPT N5 Grammar — 60 in stock
-Allocation: 50 of 60 to the waitlist · 31 spoken for · 19 to give out
+On hand  Promised  Reserved         On shelf
+10       1         7 of 10 alloc.   2
 ```
 
-- **spoken for** — sold through this release, plus what is being held right now.
-- **to give out** — what the next wave can fund. This is the smaller of two
-  numbers: what the release has left, _and_ what physically exists unheld. If
-  you allocate 80 copies of a 60-copy book, the panel quietly holds you to 60
-  and says so. Allocation can only ever narrow; it never conjures books.
+- **Promised** — copies held by live invites.
+- **Reserved** — copies kept for the queue that nobody has been texted about yet.
+- **of 10 allocated** — the release's running total. It _includes copies
+  already sold through it_, which have left the building. That is why it can
+  read higher than what the queue actually has on the shelf today, and why the
+  dialog asks about free copies instead of this number.
 
-### The ten counter copies are not marked anywhere
+### Changing the share, or starting over
 
-Nothing sets them aside and nothing needs to. If only fifty invites are ever
-issued, live holds can never exceed fifty, and `60 − 50 = 10` is on the public
-shelf by arithmetic. A separate "reserved pool" column would be a second number
-to keep in step with the first, and the first one that drifted would either
-strand copies or oversell them silently.
+- **Change share** — raise or lower how many free copies the queue keeps. Works
+  any time, with invites out. Lowering puts copies back on the shelf; nothing
+  already texted is touched.
+- **Close release** — stops new invites being charged to it. Anyone holding an
+  invite keeps it, with their copy and their window. The copies it was keeping
+  go back on the shelf, and the button beside it becomes **Set the share**, so
+  the next release opens in the same place.
+- **Start a new release** — appears instead of Change share once a release has
+  handed out everything it had and new stock is sitting on the shelf. It closes
+  the old one and opens the next in one step.
 
-### Changing your mind about the number
-
-There is no edit. **Close the release and open a new one** with the right
-figure. This is safe: closing does not touch invites already sent — they keep
-their windows and their copies — and the new release cannot over-issue, because
-the physical cap already subtracts every live hold, including the ones charged
-to the release you just closed.
-
-The one thing to know is that the new release's _budget_ number reads
-optimistically for as long as the old one's holds are still alive: it says 50
-available while 30 copies are held under the closed release. The panel will not
-let you spend them — "to give out" is held down by the physical count and says
-so — but do not read the raw allocation figure as gospel during that overlap.
+**New stock arrived?** Record it with **Books arrived**, then **Change share**
+(or **Start a new release**, if that is what the button says). You never need
+to withdraw anyone's invite to release more.
 
 ### One open release per book, ever
 
@@ -355,16 +365,16 @@ Three things follow, and they are the ones to know at the desk:
 ## 10. Restock morning, on one card
 
 ```
-1.  Books → set stock, confirm availability = in_stock
+1.  Stock → Manage → Books arrived; confirm availability = in_stock
 2.  Settings → Waitlist invite → confirm the window (48h default)
 3.  Send ONE invite by hand → confirm delivery says SENT
-4.  Waitlist → filter the book → Open release (how many copies the queue gets)
+4.  Stock → Manage → Set the share (how many free copies the queue gets)
 5.  Invite next N
 6.  Read the skipped list. Note anyone wanting more copies than remain.
 7.  Check the delivery column. Re-invite every FAILED row.
 8.  Wait out the window. Do nothing — copies come back on their own.
 9.  Invite next N again. Repeat.
-10. Queue empty or release spent → Close release.
+10. More books arrive → Stock → Books arrived → Change share. No need to close.
 ```
 
 If an invite is ever refused, the message says which of the two limits stopped
