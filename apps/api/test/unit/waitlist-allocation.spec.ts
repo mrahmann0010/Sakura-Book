@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { adminWaitlistAllocationResizeSchema } from "@sakura/contracts";
 import { WaitlistAllocationService } from "../../src/waitlist/waitlist-allocation.service";
 
 /**
@@ -326,8 +327,15 @@ describe("what a spent invite costs its release", () => {
  * below is what stops it becoming a quieter version of the same bug.
  */
 function resizeService(row: Record<string, unknown> | undefined, budget?: Record<string, unknown>) {
+  /* What the UPDATE was asked to write, so a test can assert the total a hold
+     became rather than only that some update happened. */
+  const written: Record<string, unknown>[] = [];
+
   const update = vi.fn().mockReturnValue({
-    set: () => ({ where: () => Promise.resolve() }),
+    set: (values: Record<string, unknown>) => {
+      written.push(values);
+      return { where: () => Promise.resolve() };
+    },
   });
 
   const select = vi
@@ -344,7 +352,7 @@ function resizeService(row: Record<string, unknown> | undefined, budget?: Record
 
   const tx = { select, update } as never;
 
-  return { service: new WaitlistAllocationService({ db: {} } as never), tx, update };
+  return { service: new WaitlistAllocationService({ db: {} } as never), tx, update, written };
 }
 
 describe("WaitlistAllocationService.resize — changing a share without ending it", () => {
@@ -390,5 +398,81 @@ describe("WaitlistAllocationService.resize — changing a share without ending i
     const { service, tx } = resizeService(undefined);
 
     await expect(service.resize("alloc-1", 30, tx)).rejects.toThrow(/Open stock release/);
+  });
+});
+
+/**
+ * Asking for the share in today's units.
+ *
+ * `copies` is a running total that still counts copies sold through the
+ * release — copies that have left the building. The panel used to cap that
+ * total at the stock count, so a release that had sold anything could never
+ * be raised to cover what was actually on hand, and the difference fell
+ * through to the public shelf with no control able to move it.
+ *
+ * A hold — how many of the free copies to keep — is the number a person
+ * actually knows. These pin that the server turns it into the right total,
+ * using `committed` read inside its own transaction.
+ */
+describe("WaitlistAllocationService.resize — by hold", () => {
+  it("adds what the release has already used to the copies kept", async () => {
+    // The book this was found on: 10 allocated, 2 sold and 1 held (3 used),
+    // 10 on hand, 1 held — so 9 free. Keeping all 9 must write 12, not 10.
+    const { service, tx, written } = resizeService(
+      { bookId: "book-1", committed: 3 },
+      allocationRow({ copies: 12, committed: 3, stockQuantity: 10, physicalSpare: 9 }),
+    );
+
+    const budget = await service.resize("alloc-1", { hold: 9 }, tx);
+
+    expect(written[0]).toMatchObject({ copies: 12 });
+    expect(budget.remaining).toBe(9);
+    expect(budget.spendable).toBe(9);
+  });
+
+  it("allows keeping nothing more on a release that has been used", async () => {
+    // "No more from this release, the rest goes to the shelf" is a real
+    // decision. It writes exactly what was used — a fully spent release.
+    const { service, tx, written } = resizeService(
+      { bookId: "book-1", committed: 3 },
+      allocationRow({ copies: 3, committed: 3 }),
+    );
+
+    await service.resize("alloc-1", { hold: 0 }, tx);
+
+    expect(written[0]).toMatchObject({ copies: 3 });
+  });
+
+  it("refuses to empty a release that was never used, and says to close it", async () => {
+    // Zero copies is not a release; the table refuses one. The honest verb
+    // for "keep nothing" on an unused release is Close.
+    const { service, tx, update } = resizeService({ bookId: "book-1", committed: 0 });
+
+    await expect(service.resize("alloc-1", { hold: 0 }, tx)).rejects.toThrow(/Close it instead/);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("accepts exactly one of a total or a hold — never both, never neither", () => {
+    // Both at once is ambiguous about which one wins, and neither is a resize
+    // that says nothing. Either would reach the service as a guess.
+    const accepts = (body: unknown) => adminWaitlistAllocationResizeSchema.safeParse(body).success;
+
+    expect(accepts({ copies: 12 })).toBe(true);
+    expect(accepts({ hold: 9 })).toBe(true);
+    expect(accepts({ hold: 0 })).toBe(true);
+    expect(accepts({ copies: 12, hold: 9 })).toBe(false);
+    expect(accepts({})).toBe(false);
+    expect(accepts({ hold: -1 })).toBe(false);
+  });
+
+  it("can never land below the floor, because a hold is never negative", async () => {
+    const { service, tx, written } = resizeService(
+      { bookId: "book-1", committed: 18 },
+      allocationRow({ copies: 19, committed: 18 }),
+    );
+
+    await service.resize("alloc-1", { hold: 1 }, tx);
+
+    expect(written[0]).toMatchObject({ copies: 19 });
   });
 });

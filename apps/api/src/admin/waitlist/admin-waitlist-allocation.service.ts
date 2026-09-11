@@ -33,12 +33,15 @@ export class AdminWaitlistAllocationService {
 
   /** The open release for a book plus everything it has had before. */
   async view(bookId: string): Promise<AdminWaitlistAllocationView> {
-    const [open, history] = await Promise.all([
+    const [open, history, stock] = await Promise.all([
       this.waitlistAllocationService.describe(bookId),
       this.waitlistAllocationService.history(bookId),
+      this.waitlistAllocationService.stockOf(bookId),
     ]);
 
     return {
+      onHand: stock.onHand,
+      held: stock.held,
       open: open
         ? {
             id: open.id,
@@ -113,21 +116,32 @@ export class AdminWaitlistAllocationService {
   ): Promise<AdminWaitlistAllocationView> {
     const before = await this.waitlistAllocationService.describe(bookId);
 
-    await this.dbService.db.transaction((tx) =>
-      this.waitlistAllocationService.resize(id, request.copies, tx, request.note),
+    /* The schema guarantees exactly one of the two is present. */
+    const target = request.copies ?? { hold: request.hold! };
+
+    const after = await this.dbService.db.transaction((tx) =>
+      this.waitlistAllocationService.resize(id, target, tx, request.note),
     );
 
+    /* Audited as the total actually written, not as what was sent. A hold is
+       turned into a total inside the transaction, so the request alone cannot
+       say what the release now reads — and "who changed it from what to what"
+       is the whole question this row exists to answer. The hold rides along
+       because it is the number the person chose. */
     await this.auditService.recordDetached({
       actor: { sub: context.actor.sub, email: context.actor.email },
       action: "UPDATE",
       entityType: "waitlist_allocation",
       entityId: id,
       before: before ? { copies: before.copies } : undefined,
-      after: { copies: request.copies },
+      after: {
+        copies: after.copies,
+        ...(request.hold === undefined ? {} : { hold: request.hold }),
+      },
       note:
-        before && before.copies !== request.copies
-          ? `Changed the waitlist's share from ${before.copies} to ${request.copies}.`
-          : `Set the waitlist's share to ${request.copies}.`,
+        before && before.copies !== after.copies
+          ? `Changed the waitlist's share from ${before.copies} to ${after.copies}.`
+          : `Set the waitlist's share to ${after.copies}.`,
       ipAddress: context.ipAddress,
       userAgent: context.userAgent,
     });

@@ -48,16 +48,48 @@ export type AdminWaitlistAllocationOpen = z.infer<typeof adminWaitlistAllocation
  * correction usually has nothing to say about a note written when the restock
  * landed, and wiping it because the field was not sent would lose the only
  * record of why the split was chosen.
+ *
+ * Two ways to say the new size, and exactly one must be sent:
+ *
+ *   copies   the release's total, absolute — what it has already used plus
+ *            what it may still hand out.
+ *   hold     how many of the copies free *right now* to keep for the queue.
+ *            The server adds what the release has already used.
+ *
+ * `hold` is the one the panel sends, and the reason it exists is that `copies`
+ * is the wrong unit for a person to type. It is a running total, and it still
+ * counts copies that were sold through the release and have left the
+ * building — so the one number a shopkeeper actually knows, "how many are on
+ * the shelf", could not be turned into it without the browser doing
+ * arithmetic against a figure that moves every time an invite lapses. A
+ * release of 10 that had sold 2 could not be raised to cover the 10 still on
+ * hand, because the dialog compared the total against the count and capped it
+ * at 10. Asking in today's units makes that mistake unreachable, and adding
+ * `committed` inside the transaction means a lapse between opening the dialog
+ * and saving it cannot skew the result.
  */
-export const adminWaitlistAllocationResizeSchema = z.object({
-  copies: z
-    .number()
-    .int("Copies must be a whole number.")
-    .positive("A release of zero copies is a closed one — close it instead.")
-    .max(100_000),
+export const adminWaitlistAllocationResizeSchema = z
+  .object({
+    copies: z
+      .number()
+      .int("Copies must be a whole number.")
+      .positive("A release of zero copies is a closed one — close it instead.")
+      .max(100_000)
+      .optional(),
 
-  note: z.string().trim().max(500).nullish(),
-});
+    hold: z
+      .number()
+      .int("Copies must be a whole number.")
+      .nonnegative("The queue cannot be given fewer than no copies.")
+      .max(100_000)
+      .optional(),
+
+    note: z.string().trim().max(500).nullish(),
+  })
+  .refine(
+    (value) => (value.copies === undefined) !== (value.hold === undefined),
+    "Send either a total (copies) or how many free copies to keep (hold) — exactly one.",
+  );
 
 export type AdminWaitlistAllocationResize = z.infer<typeof adminWaitlistAllocationResizeSchema>;
 
@@ -144,6 +176,24 @@ export const adminWaitlistAllocationViewSchema = z.object({
    *  case no invite for this book will send. */
   open: adminWaitlistAllocationSchema.nullable(),
   history: z.array(adminWaitlistAllocationHistorySchema),
+
+  /**
+   * `books.stock_quantity`, read in the same request as `held`.
+   *
+   * Carried here rather than left to the caller's copy of the book because the
+   * share dialog subtracts one from the other, and two numbers fetched at
+   * different moments are how a preview disagrees with the save.
+   */
+  onHand: z.number().int(),
+
+  /**
+   * Copies held by live invites on this book, whichever release charged them.
+   *
+   * Present even with no open release: invites outlive the release they were
+   * charged to, so a book with its release closed can still have copies held,
+   * and those are not free to set aside again.
+   */
+  held: z.number().int().nonnegative(),
 });
 
 export type AdminWaitlistAllocationView = z.infer<typeof adminWaitlistAllocationViewSchema>;

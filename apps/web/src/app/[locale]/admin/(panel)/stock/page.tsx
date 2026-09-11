@@ -143,16 +143,21 @@ export default function AdminStockPage() {
    *   live release    resize it in place
    *   spent release   close it, then open its successor
    *
-   * The middle and last look identical on screen and must not be confused
-   * underneath. Resizing keeps the row, which is right while a release is
-   * still working — closing and reopening there would reset what it has
-   * committed and re-promise copies already given out. But a release that has
-   * sold through *has* to be replaced: its copies are charged to it forever
-   * (that is what stops a sale refilling the budget), so no new number makes
-   * it spendable again. `releaseSpent` is the server's word for which of the
-   * two this is; the browser does not guess it.
+   * Resizing keeps the row, which is right while a release is still working —
+   * closing and reopening there would reset what it has committed and
+   * re-promise copies already given out. A release that has sold through is
+   * replaced instead, because a new delivery landing on a spent release is a
+   * new restock, and the history should read one release per restock.
+   * `releaseSpent` is the server's word for which of the two this is; the
+   * browser does not guess it.
+   *
+   * Every route is given `hold` — how many of the copies free right now to
+   * keep for the queue — never a total. For a new release the two are the
+   * same number. For a resize the server adds what the release has already
+   * used, inside its own transaction; the browser used to do that sum itself,
+   * in the wrong unit, and capped every share at the stock count.
    */
-  async function saveShare(row: AdminStockRow, copies: number, note: string) {
+  async function saveShare(row: AdminStockRow, hold: number, note: string) {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -161,24 +166,24 @@ export default function AdminStockPage() {
         await closeAdminWaitlistAllocation(row.allocationId, row.bookId);
         await openAdminWaitlistAllocation({
           bookId: row.bookId,
-          copies,
+          copies: hold,
           note: note || undefined,
         });
       } else if (row.allocationId) {
         await resizeAdminWaitlistAllocation(row.allocationId, row.bookId, {
-          copies,
+          hold,
           note: note || undefined,
         });
       } else {
         await openAdminWaitlistAllocation({
           bookId: row.bookId,
-          copies,
+          copies: hold,
           note: note || undefined,
         });
       }
 
       setReleaseFor(null);
-      setNotice(`${row.title} — the queue may be promised ${copies}.`);
+      setNotice(`${row.title} — ${hold} kept for the queue.`);
       await load();
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Could not set that share.");
@@ -395,24 +400,19 @@ export default function AdminStockPage() {
         <StockReleaseDialog
           onClose={() => setReleaseFor(null)}
           bookTitle={releaseFor.title}
-          /* A successor release starts from what is genuinely free, not from
-             the shelf count: copies still held by live invites belong to
-             whoever is holding them, whichever release charged them. For a
-             spent release `reserved` is zero, so that is exactly `onShelf`. */
-          stockQuantity={releaseFor.releaseSpent ? releaseFor.onShelf : releaseFor.onHand}
-          committed={
-            /* What the release being edited has already spent: its size less
-               what is left of it. A successor has spent nothing — its
-               predecessor's charges go with the release they belong to. */
-            releaseFor.releaseSpent || releaseFor.allocationCopies === null
-              ? 0
-              : Math.max(releaseFor.allocationCopies - releaseFor.reserved, 0)
-          }
-          currentCopies={
-            releaseFor.releaseSpent ? undefined : (releaseFor.allocationCopies ?? undefined)
+          onHand={releaseFor.onHand}
+          /* Every live invite on the book, whichever release charged it — the
+             same figure the storefront subtracts, so the dialog's "free" and
+             the shelf agree. */
+          held={releaseFor.promised}
+          /* The reserve being changed, so a correction opens where the release
+             stands. Undefined for a first release and for a spent one, which
+             is replaced rather than changed — its successor keeps nothing yet. */
+          currentHold={
+            releaseFor.allocationId && !releaseFor.releaseSpent ? releaseFor.reserved : undefined
           }
           busy={busy}
-          onSubmit={(copies, note) => void saveShare(releaseFor, copies, note)}
+          onSubmit={(hold, note) => void saveShare(releaseFor, hold, note)}
         />
       ) : null}
     </div>

@@ -289,7 +289,9 @@ export default function AdminWaitlistPage() {
    * closing and reopening resets `committed` to zero and re-promises copies
    * the closed one already gave away.
    */
-  async function saveRelease(copies: number, note: string) {
+  /** `hold` is how many of the copies free right now to keep for the queue —
+   *  see `StockReleaseDialog` for why the share is asked in that unit. */
+  async function saveRelease(hold: number, note: string) {
     const open = allocation?.open;
 
     setBusy(true);
@@ -298,14 +300,14 @@ export default function AdminWaitlistPage() {
       setAllocation(
         open
           ? await resizeAdminWaitlistAllocation(open.id, bookId, {
-              copies,
+              hold,
               // Absent leaves the existing note alone; the dialog only sends
               // one when staff actually wrote something.
               note: note || undefined,
             })
-          : await openAdminWaitlistAllocation({ bookId, copies, note: note || undefined }),
+          : await openAdminWaitlistAllocation({ bookId, copies: hold, note: note || undefined }),
       );
-      setNotice(`The queue may be promised ${copies} cop${copies === 1 ? "y" : "ies"}.`);
+      setNotice(`${hold} cop${hold === 1 ? "y" : "ies"} kept for the queue.`);
       setReleaseOpen(false);
       /* The plan is a function of the budget just changed — leaving the old
          one on screen would label the send button with a number that is no
@@ -614,6 +616,14 @@ export default function AdminWaitlistPage() {
                 </Button>
               </div>
             </div>
+          ) : !allocation ? (
+            /* The lookup failed, which `load` deliberately tolerates. Said
+               rather than drawn as "no release": that branch offers a button
+               whose dialog needs this very response, so it would open nothing,
+               and a button that does nothing reads as a broken shop. */
+            <p className="text-13.5 text-secondary">
+              Could not load this book&rsquo;s share of stock. Reload the page to try again.
+            </p>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-3">
               {/* Not a warning about a missing setting — it is the step that
@@ -890,13 +900,16 @@ export default function AdminWaitlistPage() {
         </div>
       ) : null}
 
-      {releaseOpen && selectedBook ? (
+      {/* Waits for the release view as well as the book: `held` only comes
+          from it, and a dialog drawn without it would offer copies that live
+          invites are holding as if they were free. */}
+      {releaseOpen && selectedBook && allocation ? (
         <StockReleaseDialog
           onClose={() => setReleaseOpen(false)}
           bookTitle={selectedBook.title}
-          stockQuantity={selectedBook.stockQuantity}
-          committed={allocation?.open?.committed ?? 0}
-          currentCopies={allocation?.open?.copies}
+          onHand={allocation.onHand}
+          held={allocation.held}
+          currentHold={allocation.open?.remaining}
           busy={busy}
           onSubmit={saveRelease}
         />

@@ -196,10 +196,18 @@ export class WaitlistAllocationService {
    * `stockSnapshot` is deliberately left alone. It records what the original
    * decision was a share *of* — "50 of 60" — and a correction two hours later
    * is still a correction to that same restock, not a new one.
+   *
+   * `target` is either the absolute total or `{ hold }` — how many of the
+   * copies free right now to keep for the queue. The second is what a person
+   * actually knows, and it is turned into a total *here*, against `committed`
+   * read in this same transaction, rather than in a browser against a figure
+   * that moved when an invite lapsed. It also cannot hit the floor below: a
+   * hold is never negative, so `committed + hold` is never less than
+   * `committed`.
    */
   async resize(
     id: string,
-    copies: number,
+    target: number | { hold: number },
     tx: Transaction,
     note?: string | null,
   ): Promise<AllocationBudget> {
@@ -209,6 +217,18 @@ export class WaitlistAllocationService {
       .where(and(eq(waitlistAllocations.id, id), eq(waitlistAllocations.status, "OPEN")));
 
     if (!row) throw new ResourceNotFoundError("Open stock release", id);
+
+    const copies = typeof target === "number" ? target : row.committed + target.hold;
+
+    /* Only reachable through a hold: a release that has used nothing, asked to
+       keep nothing. The table refuses a zero-copy release, and it is right to —
+       that is a release with no purpose, and closing it is the honest verb. */
+    if (copies < 1) {
+      throw new InvalidInputError(
+        "This release has not been used yet, so keeping nothing for the queue would leave it empty. Close it instead.",
+        { allocationId: id },
+      );
+    }
 
     if (copies < row.committed) {
       throw new InvalidInputError(
@@ -236,6 +256,33 @@ export class WaitlistAllocationService {
     if (!budget) throw new ResourceNotFoundError("Open stock release", id);
 
     return budget;
+  }
+
+  /**
+   * A book's copies on hand, and how many of them live invites are holding.
+   *
+   * One statement, so the two cannot come from either side of an invite
+   * lapsing: the share dialog shows `onHand − held` as the copies free to set
+   * aside, and a preview built from two reads is a preview that can disagree
+   * with the save.
+   *
+   * `held` counts every live invite on the book regardless of release — the
+   * same `reservedQuantitySql` the storefront subtracts — because a copy held
+   * under a release that has since closed is no more free than one held under
+   * the open one.
+   */
+  async stockOf(
+    bookId: string,
+    executor: Executor = this.dbService.db,
+  ): Promise<{ onHand: number; held: number }> {
+    const [row] = await executor
+      .select({ onHand: books.stockQuantity, held: reservedQuantitySql(books.id) })
+      .from(books)
+      .where(eq(books.id, bookId));
+
+    if (!row) throw new ResourceNotFoundError("Book", bookId);
+
+    return row;
   }
 
   /**
