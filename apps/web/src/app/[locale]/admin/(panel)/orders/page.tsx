@@ -19,12 +19,12 @@ import { formatMoney } from "@/lib/money";
    -------------------------------------------------------------------------- */
 
 const TABS = [
-  { key: "pending", label: "Pending", statuses: ["PENDING"] },
   {
     key: "accepted",
     label: "Accepted",
     statuses: ["PAYMENT_CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED"],
   },
+  { key: "pending", label: "Pending", statuses: ["PENDING"] },
   { key: "rejected", label: "Rejected", statuses: ["CANCELLED", "REFUNDED"] },
 ] as const satisfies readonly { key: string; label: string; statuses: OrderStatus[] }[];
 
@@ -43,10 +43,53 @@ export default function AdminOrdersPage() {
   /* Starts true: a load fires on mount, and the first thing this screen
      shows should be the shape of a table, not an empty one. */
   const [loading, setLoading] = useState(true);
+  /* How many orders sit in each tab, so the queue can be read without opening
+     all three. Null until the first count lands — rendered as nothing rather
+     than as a zero, which would be a number the screen has not checked yet. */
+  const [counts, setCounts] = useState<Partial<Record<TabKey, number>>>({});
 
   useEffect(() => {
     void load(tab, "", 1);
   }, [tab]);
+
+  /* Counts depend on the search box and nothing else, so they are fetched on
+     mount and on search rather than on every tab switch — the figures do not
+     change when you look at a different tab. */
+  useEffect(() => {
+    void loadCounts("");
+  }, []);
+
+  /**
+   * One count per tab, from the list endpoint's `total`.
+   *
+   * Three requests, at pageSize 1 so the server pages out the rows nobody is
+   * going to read — `total` is counted before pagination, so a one-row page
+   * carries the same figure a full one would. There is no counts endpoint to
+   * ask instead; adding one for a three-tab admin screen would be a schema and
+   * a route to maintain for a number this already answers.
+   */
+  async function loadCounts(query: string) {
+    const results = await Promise.all(
+      TABS.map(async (t) => {
+        try {
+          const list = await listAdminOrders({
+            status: [...t.statuses],
+            q: query || undefined,
+            page: 1,
+            pageSize: 1,
+          });
+          return [t.key, list.total] as const;
+        } catch {
+          /* A count that fails is left absent rather than shown as zero — the
+             table below is the real answer, and a wrong number beside it is
+             worse than no number. */
+          return [t.key, undefined] as const;
+        }
+      }),
+    );
+
+    setCounts(Object.fromEntries(results.filter(([, total]) => total !== undefined)));
+  }
 
   async function load(activeTab: TabKey, query: string, pageNumber: number) {
     setError(null);
@@ -92,6 +135,15 @@ export default function AdminOrdersPage() {
             }`}
           >
             {t.label}
+            {counts[t.key] !== undefined ? (
+              <span
+                className={`text-caption ml-2 rounded-full px-1.5 py-0.5 tabular-nums ${
+                  tab === t.key ? "bg-clay/10 text-clay-deep" : "bg-tint text-muted"
+                }`}
+              >
+                {counts[t.key]}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
@@ -100,6 +152,9 @@ export default function AdminOrdersPage() {
         onSubmit={(event) => {
           event.preventDefault();
           void load(tab, q, 1);
+          /* The tab figures are "how many match", so they have to answer the
+             same search the table below is answering. */
+          void loadCounts(q);
         }}
         className="flex gap-2"
       >
