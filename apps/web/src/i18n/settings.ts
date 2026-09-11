@@ -27,5 +27,19 @@ export function getOptions(
     fallbackNS: defaultNamespace,
     defaultNS: defaultNamespace,
     ns,
+    interpolation: {
+      /* Off because React already escapes everything it renders, and doing it
+         twice is visible: i18next turned the "/" in a Japanese date into
+         "&#x2F;", React then escaped that "&", and the customer read
+         "2026&#x2F;09&#x2F;10" on the page. The same double-escape hits any
+         interpolated value carrying an apostrophe or an ampersand — a book
+         title, a customer's name.
+
+         Safe only because nothing feeds a translation to
+         dangerouslySetInnerHTML and there is no <Trans> in the app; if either
+         changes, this has to be reconsidered at that call site rather than
+         here. */
+      escapeValue: false,
+    },
   };
 }

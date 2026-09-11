@@ -267,6 +267,71 @@
     },
     "reassurance": "Nothing is charged online — you settle up with the courier or by transfer."
   },
+  "orders": {
+    "metaTitle": "Order details",
+    "orderLabel": "Order",
+    "trackAnother": "Track another order",
+    "deliveringTo": "Delivering to",
+    "notFound": "We couldn't find that order. Check the order ID from your confirmation, or try again in a moment.",
+    "detailsToggle_one": "Order details · {{count}} book",
+    "detailsToggle_other": "Order details · {{count}} books",
+    "estimate": "Expected between {{from}} and {{to}}.",
+    "lastChecked": "Last checked at {{time}}",
+    "refresh": "Refresh",
+    "refreshing": "Checking",
+    "progress": {
+      "label": "Order progress",
+      "placed": "Order placed",
+      "verified": "Payment verified",
+      "packed": "Packed",
+      "shipped": "Shipped",
+      "delivered": "Delivered"
+    },
+    "status": {
+      "cancelled": "Cancelled",
+      "refunded": "Refunded"
+    },
+    "headline": {
+      "PENDING": "We're checking your payment",
+      "PAYMENT_CONFIRMED": "Payment verified — we're getting it ready",
+      "PROCESSING": "Packed and waiting for the courier",
+      "SHIPPED": "On its way to you",
+      "DELIVERED": "Delivered",
+      "CANCELLED": "This order was cancelled",
+      "REFUNDED": "This order was refunded"
+    },
+    "track": {
+      "eyebrow": "Track order",
+      "title": "Where's your order?",
+      "description": "Enter your order ID, or the email or phone number you ordered with — whichever you have.",
+      "orderId": "Order ID",
+      "orderIdPlaceholder": "e.g. NB-40718",
+      "submit": "Track order",
+      "searching": "Searching",
+      "error": "Something went wrong looking up your order. Try again in a moment.",
+      "noMatch": "We couldn't find any orders matching that. Double-check what you entered and try again.",
+      "found_one": "{{count}} order found",
+      "found_other": "{{count}} orders found"
+    },
+    "cancel": {
+      "action": "Cancel this order",
+      "title": "Cancel this order?",
+      "description": "We'll put the books back on the shelf and stop the order. This can't be undone.",
+      "emailHint": "The email you ordered with, so we know it's you.",
+      "reasonLabel": "Reason (optional)",
+      "reasonHint": "It helps us understand why orders get cancelled.",
+      "confirm": "Yes, cancel it",
+      "keep": "Keep my order",
+      "submitting": "Cancelling",
+      "mismatch": "We couldn't match that email to this order. Check it and try again.",
+      "failed": "We couldn't cancel the order just now. Please try again in a moment."
+    },
+    "payment": {
+      "pending": "Awaiting payment",
+      "paid": "Paid",
+      "cancelled": "Not charged"
+    }
+  },
   "book": {
     "rating": "{{rating}} · {{count}} ratings",
     "noReviews": "No reviews yet",

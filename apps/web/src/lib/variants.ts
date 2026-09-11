@@ -395,15 +395,23 @@ export const timelineDot = cva("size-dot shrink-0 rounded-full", {
   defaultVariants: { step: "ahead" },
 });
 
-export const timelineConnector = cva("h-px flex-1", {
+export const timelineConnector = cva("flex-1", {
   variants: {
     step: {
       complete: "bg-ink",
       live: "bg-rule",
       ahead: "bg-rule",
     },
+    /* The run between two dots. Horizontal is the strip across a confirmation
+       card; vertical is the stacked list on the tracking page, where each
+       stage carries a timestamp and four side-by-side labels would be four
+       narrow columns on a phone. */
+    orientation: {
+      horizontal: "h-px",
+      vertical: "w-px",
+    },
   },
-  defaultVariants: { step: "ahead" },
+  defaultVariants: { step: "ahead", orientation: "horizontal" },
 });
 
 export const timelineLabel = cva("text-13.5", {

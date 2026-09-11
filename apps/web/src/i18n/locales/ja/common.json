@@ -265,6 +265,71 @@
     },
     "reassurance": "オンラインでの決済はありません — 配達時または振込でお支払いください。"
   },
+  "orders": {
+    "metaTitle": "注文の詳細",
+    "orderLabel": "注文",
+    "trackAnother": "別の注文を追跡",
+    "deliveringTo": "お届け先",
+    "notFound": "その注文が見つかりませんでした。確認メールの注文IDをご確認のうえ、しばらくしてからもう一度お試しください。",
+    "detailsToggle_one": "注文の詳細 · {{count}}冊",
+    "detailsToggle_other": "注文の詳細 · {{count}}冊",
+    "estimate": "{{from}}から{{to}}の間にお届け予定です。",
+    "lastChecked": "最終確認 {{time}}",
+    "refresh": "更新",
+    "refreshing": "確認中",
+    "progress": {
+      "label": "注文の進行状況",
+      "placed": "注文受付",
+      "verified": "入金確認済み",
+      "packed": "梱包済み",
+      "shipped": "発送済み",
+      "delivered": "配達済み"
+    },
+    "status": {
+      "cancelled": "キャンセル済み",
+      "refunded": "返金済み"
+    },
+    "headline": {
+      "PENDING": "お支払いを確認しています",
+      "PAYMENT_CONFIRMED": "入金を確認しました — 現在ご準備中です",
+      "PROCESSING": "梱包が完了し、配送業者をお待ちしています",
+      "SHIPPED": "お客様へ配送中です",
+      "DELIVERED": "配達済み",
+      "CANCELLED": "この注文はキャンセルされました",
+      "REFUNDED": "この注文は返金されました"
+    },
+    "track": {
+      "eyebrow": "注文の追跡",
+      "title": "ご注文はいまどこに?",
+      "description": "注文ID、またはご注文時のメールアドレスか電話番号のいずれかをご入力ください。",
+      "orderId": "注文ID",
+      "orderIdPlaceholder": "例: NB-40718",
+      "submit": "注文を追跡",
+      "searching": "検索中",
+      "error": "注文の照会中に問題が発生しました。しばらくしてからもう一度お試しください。",
+      "noMatch": "一致する注文が見つかりませんでした。入力内容をご確認のうえ、もう一度お試しください。",
+      "found_one": "{{count}}件の注文が見つかりました",
+      "found_other": "{{count}}件の注文が見つかりました"
+    },
+    "cancel": {
+      "action": "この注文をキャンセル",
+      "title": "この注文をキャンセルしますか?",
+      "description": "書籍を在庫に戻し、注文を停止します。この操作は取り消せません。",
+      "emailHint": "ご本人確認のため、ご注文時のメールアドレスをご入力ください。",
+      "reasonLabel": "理由(任意)",
+      "reasonHint": "キャンセルの理由を把握するのに役立ちます。",
+      "confirm": "はい、キャンセルします",
+      "keep": "注文を続ける",
+      "submitting": "キャンセル中",
+      "mismatch": "そのメールアドレスはこの注文と一致しませんでした。ご確認のうえ、もう一度お試しください。",
+      "failed": "現在この注文をキャンセルできませんでした。しばらくしてからもう一度お試しください。"
+    },
+    "payment": {
+      "pending": "入金待ち",
+      "paid": "支払い済み",
+      "cancelled": "請求なし"
+    }
+  },
   "book": {
     "rating": "{{rating}} · {{count}}件の評価",
     "noReviews": "レビューはまだありません",
