@@ -5,16 +5,20 @@ import { useTranslation } from "react-i18next";
 import type { Order } from "@sakura/contracts";
 
 import { OrderLine, OrderProgress, SummaryRow } from "@/components/domain";
-import { toOrderProgressStep } from "@/components/orders/order-detail-card";
+import { toOrderProgressStep } from "./order-detail-card";
 import { Button, Card, CopyButton, Notice, OrderId, StatusPill } from "@/components/ui";
 import type { Locale } from "@/i18n/settings";
 import { formatMoney, intlLocale } from "@/lib/money";
 
 /* --------------------------------------------------------------------------
-   The full receipt shown on the checkout confirmation screen: order ID,
-   status, line items, cost breakdown, payment, and a client-side "download
-   as PDF" of everything in `receiptRef` (the two cards, not the actions
-   below them).
+   The full receipt shown on a confirmation screen: order ID, status, line
+   items, cost breakdown, payment, and a client-side "download as PDF" of
+   everything in `receiptRef` (the two cards, not the actions below them).
+
+   Lives here rather than under components/checkout because both confirmation
+   screens draw it — the ordinary cart checkout and the waitlist-invite one —
+   and neither owns it. It takes an `Order` and nothing else, so any page
+   holding one can render it; see OrderPlaced, which is how both currently do.
 
    The PDF is a screenshot (html2canvas → jsPDF), not text drawn by jsPDF
    itself — the app ships three real scripts (en/ja/bn) and jsPDF's built-in
