@@ -74,21 +74,36 @@ export function Modal({
         tabIndex={-1}
         className={cn(
           card({ variant: "modal", padding: "roomy" }),
-          "w-full outline-none",
+          /* Never taller than the space it was given, and a column so the
+             body below can be the only part that scrolls. A modal that simply
+             grew past the viewport put its own buttons off-screen with no way
+             to reach them — on a phone that is every form in the panel, and on
+             a laptop it is any form past about six fields. */
+          "flex max-h-full w-full flex-col outline-none",
           widths[size],
           className,
         )}
       >
-        <h2 className="text-24 text-ink font-serif leading-tight">{title}</h2>
+        <div className="shrink-0">
+          <h2 className="text-24 text-ink font-serif leading-tight">{title}</h2>
 
-        {description ? (
-          <p className="text-13.5 text-body mt-3.5 leading-relaxed">{description}</p>
+          {description ? (
+            <p className="text-13.5 text-body mt-3.5 leading-relaxed">{description}</p>
+          ) : null}
+        </div>
+
+        {/* `min-h-0` because a flex child will not shrink below its content
+            without it, which is exactly how an overflow container ends up not
+            overflowing. `overscroll-contain` keeps a flick at the end of the
+            list from scrolling the page underneath. */}
+        {children ? (
+          <div className="mt-5 -mr-2 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2">
+            {children}
+          </div>
         ) : null}
 
-        {children ? <div className="mt-5">{children}</div> : null}
-
         {actions ? (
-          <div className="mt-card-roomy flex flex-wrap items-center gap-3">{actions}</div>
+          <div className="mt-card-roomy flex shrink-0 flex-wrap items-center gap-3">{actions}</div>
         ) : null}
       </div>
     </div>

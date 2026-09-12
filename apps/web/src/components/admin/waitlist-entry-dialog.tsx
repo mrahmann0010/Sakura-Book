@@ -7,7 +7,7 @@ import type {
   AdminWaitlistUpdateRequest,
 } from "@sakura/contracts";
 
-import { Button, Input, Modal, Select, Textarea } from "@/components/ui";
+import { Button, Eyebrow, Input, Modal, Select, Textarea } from "@/components/ui";
 
 /* --------------------------------------------------------------------------
    Correcting one entry.
@@ -110,10 +110,13 @@ export function WaitlistEntryDialog({
       onClose={onClose}
       size="md"
       title="Edit entry"
+      /* One line, and the identifying one: which row this is. What the dialog
+         does is obvious from the fields, and a paragraph explaining it only
+         pushes them further down a screen that is already tight on a phone. */
       description={
         <>
-          Signed up {new Date(entry.signedUpAt).toLocaleDateString()} via {entry.source}. Changes
-          here are recorded against your account.
+          <span className="text-ink font-medium">{entry.customerName}</span> · signed up{" "}
+          {new Date(entry.signedUpAt).toLocaleDateString()} via {entry.source}
         </>
       }
       actions={
@@ -127,27 +130,35 @@ export function WaitlistEntryDialog({
         </>
       }
     >
-      <div className="flex flex-col gap-4">
-        {error ? <p className="text-13.5 text-clay-deep font-medium">{error}</p> : null}
+      {/* Two columns from `sm` up, one below. Seven stacked fields ran past the
+          bottom of a laptop screen; paired up, the whole form is four rows and
+          the buttons stay in view. The two sections are the two questions a
+          correction is ever about — what they asked for, and how to reach
+          them — so the split is the one staff are already thinking in. */}
+      <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
+        {error ? (
+          <p className="text-13.5 text-clay-deep font-medium sm:col-span-2">{error}</p>
+        ) : null}
 
         {holdLocked ? (
-          <p className="rounded-control border-rule bg-tint text-caption text-secondary border px-3 py-2">
+          <p className="rounded-control border-rule bg-tint text-caption text-secondary border px-3 py-2 sm:col-span-2">
             {converted
               ? "This entry became an order, so its book and quantity are the record of what was bought. Contact details can still be corrected."
-              : "This entry is holding a copy against an open release. To change the book or quantity, remove it from the list — which takes the invite back — then restore it."}
+              : "Holding a copy against an open release. To change the book or quantity, Remove this entry — which takes the invite back — then Restore it."}
           </p>
         ) : null}
+
+        <Eyebrow className="text-muted sm:col-span-2">The request</Eyebrow>
 
         <Select
           label="Waiting on"
           hint={
-            orphaned
-              ? `Recorded as “${entry.bookTitle}”, a title no longer in the catalog. Saving a book here replaces that.`
-              : "The title this person is in line for."
+            orphaned ? `Recorded as “${entry.bookTitle}”, no longer in the catalog.` : undefined
           }
           value={bookId}
           disabled={busy || holdLocked}
           onChange={(event) => setBookId(event.target.value)}
+          fieldClassName="sm:col-span-2"
         >
           <option value="">General waitlist (no book)</option>
           {books.map((book) => (
@@ -165,8 +176,22 @@ export function WaitlistEntryDialog({
           value={quantity}
           disabled={busy || holdLocked}
           onChange={(event) => setQuantity(event.target.value)}
-          fieldClassName="w-32"
         />
+
+        <Select
+          label="Language"
+          hint="Which language the restock text goes out in."
+          options={LANGUAGES}
+          value={locale}
+          disabled={busy}
+          onChange={(event) => setLocale(event.target.value)}
+        />
+
+        {/* A rule rather than more whitespace: the gap that would read as a
+            section break at this density is a gap that costs a row. */}
+        <Eyebrow className="border-rule text-muted border-t pt-4 sm:col-span-2">
+          Who is waiting
+        </Eyebrow>
 
         <Input
           label="Name"
@@ -177,7 +202,7 @@ export function WaitlistEntryDialog({
 
         <Input
           label="Phone"
-          hint="Bangladeshi mobile — this is where the invite text goes."
+          hint="Where the invite text goes."
           inputMode="tel"
           className="font-mono"
           value={customerPhone}
@@ -191,16 +216,7 @@ export function WaitlistEntryDialog({
           value={customerEmail}
           disabled={busy}
           onChange={(event) => setCustomerEmail(event.target.value)}
-        />
-
-        <Select
-          label="Language"
-          hint="Which language the restock message goes out in."
-          options={LANGUAGES}
-          value={locale}
-          disabled={busy}
-          onChange={(event) => setLocale(event.target.value)}
-          fieldClassName="w-48"
+          fieldClassName="sm:col-span-2"
         />
 
         <Textarea
@@ -211,6 +227,7 @@ export function WaitlistEntryDialog({
           value={internalNote}
           disabled={busy}
           onChange={(event) => setInternalNote(event.target.value)}
+          fieldClassName="sm:col-span-2"
         />
       </div>
     </Modal>
