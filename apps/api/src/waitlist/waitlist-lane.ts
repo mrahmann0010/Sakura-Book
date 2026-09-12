@@ -37,11 +37,26 @@ import { waitlistEntries } from "../db/schema";
  * different clocks — or the same clock twice, either side of an invite
  * lapsing — is how a tab ends up showing a number it has no rows for.
  *
- * Order matters. CANCELLED and CONVERTED come first because they are terminal:
- * a cancelled entry whose token has not yet been revoked is still cancelled,
- * and a converted one keeps the spent token it was converted with. EXPIRED
- * precedes INVITED so the latter needs no expiry clause of its own — anything
- * reaching it has already failed the `<= now()` test above.
+ * Order matters, and each position answers a "which of these two facts about
+ * the same row wins" question that has a real answer.
+ *
+ * CANCELLED and CONVERTED come first because they are terminal: a cancelled
+ * entry whose token has not yet been revoked is still cancelled, and a
+ * converted one keeps the spent token it was converted with.
+ *
+ * INVITED comes before ORDERED, and pays for it with an expiry clause it used
+ * not to need. An entry can hold a live link *and* an unpaid order — staff can
+ * invite someone the wave planner skipped — and when it does, the storefront
+ * is holding copies for that link. The INVITED branch is the one condition
+ * `inventory/reservations.ts` keeps a copy off the shelf under, so a row
+ * matching it must land here or the panel and the shelf start describing the
+ * same copy differently, which is the one thing this module exists to prevent.
+ *
+ * ORDERED then comes before EXPIRED, which is the opposite trade and the right
+ * one: a lapsed invite holds nothing, so nothing is misreported by letting the
+ * order speak instead — and letting EXPIRED win would put somebody with a
+ * parcel already on the way back into the next wave's candidate pool, which is
+ * exactly the mistake the lane was added to stop.
  *
  * Written with column objects rather than the raw `we.`-prefixed identifiers
  * `reservations.ts` is forced into: this is only ever used in plain
@@ -55,9 +70,10 @@ export function waitlistLaneSql(): SQL<WaitlistLane> {
       when ${waitlistEntries.status} = 'CONVERTED' then 'CONVERTED'
       when ${waitlistEntries.inviteToken} is not null
        and ${waitlistEntries.inviteUsedAt} is null
-       and ${waitlistEntries.inviteExpiresAt} <= now() then 'EXPIRED'
+       and ${waitlistEntries.inviteExpiresAt} > now() then 'INVITED'
+      when ${waitlistEntries.fulfillingOrderId} is not null then 'ORDERED'
       when ${waitlistEntries.inviteToken} is not null
-       and ${waitlistEntries.inviteUsedAt} is null then 'INVITED'
+       and ${waitlistEntries.inviteUsedAt} is null then 'EXPIRED'
       else 'WAITING'
     end
   `;

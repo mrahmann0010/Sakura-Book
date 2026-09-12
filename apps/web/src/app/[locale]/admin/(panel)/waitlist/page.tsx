@@ -58,6 +58,7 @@ const TABS = [
   { key: "WAITING", label: "Waiting" },
   { key: "INVITED", label: "Invited" },
   { key: "EXPIRED", label: "Expired" },
+  { key: "ORDERED", label: "Ordered" },
   { key: "CONVERTED", label: "Converted" },
   { key: "CANCELLED", label: "Cancelled" },
 ] as const satisfies readonly { key: WaitlistLane; label: string }[];
@@ -66,18 +67,26 @@ const EMPTY_COUNTS: AdminWaitlistCounts = {
   WAITING: 0,
   INVITED: 0,
   EXPIRED: 0,
+  ORDERED: 0,
   CONVERTED: 0,
   CANCELLED: 0,
 };
 
 /** Sentence case for the cell, so a row reads as a state rather than as an
  *  enum member leaking through. `Holding a copy` says what INVITED costs the
- *  shop, which is the thing staff are deciding about. */
+ *  shop, which is the thing staff are deciding about.
+ *
+ *  ORDERED and CONVERTED are two points on one story and the labels have to
+ *  keep them apart: an order placed, and an order paid for. CONVERTED used to
+ *  read "Ordered" here, which is the wording that now belongs to the earlier,
+ *  reversible half — so it becomes "Bought", and the pair reads as the
+ *  sequence it is. Both say why the row is not being texted. */
 const LANE_LABELS: Record<WaitlistLane, string> = {
   WAITING: "Waiting",
   INVITED: "Holding a copy",
   EXPIRED: "Lapsed",
-  CONVERTED: "Ordered",
+  ORDERED: "Ordered, awaiting payment",
+  CONVERTED: "Bought",
   CANCELLED: "Removed",
 };
 

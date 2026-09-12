@@ -25,6 +25,7 @@ type Existing = Partial<{
   status: string;
   inviteUsedAt: Date | null;
   inviteExpiresAt: Date | null;
+  fulfillingOrderId: string | null;
 }>;
 
 function makeService(existing: Existing = {}, clash: { customerName: string } | null = null) {
@@ -45,6 +46,7 @@ function makeService(existing: Existing = {}, clash: { customerName: string } | 
     locale: "bn",
     inviteUsedAt: null,
     inviteExpiresAt: null,
+    fulfillingOrderId: null,
     ...existing,
   };
 
@@ -178,6 +180,33 @@ describe("AdminWaitlistService.update — editing the details", () => {
     await expect(service.update("e1", { quantity: 3 }, context)).rejects.toThrow(
       /already become an order/i,
     );
+  });
+
+  it("refuses either while an order for this book is waiting on payment", async () => {
+    /* The third way the book and quantity can already be spoken for, and the
+       only one with no token to look at. Moving the entry to another title
+       would leave it linked to an order that does not contain that title — and
+       that link is what converts it when the money lands, so the row would end
+       up recording a sale of a book nobody bought. */
+    const { service } = makeService({ fulfillingOrderId: "order-1" });
+
+    await expect(service.update("e1", { bookId: "book-new" }, context)).rejects.toThrow(
+      /waiting on payment/i,
+    );
+    await expect(service.update("e1", { quantity: 3 }, context)).rejects.toThrow(
+      /waiting on payment/i,
+    );
+  });
+
+  it("still allows the contact details to be corrected while that order is open", async () => {
+    // The guard is about what was ordered, not about the person who ordered
+    // it: a misheard name is exactly the thing the desk needs to fix, and
+    // fixing it moves no copies.
+    const { service, written } = makeService({ fulfillingOrderId: "order-1" });
+
+    await service.update("e1", { customerName: "Mina Rahman" }, context);
+
+    expect(written()).toMatchObject({ customerName: "Mina Rahman" });
   });
 
   it("allows the same edits once the window has lapsed", async () => {

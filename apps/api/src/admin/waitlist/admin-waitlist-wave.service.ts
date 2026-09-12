@@ -47,6 +47,12 @@ export class AdminWaitlistWaveService {
    * not declined anything yet, and texting them again would spend the release's
    * budget on a copy they are already holding.
    *
+   * ORDERED is excluded by the same two-lane filter, at no extra cost and
+   * deliberately: they have already bought the book and are only waiting for
+   * the payment to be confirmed. Texting them an invite would spend a paid SMS
+   * segment, and a copy of the release's budget, on somebody whose parcel may
+   * already be with the courier.
+   *
    * Filled by walking the fairness order and taking entries while their
    * quantity still fits. Sequentially, in one pass, before a single SMS is
    * sent — the same reason `refuseBeyondAllocation` decides capacity up front:

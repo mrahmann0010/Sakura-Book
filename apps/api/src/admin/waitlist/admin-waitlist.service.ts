@@ -151,6 +151,7 @@ export class AdminWaitlistService {
       WAITING: 0,
       INVITED: 0,
       EXPIRED: 0,
+      ORDERED: 0,
       CONVERTED: 0,
       CANCELLED: 0,
     };
@@ -270,6 +271,7 @@ export class AdminWaitlistService {
         locale: true,
         inviteUsedAt: true,
         inviteExpiresAt: true,
+        fulfillingOrderId: true,
       },
     });
 
@@ -393,6 +395,7 @@ export class AdminWaitlistService {
       status: AdminWaitlistEntry["status"];
       inviteUsedAt: Date | null;
       inviteExpiresAt: Date | null;
+      fulfillingOrderId: string | null;
     },
   ): Promise<Partial<typeof waitlistEntries.$inferInsert>> {
     const details: Partial<typeof waitlistEntries.$inferInsert> = {};
@@ -420,6 +423,20 @@ export class AdminWaitlistService {
       if (existing.inviteExpiresAt !== null && existing.inviteExpiresAt > new Date()) {
         throw new InvalidInputError(
           "This entry is holding a copy. Remove it from the list to take the invite back, restore it, then change the book or quantity.",
+        );
+      }
+
+      /* The third way a book and quantity can already be spoken for, and the
+         one with no token behind it to look at: this customer has placed an
+         order for this book and the shop is waiting to be paid. Moving the
+         entry to another title would leave it linked to an order that does not
+         contain that title — and the link is what converts it when the money
+         lands, so the row would eventually record a sale of a book nobody
+         bought. Refused rather than silently unlinked, because which of the two
+         is wrong is a question only the person at the desk can answer. */
+      if (existing.fulfillingOrderId !== null) {
+        throw new InvalidInputError(
+          "This customer has an order for this book waiting on payment. Settle or cancel that order before changing the book or quantity.",
         );
       }
     }

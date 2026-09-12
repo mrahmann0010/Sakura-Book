@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { RestockScheduleService } from "./restock-schedule.service";
 import { WaitlistAllocationService } from "./waitlist-allocation.service";
 import { WaitlistBooksService } from "./waitlist-books.service";
+import { WaitlistFulfillmentService } from "./waitlist-fulfillment.service";
 import { WaitlistInviteSettingsService } from "./waitlist-invite-settings.service";
 import { WaitlistInviteService } from "./waitlist-invite.service";
 import { WaitlistController } from "./waitlist.controller";
@@ -19,6 +20,7 @@ import { WaitlistService } from "./waitlist.service";
   controllers: [WaitlistController],
   providers: [
     WaitlistService,
+    WaitlistFulfillmentService,
     RestockScheduleService,
     WaitlistBooksService,
     WaitlistInviteService,
@@ -34,12 +36,18 @@ import { WaitlistService } from "./waitlist.service";
   // WaitlistInviteSettingsService is exported for the same reason as
   // RestockScheduleService: AdminSettingsModule owns editing the TTL, this
   // module owns reading it when an invite is issued.
+  // WaitlistFulfillmentService is exported for two callers that must agree:
+  // checkout, which links an order to the entries it settles, and
+  // OrdersService.transition, which converts or releases those entries as the
+  // order is paid for or dies. One service so "what does buying mean for the
+  // queue" is answered in one place rather than at each status change.
   // WaitlistAllocationService is exported for the same reason
   // WaitlistInviteService is: the admin panel opens and closes releases and
   // the invite path spends them, and a second idea of how much a release has
   // left is exactly the drift the whole design is built to avoid.
   exports: [
     WaitlistService,
+    WaitlistFulfillmentService,
     RestockScheduleService,
     WaitlistBooksService,
     WaitlistInviteService,

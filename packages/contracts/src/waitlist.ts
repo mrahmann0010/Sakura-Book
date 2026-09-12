@@ -40,7 +40,13 @@ export type WaitlistStatus = (typeof waitlistStatuses)[number];
  *              that the storefront may not sell to anyone else.
  *   EXPIRED    was invited, never ordered, window closed. Their copies went
  *              back to the pool the instant it did.
- *   CONVERTED  became an order.
+ *   ORDERED    has an order for this book in flight that nobody has paid for
+ *              yet — placed from the storefront under their own phone number,
+ *              with or without a link. Not CONVERTED, because a
+ *              cash-on-delivery order can sit unpaid for days and then be
+ *              cancelled, and somebody who ends up not buying must keep the
+ *              place in the queue they signed up for.
+ *   CONVERTED  became an order, and that order has been paid for.
  *   CANCELLED  taken off the list.
  *
  * **There is no `EXPIRED` in `waitlistStatuses` and there must never be one.**
@@ -50,8 +56,20 @@ export type WaitlistStatus = (typeof waitlistStatuses)[number];
  * from the invite columns by the same expression `inventory/reservations.ts`
  * holds copies back under, so the admin panel and the storefront cannot
  * disagree about who is holding what. See `waitlist/waitlist-lane.ts`.
+ *
+ * ORDERED is the one lane backed by a stored column (`fulfillingOrderId`)
+ * rather than computed from the clock, and it is not the exception it looks
+ * like: an order being placed *is* somebody writing a row, so there is no
+ * interval during which the database and the shelf can disagree.
  */
-export const waitlistLanes = ["WAITING", "INVITED", "EXPIRED", "CONVERTED", "CANCELLED"] as const;
+export const waitlistLanes = [
+  "WAITING",
+  "INVITED",
+  "EXPIRED",
+  "ORDERED",
+  "CONVERTED",
+  "CANCELLED",
+] as const;
 
 export type WaitlistLane = (typeof waitlistLanes)[number];
 
