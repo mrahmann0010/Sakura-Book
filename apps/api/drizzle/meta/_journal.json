@@ -281,6 +281,13 @@
       "when": 1789151525035,
       "tag": "0039_silky_nomad",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1789202323891,
+      "tag": "0040_waitlist_order_fulfilment",
+      "breakpoints": true
     }
   ]
 }

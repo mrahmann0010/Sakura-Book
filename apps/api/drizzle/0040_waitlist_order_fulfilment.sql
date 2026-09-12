@@ -1,0 +1,44 @@
+-- Let a purchase settle the waitlist entry it satisfies.
+--
+-- Until now the waitlist and the shop only ever met through an invite token.
+-- A customer who joined a book's queue and then simply bought that book from
+-- the storefront — no link, or a link they never opened — stayed in the queue
+-- as though they were still waiting, because nothing on the checkout path
+-- looked for them. Three things followed, all of them silent: restock texts to
+-- somebody who already owns the book (one paid SMS segment each; Bangla is
+-- UCS-2, 70 characters a segment), copies left held under their untouched
+-- invite and therefore off the shelf for everybody behind them, and a queue
+-- whose conversion figures could only be recovered by matching phone numbers
+-- by hand.
+--
+-- This column is the link, and it is deliberately not `converted_order_id`.
+-- Payment here is manual: bKash and bank transfers are matched at the desk,
+-- cash-on-delivery is confirmed on the doorstep, and an order can sit PENDING
+-- for days before either happens or never does. Converting an entry the
+-- instant an order is *placed* would take the customer's place in the queue
+-- away on the strength of an order that may evaporate, and since a rejoin is a
+-- new row at the back of the list, they could not get that place back.
+--
+-- So: `fulfilling_order_id` carries the belief and `converted_order_id`
+-- carries the fact. `OrdersService.transition` is the only writer after
+-- checkout — PAYMENT_CONFIRMED converts the entry and clears this, and any
+-- terminal status nulls it out, dropping the entry back into WAITING with its
+-- original `created_at` and `invite_attempts` intact. The ORDERED lane the
+-- admin panel shows is computed from this column alone, which is why
+-- `markOrdered` writes no status: there is then nothing to restore.
+--
+-- ON DELETE SET NULL, matching `converted_order_id`. Deleting an order must
+-- not delete waitlist history, and an entry left pointing at an order that no
+-- longer exists would be suppressed forever — null is the reading that puts
+-- the customer back in the queue.
+--
+-- The index is partial because almost no row will ever have this set, and the
+-- only query that reads it runs on every status change the desk makes.
+--
+-- Adding a nullable column with no default rewrites no rows and takes no
+-- lengthy lock; every existing entry starts at null, which is exactly right —
+-- no order placed before today was ever matched to the queue.
+
+ALTER TABLE "waitlist_entries" ADD COLUMN "fulfilling_order_id" uuid;--> statement-breakpoint
+ALTER TABLE "waitlist_entries" ADD CONSTRAINT "waitlist_entries_fulfilling_order_id_orders_id_fk" FOREIGN KEY ("fulfilling_order_id") REFERENCES "public"."orders"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "waitlist_entries_fulfilling_order_idx" ON "waitlist_entries" USING btree ("fulfilling_order_id") WHERE "waitlist_entries"."fulfilling_order_id" is not null;
