@@ -11,6 +11,7 @@ import type { AdminWaitlistEntry } from "@sakura/contracts";
 
 export type WaitlistRow = {
   id: string;
+  bookId: string | null;
   bookTitleSnapshot: string | null;
   customerName: string;
   customerEmail: string;
@@ -37,6 +38,7 @@ export function toAdminWaitlistEntry(row: WaitlistRow): AdminWaitlistEntry {
   return {
     id: row.id,
     bookTitle: row.bookTitleSnapshot,
+    bookId: row.bookId,
     customerName: row.customerName,
     customerEmail: row.customerEmail,
     customerPhone: row.customerPhone,

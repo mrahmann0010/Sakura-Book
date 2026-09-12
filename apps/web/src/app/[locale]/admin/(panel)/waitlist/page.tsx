@@ -8,6 +8,7 @@ import type {
   AdminWaitlistCounts,
   AdminWaitlistEntry,
   AdminWaitlistInviteOutcome,
+  AdminWaitlistUpdateRequest,
   AdminWaitlistWavePlan,
   WaitlistLane,
   WaitlistStatus,
@@ -15,6 +16,7 @@ import type {
 
 import { AdminTableRows } from "@/components/admin/skeletons";
 import { StockReleaseDialog } from "@/components/admin/stock-release-dialog";
+import { WaitlistEntryDialog } from "@/components/admin/waitlist-entry-dialog";
 import { Button } from "@/components/ui";
 import {
   AdminApiError,
@@ -154,6 +156,11 @@ export default function AdminWaitlistPage() {
   const [inviteErrors, setInviteErrors] = useState<Map<string, string>>(new Map());
 
   const [releaseOpen, setReleaseOpen] = useState(false);
+
+  /* The row being corrected, or null. Holds the entry itself rather than an id
+     so the dialog seeds its fields from the row that was on screen when it was
+     opened, and is torn down with it on every reload. */
+  const [editing, setEditing] = useState<AdminWaitlistEntry | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -428,17 +435,24 @@ export default function AdminWaitlistPage() {
     }
   }
 
-  async function editNote(entry: AdminWaitlistEntry) {
-    const next = window.prompt("Internal note (staff only)", entry.internalNote ?? "");
-    if (next === null) return;
-
+  /**
+   * Save the edit dialog.
+   *
+   * The dialog stays open on failure — the API refuses a book or quantity
+   * change while an invite is live, and closing the form would throw away what
+   * staff typed along with the sentence explaining why it did not stick.
+   */
+  async function saveEntry(id: string, patch: AdminWaitlistUpdateRequest) {
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
-      await updateAdminWaitlistEntry(entry.id, { internalNote: next });
+      await updateAdminWaitlistEntry(id, patch);
+      setEditing(null);
+      setNotice("Entry updated.");
       await load(tab, page);
     } catch (err) {
-      setError(err instanceof AdminApiError ? err.message : "Could not save that note.");
+      setError(err instanceof AdminApiError ? err.message : "Could not save that entry.");
     } finally {
       setBusy(false);
     }
@@ -833,13 +847,19 @@ export default function AdminWaitlistPage() {
                       {entry.lane === "WAITING" ? "Invite" : "Re-invite"}
                     </button>
                   ) : null}
+                  {/* Was "Note", and only ever edited the note. The book, the
+                      count and the phone number are what a customer rings up
+                      to correct, and all three lived behind a SQL client. */}
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => void editNote(entry)}
+                    onClick={() => {
+                      setError(null);
+                      setEditing(entry);
+                    }}
                     className="text-clay hover:text-clay-deep ml-3"
                   >
-                    Note
+                    Edit
                   </button>
                   {entry.lane !== "CANCELLED" ? (
                     <button
@@ -912,6 +932,17 @@ export default function AdminWaitlistPage() {
           currentHold={allocation.open?.remaining}
           busy={busy}
           onSubmit={saveRelease}
+        />
+      ) : null}
+
+      {editing ? (
+        <WaitlistEntryDialog
+          entry={editing}
+          books={books}
+          busy={busy}
+          error={error}
+          onClose={() => setEditing(null)}
+          onSubmit={(patch) => saveEntry(editing.id, patch)}
         />
       ) : null}
     </div>
