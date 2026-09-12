@@ -6,26 +6,34 @@ import type { Order } from "@sakura/contracts";
 
 import { OrderLine, OrderProgress, SummaryRow } from "@/components/domain";
 import { toOrderProgressStep } from "./order-status";
+import { ReceiptSheet, SHEET_H, SHEET_W } from "./receipt-sheet";
 import { Button, Card, CopyButton, Notice, OrderId, StatusPill } from "@/components/ui";
 import type { Locale } from "@/i18n/settings";
 import { formatMoney, intlLocale } from "@/lib/money";
 
 /* --------------------------------------------------------------------------
    The full receipt shown on a confirmation screen: order ID, status, line
-   items, cost breakdown, payment, and a client-side "download as PDF" of
-   everything in `receiptRef` (the two cards, not the actions below them).
+   items, cost breakdown, payment, and a "download as PDF".
 
    Lives here rather than under components/checkout because both confirmation
    screens draw it — the ordinary cart checkout and the waitlist-invite one —
    and neither owns it. It takes an `Order` and nothing else, so any page
    holding one can render it; see OrderPlaced, which is how both currently do.
 
-   The PDF is a screenshot (html2canvas → jsPDF), not text drawn by jsPDF
-   itself — the app ships three real scripts (en/ja/bn) and jsPDF's built-in
-   fonts cannot render Japanese or Bengali without manually embedding font
-   files. Rasterising whatever is already on screen, in whatever font the
-   page already loaded, sidesteps that entirely at the cost of a larger file
-   and non-selectable text — an acceptable trade for a receipt.
+   The screen and the download are two different layouts, which is the change
+   this file records. They used to be one: the button pointed html2canvas at
+   the on-screen cards, so the PDF came out as a photograph of a web page —
+   screen-shaped rather than A4, carrying a copy button, a progress tracker
+   and a "save this somewhere" prompt that mean nothing on paper, and in dark
+   mode rendering themed text onto a hard-coded white background. The download
+   now rasterises ReceiptSheet instead, which is a document: A4, unthemed,
+   paginated, and never visible on screen.
+
+   Rasterising is still the mechanism, and still for the original reason — the
+   app ships three real scripts (en/ja/bn) and jsPDF's built-in fonts cannot
+   draw Japanese or Bengali without embedded font files. Drawing the sheet in
+   whatever fonts the page already loaded sidesteps that entirely, at the cost
+   of a larger file and non-selectable text.
    -------------------------------------------------------------------------- */
 
 /**
@@ -133,17 +141,21 @@ export function OrderSummaryLines({ order, locale }: { order: Order; locale: Loc
   );
 }
 
+/** A4 in points — the page size every viewer and printer already expects. */
+const A4_PT_W = 595.28;
+const A4_PT_H = 841.89;
+
 export function OrderReceipt({ order, locale }: { order: Order; locale: Locale }) {
   const { t } = useTranslation();
-  const receiptRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState(false);
 
   const step = toOrderProgressStep(order.status);
 
   async function downloadReceipt() {
-    const node = receiptRef.current;
-    if (!node) return;
+    const host = sheetRef.current;
+    if (!host) return;
 
     setDownloading(true);
     setDownloadError(false);
@@ -154,20 +166,43 @@ export function OrderReceipt({ order, locale }: { order: Order; locale: Locale }
         import("jspdf"),
       ]);
 
-      const canvas = await html2canvas(node, { backgroundColor: "#ffffff", scale: 2 });
-      /* JPEG, not PNG: a lossless screenshot of a mostly-flat, mostly-text
-         card runs 5-6MB, a rough download on the mobile data the shop's
-         customers actually order on. Quality 0.92 is visually identical for
-         this kind of content and lands under 500KB. */
-      const image = canvas.toDataURL("image/jpeg", 0.92);
+      /* The sheet is set in Lora and Public Sans. Rasterising before those
+         have loaded bakes the Georgia/Arial fallbacks into the PDF
+         permanently — the one class of visual bug a screenshot cannot
+         recover from on a later render. Cheap on a warm page, since the
+         confirmation screen is already using both. */
+      if (document.fonts?.ready) await document.fonts.ready;
 
-      /* Points, at the canvas's own CSS pixel size (scale:2 doubles the
-         bitmap, not the layout box) — one page, sized exactly to the
-         content, rather than fitting a fixed page format. */
-      const width = canvas.width / 2;
-      const height = canvas.height / 2;
-      const pdf = new jsPDF({ unit: "pt", format: [width, height] });
-      pdf.addImage(image, "JPEG", 0, 0, width, height);
+      const pages = Array.from(host.querySelectorAll<HTMLElement>("[data-receipt-page]"));
+      if (pages.length === 0) throw new Error("receipt sheet did not render");
+
+      const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
+
+      for (const [index, page] of pages.entries()) {
+        const canvas = await html2canvas(page, {
+          backgroundColor: "#ffffff",
+          scale: 2,
+          /* The sheet is its own fixed A4 box, so tell html2canvas that
+             rather than letting it infer a size from an off-canvas element
+             parked outside the viewport. */
+          width: SHEET_W,
+          height: SHEET_H,
+          windowWidth: SHEET_W,
+          windowHeight: SHEET_H,
+          scrollX: 0,
+          scrollY: 0,
+        });
+
+        /* JPEG, not PNG: a lossless render of a mostly-flat, mostly-text
+           sheet runs 5-6MB, a rough download on the mobile data the shop's
+           customers actually order on. Quality 0.92 is visually identical
+           for this kind of content and lands well under 500KB. */
+        const image = canvas.toDataURL("image/jpeg", 0.92);
+
+        if (index > 0) pdf.addPage("a4", "portrait");
+        pdf.addImage(image, "JPEG", 0, 0, A4_PT_W, A4_PT_H);
+      }
+
       pdf.save(`receipt-${order.orderNumber}.pdf`);
     } catch {
       setDownloadError(true);
@@ -178,7 +213,30 @@ export function OrderReceipt({ order, locale }: { order: Order; locale: Locale }
 
   return (
     <>
-      <div ref={receiptRef} className="bg-page flex flex-col gap-5">
+      {/* The document, parked off-canvas.
+
+          Not `display: none` and not `visibility: hidden`: html2canvas
+          rasterises a live layout, and an element with no layout boxes draws
+          as nothing. Pushed off the left edge instead, which keeps it
+          measurable while keeping it unreachable — `aria-hidden` and
+          `inert`-by-absence of any focusable content keep it out of the
+          accessibility tree, and the fixed position keeps it from extending
+          the page's scroll width. */}
+      <div
+        ref={sheetRef}
+        aria-hidden="true"
+        style={{
+          position: "fixed",
+          left: "-10000px",
+          top: 0,
+          width: `${SHEET_W}px`,
+          pointerEvents: "none",
+        }}
+      >
+        <ReceiptSheet order={order} />
+      </div>
+
+      <div className="bg-page flex flex-col gap-5">
         <Card variant="tint" padding="roomy">
           <div className="flex items-baseline justify-between gap-4">
             <p className="eyebrow">{t("checkout.placed.orderId")}</p>
