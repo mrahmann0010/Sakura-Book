@@ -15,9 +15,30 @@ import { mapPostgresError, toPostgresError } from "../../src/common/errors/postg
  * would have passed all the way through that regression, so these hand it what
  * a service actually catches.
  */
+/**
+ * `PostgresError` as the driver actually constructs it.
+ *
+ * At runtime its constructor takes the field bag Postgres sent — message, code,
+ * constraint_name and the rest — and copies it onto the instance; that is how
+ * every error these tests are about comes into being, and building one any
+ * other way would be testing a shape the mapper never sees. The published
+ * `.d.ts` types the constructor as `Error`'s instead, taking a string, so the
+ * honest construction does not typecheck.
+ *
+ * Narrowed here rather than papered over at the call site, so the lie is stated
+ * once and the fixtures below stay readable. The day the driver's types catch
+ * up with its behaviour, deleting this is the whole fix.
+ */
+const DriverError = PostgresError as unknown as new (fields: {
+  message: string;
+  code: string;
+  constraint_name?: string;
+  table_name?: string;
+}) => PostgresError;
+
 describe("toPostgresError", () => {
   const uniqueViolation = (constraint: string) =>
-    new PostgresError({
+    new DriverError({
       message: `duplicate key value violates unique constraint "${constraint}"`,
       code: "23505",
       constraint_name: constraint,
