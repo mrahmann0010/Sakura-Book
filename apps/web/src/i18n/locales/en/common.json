@@ -126,6 +126,7 @@
     "removingLine": "Removed “{{title}}”.",
     "addBack": "Add back to cart",
     "rejectedNotice_one": "{{count}} book in your cart is no longer available and was left out.",
+    "quoteFailed": "We couldn't price your cart just now. The totals below may be out of date — check your connection and refresh.",
     "rejectedNotice_other": "{{count}} books in your cart are no longer available and were left out.",
     "summary": {
       "title": "Summary",
@@ -136,6 +137,9 @@
       "deliveryFree": "Free over {{threshold}}",
       "total": "Total",
       "totalPending": "—",
+      "deliveryAtCheckout": "At checkout",
+      "deliveryFreeValue": "Free",
+      "totalPlusDelivery": "{{amount}} + delivery",
       "checkout": "Proceed to checkout",
       "note": "Postage is calculated from the address you give at checkout."
     },
