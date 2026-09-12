@@ -29,11 +29,16 @@ describe("waitlistLaneSql", () => {
     // token-present, unspent and unexpired, so the lane must too — one
     // condition short here and the panel would show a copy as free while the
     // catalog still withheld it, or the reverse.
+    //
+    // All three now sit on the INVITED arm itself rather than being inherited
+    // from an EXPIRED arm above it. That reordering is what lets ORDERED sit
+    // between the two — see the lane's own comment — and it makes this test
+    // read the condition directly instead of by elimination.
     const { sql } = render(waitlistLaneSql());
 
     expect(sql).toContain('"invite_token" is not null');
     expect(sql).toContain('"invite_used_at" is null');
-    expect(sql).toContain('"invite_expires_at" <= now()');
+    expect(sql).toContain('"invite_expires_at" > now()');
   });
 
   it("reads the clock in Postgres, never as a bound timestamp", () => {
@@ -91,7 +96,7 @@ describe("adminWaitlistFilters — lane", () => {
     const { sql } = render(adminWaitlistFilters(query({ status: ["NOTIFIED"], lane: ["EXPIRED"] })));
 
     expect(sql).toContain('"status" in');
-    expect(sql).toContain('"invite_expires_at" <= now()');
+    expect(sql).toContain('"invite_expires_at" > now()');
   });
 
   it("survives the tab-count pass, which drops only the lane condition", () => {

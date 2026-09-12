@@ -197,6 +197,7 @@ export const adminWaitlistCountsSchema = z.object({
   WAITING: z.number().int().nonnegative(),
   INVITED: z.number().int().nonnegative(),
   EXPIRED: z.number().int().nonnegative(),
+  ORDERED: z.number().int().nonnegative(),
   CONVERTED: z.number().int().nonnegative(),
   CANCELLED: z.number().int().nonnegative(),
 });

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { waitlistEntries } from "../../src/db/schema";
 import { CheckoutService } from "../../src/orders/checkout.service";
 import { WaitlistInviteMismatchError } from "../../src/orders/order.errors";
+import { WaitlistFulfillmentService } from "../../src/waitlist/waitlist-fulfillment.service";
 import { WaitlistInviteService } from "../../src/waitlist/waitlist-invite.service";
 
 /**
@@ -110,6 +111,7 @@ function checkoutService(inviteService: WaitlistInviteService) {
     { redeem: vi.fn() } as never,
     { require: vi.fn().mockResolvedValue(undefined) } as never,
     inviteService,
+    new WaitlistFulfillmentService({} as never),
   );
 }
 
@@ -156,12 +158,26 @@ describe("checkout with an invite token", () => {
 
     const entryWrites = updates.filter((statement) => statement.table === waitlistEntries);
 
-    expect(entryWrites).toHaveLength(2);
+    expect(entryWrites).toHaveLength(3);
     expect(entryWrites[0].values).toHaveProperty("inviteUsedAt");
     expect(entryWrites[1].values.convertedOrderId).toBe(ORDER_ID);
+
+    /* The third is the sweep for entries this same customer has on *other*
+       books in the basket, which an invite checkout can settle just as easily
+       as a walk-in can — the token names one entry, not one customer. It runs
+       last so the ids already converted above can be excluded by name rather
+       than left to the status filter, which would depend on which of two
+       statements in one transaction Postgres applied first. */
+    expect(entryWrites[2].values.fulfillingOrderId).toBe(ORDER_ID);
   });
 
-  it("leaves the waitlist alone when the checkout carries no token", async () => {
+  it("looks the customer up by phone when the checkout carries no token", async () => {
+    /* What a walk-in used to get: nothing at all. The waitlist was reachable
+       only through a token, so somebody who joined the queue and then bought
+       the book the ordinary way stayed in it — still being texted, still
+       holding copies. Two statements now go out for them instead: spend any
+       live hold of their own, and link the order to whatever they are still
+       waiting for. */
     const { tx, updates } = fakeTx([]);
     const service = checkoutService(new WaitlistInviteService({} as never));
     const walkIn = { ...request(), inviteToken: undefined };
@@ -172,7 +188,16 @@ describe("checkout with an invite token", () => {
       tx,
     );
 
-    expect(updates.filter((statement) => statement.table === waitlistEntries)).toHaveLength(0);
+    const entryWrites = updates.filter((statement) => statement.table === waitlistEntries);
+
+    expect(entryWrites).toHaveLength(2);
+    // Their own reservation, spent without the link — before pricing, so the
+    // copies it frees are copies this basket can be priced against.
+    expect(entryWrites[0].values).toHaveProperty("inviteUsedAt");
+    // And the link to the order, which is emphatically *not* a conversion:
+    // nobody has paid yet.
+    expect(entryWrites[1].values.fulfillingOrderId).toBe(ORDER_ID);
+    expect(entryWrites[1].values).not.toHaveProperty("status");
   });
 });
 

@@ -1,11 +1,12 @@
 import { Injectable } from "@nestjs/common";
 import type { WaitlistInvite, WaitlistInviteMode } from "@sakura/contracts";
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { toPostgresError } from "../common/errors";
 import { DbService } from "../db/db.service";
 import * as schema from "../db/schema";
 import { waitlistEntries } from "../db/schema";
+import { toE164Bd } from "../sms/phone";
 import { generateInviteToken, normalizeInviteToken } from "./invite-token";
 import { WaitlistInviteInvalidError } from "./waitlist-invite.errors";
 
@@ -254,6 +255,68 @@ export class WaitlistInviteService {
     // ever null before an invite exists, and this UPDATE only matched a row
     // that has a live, unexpired token.
     return row ? { ...row, mode: row.mode! } : null;
+  }
+
+  /**
+   * Spend the live invites this customer already holds for the books they are
+   * buying, without asking them for the link.
+   *
+   * The case this exists for is absurd without it. Copies held under an invite
+   * are subtracted from public availability by `reservedQuantitySql`, which
+   * knows nothing about *whose* invite they are — correctly, because the
+   * storefront has no idea who is browsing. So an invited customer who ignores
+   * the SMS and buys the book the ordinary way is refused by the shop for lack
+   * of stock, and the stock they were refused is the stock being held in their
+   * name. They are the only person in the world who cannot buy that copy.
+   *
+   * Matching on phone and book is what makes the reservation theirs to spend:
+   * the link is a convenience for reaching the checkout page with the basket
+   * pre-filled, not the thing that entitles them to the copy. Their entry is.
+   *
+   * Nothing is granted here that the plain checkout would not grant. This only
+   * moves copies out of "held for this person" and into "buyable in this
+   * transaction" — the identical effect spending the token has, and the reason
+   * both must happen before pricing reads availability. `InventoryService`
+   * still decides whether the order fits, so an over-large basket is refused
+   * on stock exactly as it would have been.
+   *
+   * LOCKED mode is deliberately not enforced, unlike the token path. That
+   * check exists to stop a link being redeemed against a basket it was not
+   * issued for, and there is no link here to misuse: an entry can only ever
+   * release its own copies of its own book. Ordering fewer copies than the
+   * entry asked for returns the difference to the shelf, and ordering more
+   * simply buys the rest from public stock.
+   */
+  async consumeForCustomer(
+    phone: string,
+    bookIds: readonly string[],
+    tx: PostgresJsDatabase<typeof schema> = this.dbService.db,
+  ): Promise<{ entryId: string; bookId: string | null; quantity: number }[]> {
+    const books = [...new Set(bookIds)];
+    if (books.length === 0) return [];
+
+    /* The same three conditions `consume` matches on, and the same guarded
+       UPDATE, for the same reason: this runs inside the order transaction, and
+       two racing checkouts by one customer must not both spend one hold. The
+       difference is only how the row is found — by who they are rather than by
+       what they are carrying. */
+    return tx
+      .update(waitlistEntries)
+      .set({ inviteUsedAt: sql`now()`, updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(waitlistEntries.customerPhone, toE164Bd(phone)),
+          inArray(waitlistEntries.bookId, books),
+          isNotNull(waitlistEntries.inviteToken),
+          isNull(waitlistEntries.inviteUsedAt),
+          gt(waitlistEntries.inviteExpiresAt, new Date()),
+        ),
+      )
+      .returning({
+        entryId: waitlistEntries.id,
+        bookId: waitlistEntries.bookId,
+        quantity: waitlistEntries.quantity,
+      });
   }
 
   /**

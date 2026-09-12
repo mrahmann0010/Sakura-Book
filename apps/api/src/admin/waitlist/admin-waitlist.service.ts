@@ -149,6 +149,7 @@ export class AdminWaitlistService {
       WAITING: 0,
       INVITED: 0,
       EXPIRED: 0,
+      ORDERED: 0,
       CONVERTED: 0,
       CANCELLED: 0,
     };

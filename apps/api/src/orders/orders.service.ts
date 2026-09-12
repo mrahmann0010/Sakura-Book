@@ -7,6 +7,7 @@ import { DbService } from "../db/db.service";
 import type { Executor, Transaction } from "../db/db.types";
 import { orders, orderStatusHistory } from "../db/schema";
 import { InventoryService } from "../inventory";
+import { WaitlistFulfillmentService } from "../waitlist";
 import { toOrderResponse } from "./order.mapper";
 import { findOrder, findOrders } from "./order.query";
 import {
@@ -14,6 +15,8 @@ import {
   canTransition,
   forwardPathTo,
   releasesStock,
+  releasesWaitlist,
+  settlesWaitlist,
   type OrderStatus,
 } from "./order-status.machine";
 import { InvalidStatusTransitionError } from "./order.errors";
@@ -35,6 +38,7 @@ export class OrdersService {
   constructor(
     private readonly dbService: DbService,
     private readonly inventoryService: InventoryService,
+    private readonly waitlistFulfillmentService: WaitlistFulfillmentService,
     private readonly events: EventEmitter2,
   ) {}
 
@@ -151,6 +155,23 @@ export class OrdersService {
 
     if (releasesStock(current.status, next)) {
       await this.restoreStock(orderId, tx);
+    }
+
+    /* And the waitlist entries this order was standing in for, on exactly the
+       same argument the stock return is made on above. A customer who bought
+       the book they were waiting for is converted the moment the shop is paid;
+       one whose order died goes back in the queue with the seat they signed up
+       for. Both belong behind the single write path for `orders.status`,
+       because every way of forgetting them is silent — a restock text to
+       somebody holding the book, or a customer suppressed forever by an order
+       that was cancelled months ago, and nothing in any log to say why.
+
+       Both are no-ops for the ordinary order that never matched a waitlist
+       entry: they are guarded UPDATEs on a column nothing else sets. */
+    if (settlesWaitlist(next)) {
+      await this.waitlistFulfillmentService.settle(orderId, tx);
+    } else if (releasesWaitlist(next)) {
+      await this.waitlistFulfillmentService.release(orderId, tx);
     }
 
     await tx.insert(orderStatusHistory).values({ orderId, status: next, note: note ?? null });

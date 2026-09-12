@@ -75,6 +75,36 @@ export const waitlistEntries = pgTable(
       onDelete: "set null",
     }),
 
+    /**
+     * An order in flight that we believe settles this entry — matched to it by
+     * phone number and book at checkout, before anyone has paid.
+     *
+     * Separate from `convertedOrderId`, and the gap between the two is days
+     * wide on purpose. Payment here is manual: a cash-on-delivery or bKash
+     * order sits PENDING until a human confirms money arrived, and plenty of
+     * them never do. Converting on placement would take the customer's place
+     * in the queue away on the strength of an order that may evaporate — and
+     * because a rejoin is a new row starting at the back (see the index below),
+     * they could not get it back.
+     *
+     * So this column carries the belief, and `convertedOrderId` carries the
+     * fact. While it is set the entry is in the ORDERED lane, which is enough
+     * to stop the texts and — via `WaitlistInviteService.consume` having
+     * already spent any live link — put the copies it was holding back on the
+     * shelf. `OrdersService.transition` is the only writer after checkout:
+     * PAYMENT_CONFIRMED converts the entry, and a terminal status clears this
+     * back to null, which drops the entry into WAITING exactly where it was,
+     * with its original `created_at` and `invite_attempts` untouched.
+     *
+     * onDelete "set null" for the same reason as `convertedOrderId`: deleting
+     * an order should not take the waitlist history with it. An entry left
+     * ORDERED pointing at nothing would be suppressed forever, and null is the
+     * reading that puts them back in the queue.
+     */
+    fulfillingOrderId: uuid("fulfilling_order_id").references(() => orders.id, {
+      onDelete: "set null",
+    }),
+
     internalNote: text("internal_note"), // staff-only: never shown to customer
 
     // The magic-link credential for "come place your order" — a random,
@@ -222,6 +252,15 @@ export const waitlistEntries = pgTable(
 
     index("waitlist_entries_status_idx").on(table.status),
     index("waitlist_entries_book_id_idx").on(table.bookId),
+
+    /* Partial, like the token index and for the same reason: almost no row
+       ever has one, and the only query that reads this column is
+       `OrdersService.transition` asking "which entries did this order say it
+       was settling" — which is on the hot path of every status change the desk
+       makes, and must not be a scan of the whole waitlist. */
+    index("waitlist_entries_fulfilling_order_idx")
+      .on(table.fulfillingOrderId)
+      .where(sql`${table.fulfillingOrderId} is not null`),
 
     // Partial: most rows never have a token, and the public invite lookup
     // only ever queries the rows that do. Unique so two entries can never

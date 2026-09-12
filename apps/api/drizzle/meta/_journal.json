@@ -274,6 +274,13 @@
       "when": 1789067685999,
       "tag": "0038_waitlist_rejoin_after_purchase",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1789197251915,
+      "tag": "0039_waitlist_order_fulfilment",
+      "breakpoints": true
     }
   ]
 }

@@ -9,7 +9,11 @@ import { orderItems, orders, orderStatusHistory } from "../db/schema";
 import { InventoryService } from "../inventory";
 import { PricingService, type PricedCart } from "../pricing";
 import { RegionsService } from "../shipping";
-import { WaitlistInviteInvalidError, WaitlistInviteService } from "../waitlist";
+import {
+  WaitlistFulfillmentService,
+  WaitlistInviteInvalidError,
+  WaitlistInviteService,
+} from "../waitlist";
 import { generateOrderNumber, ORDER_NUMBER_ATTEMPTS } from "./order-number";
 import {
   CartNotOrderableError,
@@ -46,6 +50,7 @@ export class CheckoutService {
     private readonly couponsService: CouponsService,
     private readonly regionsService: RegionsService,
     private readonly waitlistInviteService: WaitlistInviteService,
+    private readonly waitlistFulfillmentService: WaitlistFulfillmentService,
   ) {}
 
   /**
@@ -149,6 +154,24 @@ export class CheckoutService {
     // whatever the checkout page rendered a minute ago.
     const invite = request.inviteToken ? await this.consumeInvite(request, tx) : undefined;
 
+    /* No token, but this customer may still be holding copies of their own.
+       Same position in the transaction and for the same reason as the line
+       above: it has to happen before pricing so the copies it frees are copies
+       this basket can be priced against.
+
+       Only when no token was sent. A checkout that carried one has already
+       spent the entry it belonged to, and the LOCKED-mode rules in
+       `consumeInvite` are the caller's whole contract — quietly spending a
+       second hold underneath them would make a refused-then-accepted basket
+       possible for reasons no error message mentions. */
+    const held = invite
+      ? []
+      : await this.waitlistInviteService.consumeForCustomer(
+          request.customer.phone,
+          request.items.map((item) => item.bookId),
+          tx,
+        );
+
     /* Spending the token above is what makes this customer's copies buyable by
        them: it drops their reservation out of the "spoken for" subquery that
        pricing and the decrement below both read, freeing exactly the copies it
@@ -201,6 +224,32 @@ export class CheckoutService {
     if (invite) {
       await this.waitlistInviteService.markConverted(invite.entryId, orderId, tx);
     }
+
+    /* An invite spent without its link is still an invite spent: the hold is
+       gone and the copies left with this order, which is as irreversible as
+       the token path and is recorded the same way. */
+    for (const entry of held) {
+      await this.waitlistInviteService.markConverted(entry.entryId, orderId, tx);
+    }
+
+    /* Everyone else this order settles: on the list for a book in this basket,
+       under this phone number, holding no invite to spend. They are linked but
+       deliberately *not* converted — see `WaitlistFulfillmentService`, and the
+       column's own comment, for why a manual-payment shop must not treat an
+       unpaid order as a sale. The link alone is enough to stop the restock
+       texts, which is the immediate harm.
+
+       Last among the waitlist writes so the ids just converted are already
+       known, and excluded explicitly rather than trusted to the status filter:
+       both statements are in flight in one transaction and this must not
+       depend on which of them Postgres applied first. */
+    await this.waitlistFulfillmentService.markOrdered(
+      request.customer.phone,
+      priced.lines.map((line) => line.bookId),
+      orderId,
+      tx,
+      { excludeEntryIds: [...(invite ? [invite.entryId] : []), ...held.map((e) => e.entryId)] },
+    );
 
     return orderId;
   }

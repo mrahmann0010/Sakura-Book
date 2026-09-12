@@ -15,7 +15,7 @@ Companion to [backend-architecture.md](./backend-architecture.md).
 
 ---
 
-> **Status:** phases 1–3 are built. Phase 4 is not. Section 6 marks what
+> **Status:** phases 1–3 and 5 are built. Phase 4 is not. Section 6 marks what
 > landed; the design below is what was built from, and still describes the
 > system as it now stands.
 
@@ -112,9 +112,14 @@ stateDiagram-v2
   INVITED --> WAITING: staff withdraw the hold<br/>revoke() nulls the token
   EXPIRED --> INVITED: re-invite — new token,<br/>charged to the current allocation
   EXPIRED --> WAITING: staff withdraw the dead token
+  WAITING --> ORDERED: they buy it on the storefront<br/>matched by phone + book
+  EXPIRED --> ORDERED: same, link ignored or lapsed
+  ORDERED --> CONVERTED: order reaches PAYMENT_CONFIRMED
+  ORDERED --> WAITING: order cancelled or refunded<br/>— original seat in the queue kept
   WAITING --> CANCELLED: staff
   INVITED --> CANCELLED: staff (revokes the hold first)
   EXPIRED --> CANCELLED: staff
+  ORDERED --> CANCELLED: staff
 
   CONVERTED --> [*]
   CANCELLED --> [*]
@@ -131,6 +136,22 @@ The four stored `status` values keep their current meanings and are not touched 
 design: `PENDING` (never reached), `NOTIFIED` (has been reached at least once, and
 `notified_at` never restamps), `CONVERTED`, `CANCELLED`. `EXPIRED` and the split between
 `WAITING` and `INVITED` come entirely from the token columns.
+
+`ORDERED` is the one lane with a column of its own, `fulfilling_order_id`, and it is the
+exception that proves the derived-lane rule rather than breaking it. The reason the other
+lanes are computed is that they change when *nothing is written* — a window lapses because
+time passed. An order being placed is emphatically somebody writing a row, so there is no
+interval in which the stored answer and the real one can disagree.
+
+Why it is not simply `CONVERTED`: payment here is manual. A bKash transfer is matched at
+the desk and a cash-on-delivery order is confirmed on the doorstep, so an order sits
+`PENDING` for days and a fair number never get paid for at all. Converting on *placement*
+would take the customer's seat in the queue on the strength of an order that may
+evaporate — and since a rejoin is a new row at the back of the list, they could not get
+that seat back. So the link is written at checkout (enough to stop the texts, which is the
+immediate harm), and the conversion waits for `PAYMENT_CONFIRMED` — the earliest status
+that means "the shop has the money" for both payment methods, since COD can only reach it
+by being marked delivered.
 
 One consequence worth stating plainly: **a re-invited person shows as `NOTIFIED` in
 `status` and `INVITED` in lane, and an expired person shows as `NOTIFIED` in `status`
@@ -149,9 +170,19 @@ Three exits, all of which release the copies:
 | **Buys**       | `consume()` sets `invite_used_at` in the order's transaction | Falls out of `liveInviteConditions` (`used_at is null` fails); the stock decrement in the same transaction is the real handover |
 | **Expires**    | Wall clock passes `invite_expires_at`        | Falls out of `liveInviteConditions` (`expires_at > now()` fails) |
 | **Withdrawn**  | `revoke()` nulls all token columns, guarded to unspent | Falls out of `liveInviteConditions` (`invite_token is not null` fails) |
+| **Bought without the link** | `consumeForCustomer()` spends the hold at checkout, matched on phone + book | Identical to **Buys** — it is the same `invite_used_at` write, reached by who the customer is rather than by what they are carrying |
 
-All three are already implemented and all three are already correct. What this design
-must not do is introduce a fourth path. The two places it could:
+The fourth row is not a fourth *outcome*: it is the first one arrived at by a different
+door, and it closes a case that was genuinely absurd without it. Copies held under an
+invite are subtracted from public availability by `reservedQuantitySql`, which has no idea
+whose invite they are — correctly, because the storefront has no idea who is browsing. So
+an invited customer who ignored the SMS and bought the book the ordinary way was refused
+for lack of stock, and the stock they were refused was the stock being held in their name.
+They were the only person alive who could not buy that copy. The link is a convenience for
+reaching a pre-filled checkout page; the entry is what entitles them to the copy.
+
+All of them are now implemented and all of them are correct. What this design must not do
+is introduce a path that releases *nothing*. The two places it could:
 
 - **An allocation being deleted while holds are live against it.** Allocations are
   closed, never deleted, and the FK from an entry's wave must be `restrict` on delete.
@@ -460,6 +491,27 @@ Auto-advance a wave when the previous one closes (needs a job runner — the sam
 Per-allocation conversion reporting. A customer-facing "you're #14 in line" number, which
 is easy to compute and hard to promise, so it should be a separate decision.
 
+### Phase 5 — The storefront closes the loop — **built**
+
+Phases 1–3 assumed every purchase arrives through an invite link. Most do; the ones that
+do not were invisible, and §8's "conversion only closes for invited orders" is where that
+was written down. Closing it needed no new table:
+
+- Migration `0039`: `fulfilling_order_id` on `waitlist_entries`, FK `set null`, partial
+  index — the belief, kept apart from `converted_order_id`'s fact.
+- `waitlist-fulfillment.service.ts` — `markOrdered` at checkout (phone + book, never phone
+  alone, terminal entries untouched), `settle` on payment, `release` when the order dies.
+- `WaitlistInviteService.consumeForCustomer` — spends the customer's own live hold without
+  the link, before pricing, so the copies it frees are copies their basket can be priced
+  against.
+- `OrdersService.transition` calls `settle`/`release` in the same transaction as the
+  status change, next to the stock return and for the same reason: every way of forgetting
+  is silent.
+- `ORDERED` joins `waitlistLanes`, between `INVITED` and `EXPIRED` in the CASE — it yields
+  to a live hold, because a live hold is copies off the shelf, and it beats a lapsed one,
+  because a lapsed hold is nothing and somebody with a parcel on the way must not be fed
+  back into the next wave.
+
 ---
 
 ## 7. Decisions to confirm before Phase 2
@@ -489,9 +541,20 @@ is easy to compute and hard to promise, so it should be a separate decision.
   invisible, so a wave's "50 invited" is 50 messages handed to a phone, not 50 messages
   read. Unchanged from today, and it is the strongest practical argument for a 48-hour
   window over a 24-hour one.
-- **Conversion only closes for invited orders.** Someone who ignores their link and
-  walks into the shop still leaves their entry sitting in `EXPIRED`. Matching them back
-  needs a rule, and phone equality is wrong for a shared household number.
+- ~~**Conversion only closes for invited orders.**~~ **Closed.** Checkout now matches
+  every order back to the queue on phone + book: the customer's own live hold is spent
+  without needing the link, and any remaining entry is stamped with the order and lands in
+  `ORDERED`. The shared-household worry turned out to be answered by a rule that was
+  already here — `(phone, book)` is the uniqueness key that makes this a queue, so two
+  people sharing a number already cannot hold two entries for one title. Matching on the
+  pair conflates nobody the signup form had not already conflated. What it deliberately
+  does *not* do is match on phone alone, which would close a queue for a book the customer
+  did not buy.
+- **A customer who orders under a different number is still missed.** Nothing links an
+  order to an entry except the number on both, so a second SIM or a relative's phone at
+  checkout leaves the entry waiting. Accepted: the failure is a stale entry rather than a
+  wrong one, and the panel's `ORDERED` lane makes the successful matches visible enough
+  that the gaps are noticeable.
 - **Bulk sends still run inside the request**, five at a time. A 50-invite wave is fine;
   the ceiling is the same as it is today, and the answer is still a job table and a
   worker rather than a bigger loop.

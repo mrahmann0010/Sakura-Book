@@ -96,6 +96,44 @@ export function releasesStock(from: OrderStatus, to: OrderStatus): boolean {
   return STOCK_HELD_STATUSES.includes(from) && isTerminal(to);
 }
 
+/**
+ * Whether arriving here means the waitlist entries this order settles have
+ * become real sales.
+ *
+ * PAYMENT_CONFIRMED is the earliest honest answer for both of this shop's
+ * payment methods, which is why it rather than DELIVERED. A bKash or bank
+ * transfer reaches it when someone at the desk matches the money; a
+ * cash-on-delivery order cannot reach it any other way than by being marked
+ * delivered, because `AdminOrdersService.confirmPayment` refuses COD outright.
+ * So one status covers "the shop has been paid" in both worlds, and waiting for
+ * DELIVERED would leave prepaid customers suppressed on the list for days after
+ * they had actually bought.
+ *
+ * Not derived from `isTerminal` like `releasesStock`, because this is not about
+ * an order ending — it is about money arriving, and that happens in the middle
+ * of the lifecycle rather than at the end of it.
+ */
+export function settlesWaitlist(to: OrderStatus): boolean {
+  return to === "PAYMENT_CONFIRMED";
+}
+
+/**
+ * Whether arriving here means the waitlist should stop expecting this order.
+ *
+ * Every terminal status, and for the same reason `releasesStock` uses that
+ * test: an order with nowhere left to go is an order that will never be paid
+ * for now. The copies go back on the shelf and the people it was standing in
+ * for go back in the queue, in the same transaction, off the same fact.
+ *
+ * Entries already converted by `settlesWaitlist` are not affected — settling
+ * clears the link this reads — so a refund after payment leaves the sale
+ * recorded. That asymmetry is deliberate and `WaitlistFulfillmentService.release`
+ * explains it.
+ */
+export function releasesWaitlist(to: OrderStatus): boolean {
+  return isTerminal(to);
+}
+
 export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
   return ORDER_STATUS_TRANSITIONS[from].includes(to);
 }

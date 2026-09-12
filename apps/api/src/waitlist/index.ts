@@ -8,6 +8,7 @@ export { WaitlistService } from "./waitlist.service";
 export { RestockScheduleService } from "./restock-schedule.service";
 export { WaitlistBooksService } from "./waitlist-books.service";
 export { WaitlistInviteService } from "./waitlist-invite.service";
+export { WaitlistFulfillmentService } from "./waitlist-fulfillment.service";
 export { WaitlistInviteSettingsService } from "./waitlist-invite-settings.service";
 export { WaitlistInviteInvalidError } from "./waitlist-invite.errors";
 export { waitlistLaneFilterSql, waitlistLaneSql } from "./waitlist-lane";
