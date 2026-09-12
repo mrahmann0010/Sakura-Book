@@ -30,10 +30,30 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
+/**
+ * Which tab to open on, honouring `?tab=` from whoever linked here.
+ *
+ * Read straight off `location` in a lazy initialiser rather than through
+ * `useSearchParams`, which would oblige this client screen to sit inside a
+ * Suspense boundary to keep the build's prerender pass happy — a structural
+ * change to a page that only wants to know its starting tab. The value is
+ * checked against TABS, so an unknown or absent `tab` falls back to Pending,
+ * which is where this screen has always opened.
+ *
+ * The tab is not pushed back into the URL as the operator switches: it is an
+ * entry point for links from the dashboard, not a piece of shared state, and
+ * writing to history on every tab click would make Back walk the tabs.
+ */
+function initialTab(): TabKey {
+  if (typeof window === "undefined") return "pending";
+  const requested = new URLSearchParams(window.location.search).get("tab");
+  return TABS.some((t) => t.key === requested) ? (requested as TabKey) : "pending";
+}
+
 export default function AdminOrdersPage() {
   const { locale } = useParams<{ locale: string }>();
 
-  const [tab, setTab] = useState<TabKey>("pending");
+  const [tab, setTab] = useState<TabKey>(initialTab);
   const [items, setItems] = useState<AdminOrderSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);

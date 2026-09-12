@@ -1,5 +1,5 @@
 {
-  "id": "4df873b8-98de-4aa8-a3e9-7de8beea81a6",
+  "id": "ed96b39b-b2d8-4d92-ba13-7d7dc52aceb4",
   "prevId": "e25d5a8f-49b7-4d2d-826b-eb81f2ca03cf",
   "version": "7",
   "dialect": "postgresql",
@@ -1882,12 +1882,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "fulfilling_order_id": {
-          "name": "fulfilling_order_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "internal_note": {
           "name": "internal_note",
           "type": "text",
@@ -2041,22 +2035,6 @@
           "method": "btree",
           "with": {}
         },
-        "waitlist_entries_fulfilling_order_idx": {
-          "name": "waitlist_entries_fulfilling_order_idx",
-          "columns": [
-            {
-              "expression": "fulfilling_order_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"waitlist_entries\".\"fulfilling_order_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "waitlist_entries_invite_token_idx": {
           "name": "waitlist_entries_invite_token_idx",
           "columns": [
@@ -2109,19 +2087,6 @@
           "tableTo": "orders",
           "columnsFrom": [
             "converted_order_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "waitlist_entries_fulfilling_order_id_orders_id_fk": {
-          "name": "waitlist_entries_fulfilling_order_id_orders_id_fk",
-          "tableFrom": "waitlist_entries",
-          "tableTo": "orders",
-          "columnsFrom": [
-            "fulfilling_order_id"
           ],
           "columnsTo": [
             "id"
@@ -2826,7 +2791,38 @@
           "notNull": true
         }
       },
-      "indexes": {},
+      "indexes": {
+        "order_items_order_idx": {
+          "name": "order_items_order_idx",
+          "columns": [
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "order_items_book_idx": {
+          "name": "order_items_book_idx",
+          "columns": [
+            {
+              "expression": "book_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "order_items_order_id_orders_id_fk": {
           "name": "order_items_order_id_orders_id_fk",
@@ -2899,7 +2895,35 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "order_status_history_order_idx": {
+          "name": "order_status_history_order_idx",
+          "columns": [
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "order_status_history_order_id_orders_id_fk": {
           "name": "order_status_history_order_id_orders_id_fk",

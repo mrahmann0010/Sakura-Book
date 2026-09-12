@@ -10,12 +10,20 @@ import { z } from "zod";
    dashboard; the monthly report is fetched only once a month is picked).
    -------------------------------------------------------------------------- */
 
-/** One month's totals, for the trend chart. Zero-filled for months with no orders. */
+/**
+ * One month's totals, for the trend chart. Zero-filled for months with no orders.
+ *
+ * Dated by collection, not by placement — see `revenueWindowSchema`. A trend
+ * is the one place the distinction cannot be fudged: a series dated by
+ * placement but gated on confirmed status is not a fixed history, because
+ * every COD settlement retroactively raises a bar that has already been read.
+ */
 export const monthlyTrendPointSchema = z.object({
   /** "YYYY-MM" in the shop's timezone. */
   month: z.string().regex(/^\d{4}-\d{2}$/),
   orderCount: z.number().int().nonnegative(),
   revenueCents: z.number().int().nonnegative(),
+  unitsSold: z.number().int().nonnegative(),
 });
 
 export type MonthlyTrendPoint = z.infer<typeof monthlyTrendPointSchema>;
@@ -33,6 +41,7 @@ export const dailyPointSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   orderCount: z.number().int().nonnegative(),
   revenueCents: z.number().int().nonnegative(),
+  unitsSold: z.number().int().nonnegative(),
 });
 
 export type DailyPoint = z.infer<typeof dailyPointSchema>;
@@ -43,6 +52,7 @@ export const monthlyReportSchema = z.object({
   timezone: z.string(),
   totalOrders: z.number().int().nonnegative(),
   totalRevenueCents: z.number().int().nonnegative(),
+  totalUnitsSold: z.number().int().nonnegative(),
   averageOrderValueCents: z.number().int().nonnegative(),
   daily: z.array(dailyPointSchema),
 });

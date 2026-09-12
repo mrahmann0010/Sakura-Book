@@ -8,11 +8,12 @@ import type {
   AdminWaitlistQuery,
   AdminWaitlistUpdateRequest,
 } from "@sakura/contracts";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { AuditService } from "../../audit";
-import { ResourceNotFoundError } from "../../common/errors";
+import { InvalidInputError, ResourceNotFoundError } from "../../common/errors";
 import { DbService } from "../../db/db.service";
-import { orders, waitlistEntries } from "../../db/schema";
+import { books, orders, waitlistEntries } from "../../db/schema";
+import { toE164Bd } from "../../sms/phone";
 import { WaitlistInviteService, waitlistLaneSql } from "../../waitlist";
 import type { AdminContext } from "../orders";
 import { toAdminWaitlistEntry, toWaitlistCsv, type WaitlistRow } from "./admin-waitlist.mapper";
@@ -58,6 +59,7 @@ export class AdminWaitlistService {
   private get selection() {
     return {
       id: waitlistEntries.id,
+      bookId: waitlistEntries.bookId,
       bookTitleSnapshot: waitlistEntries.bookTitleSnapshot,
       customerName: waitlistEntries.customerName,
       customerEmail: waitlistEntries.customerEmail,
@@ -256,10 +258,28 @@ export class AdminWaitlistService {
   ): Promise<AdminWaitlistEntry> {
     const existing = await this.dbService.db.query.waitlistEntries.findFirst({
       where: eq(waitlistEntries.id, id),
-      columns: { id: true, status: true, internalNote: true },
+      columns: {
+        id: true,
+        status: true,
+        internalNote: true,
+        bookId: true,
+        bookTitleSnapshot: true,
+        quantity: true,
+        customerName: true,
+        customerEmail: true,
+        customerPhone: true,
+        locale: true,
+        inviteUsedAt: true,
+        inviteExpiresAt: true,
+      },
     });
 
     if (!existing) throw new ResourceNotFoundError("Waitlist entry");
+
+    /* The details, worked out before the transaction: what they normalize to,
+       what the title snapshot becomes, and whether the entry is in a state
+       where changing them is honest at all. */
+    const details = await this.resolveDetails(id, request, existing);
 
     /* One transaction because cancelling is two writes that mean one thing.
        Moving an entry to CANCELLED without taking its invite back leaves the
@@ -277,6 +297,7 @@ export class AdminWaitlistService {
             : // Empty string clears it: a note trimmed to nothing is not a note,
               // and storing "" would make `hasNote`-style checks lie.
               { internalNote: request.internalNote.trim() || null }),
+          ...details,
           updatedAt: new Date(),
         })
         .where(eq(waitlistEntries.id, id));
@@ -288,6 +309,16 @@ export class AdminWaitlistService {
       if (request.status === "CANCELLED") {
         await this.waitlistInviteService.revoke(id, tx);
       }
+
+      /* Moving a lapsed entry to another title takes its dead invite with it.
+         `resolveDetails` has already refused the live and spent cases, so what
+         is left here is a token nobody can redeem — but one that still points
+         at the *old* book's release and wave. Carrying that across would leave
+         a row charged to a budget for a book it is no longer waiting on, and
+         the Expired tab offering a re-invite that re-reads it. */
+      if (details.bookId !== undefined && details.bookId !== existing.bookId) {
+        await this.waitlistInviteService.revoke(id, tx);
+      }
     });
 
     await this.auditService.recordDetached({
@@ -295,10 +326,25 @@ export class AdminWaitlistService {
       action: "UPDATE",
       entityType: "waitlist_entry",
       entityId: id,
-      before: { status: existing.status, internalNote: existing.internalNote },
+      /* The whole editable surface on both sides, not just the fields this
+         request touched. An entry's book, quantity and contact details are now
+         staff-editable, and "who changed this number, and from what" is the
+         question the log has to be able to answer afterwards. */
+      before: {
+        status: existing.status,
+        internalNote: existing.internalNote,
+        bookId: existing.bookId,
+        bookTitleSnapshot: existing.bookTitleSnapshot,
+        quantity: existing.quantity,
+        customerName: existing.customerName,
+        customerEmail: existing.customerEmail,
+        customerPhone: existing.customerPhone,
+        locale: existing.locale,
+      },
       after: {
         ...(request.status === undefined ? {} : { status: request.status }),
         ...(request.internalNote === undefined ? {} : { internalNote: request.internalNote }),
+        ...details,
       },
       ipAddress: context.ipAddress,
       userAgent: context.userAgent,
@@ -311,6 +357,134 @@ export class AdminWaitlistService {
       .where(eq(waitlistEntries.id, id));
 
     return toAdminWaitlistEntry(row as WaitlistRow);
+  }
+
+  /**
+   * The detail half of a PATCH, checked and normalized into columns.
+   *
+   * Returns only the fields the request actually sent, so the caller can spread
+   * it into an update alongside the status/note half without having to know
+   * which of the two wrote what.
+   *
+   * ## Why the book and the quantity are guarded and the rest are not
+   *
+   * Name, email, phone and language describe how to reach somebody. Getting one
+   * wrong wastes a text; correcting one costs the shop nothing, whatever state
+   * the entry is in.
+   *
+   * The book and the quantity are different: together they *are* the hold. A
+   * live invite reserves `quantity` copies of `bookId` against that book's open
+   * release (see `reservedQuantitySql` and `committedSql`, both of which read
+   * these columns straight off the row). Editing either under a live invite
+   * silently moves copies between budgets — raise a 2 to a 5 and the release is
+   * over-issued by three with nothing on screen to say so; change the book and
+   * one release goes on being charged for copies of a title the entry has
+   * stopped waiting on. So the edit is refused while a hold is live, with the
+   * one instruction that makes it possible: take the invite back first.
+   *
+   * A spent invite is refused outright and for a plainer reason — the entry
+   * became an order, and the record of what somebody bought is not a form.
+   */
+  private async resolveDetails(
+    id: string,
+    request: AdminWaitlistUpdateRequest,
+    existing: {
+      bookId: string | null;
+      customerPhone: string;
+      status: AdminWaitlistEntry["status"];
+      inviteUsedAt: Date | null;
+      inviteExpiresAt: Date | null;
+    },
+  ): Promise<Partial<typeof waitlistEntries.$inferInsert>> {
+    const details: Partial<typeof waitlistEntries.$inferInsert> = {};
+
+    if (request.customerName !== undefined) details.customerName = request.customerName;
+    if (request.customerEmail !== undefined) details.customerEmail = request.customerEmail;
+    if (request.locale !== undefined) details.locale = request.locale;
+
+    /* Stored in the same shape the signup door stores it, because everything
+       downstream — the dedupe index, the SMS gateway, a staff member searching
+       for a number a customer just read out — assumes one spelling. */
+    const phone = request.customerPhone === undefined ? null : toE164Bd(request.customerPhone);
+    if (phone !== null) details.customerPhone = phone;
+
+    const movingBook = request.bookId !== undefined && request.bookId !== existing.bookId;
+    const changingHold = movingBook || request.quantity !== undefined;
+
+    if (changingHold) {
+      if (existing.inviteUsedAt !== null || existing.status === "CONVERTED") {
+        throw new InvalidInputError(
+          "This entry has already become an order. Its book and quantity are the record of what was bought.",
+        );
+      }
+
+      if (existing.inviteExpiresAt !== null && existing.inviteExpiresAt > new Date()) {
+        throw new InvalidInputError(
+          "This entry is holding a copy. Remove it from the list to take the invite back, restore it, then change the book or quantity.",
+        );
+      }
+    }
+
+    if (request.quantity !== undefined) details.quantity = request.quantity;
+
+    if (request.bookId !== undefined) {
+      /* The snapshot is written here, never accepted from the caller — same
+         rule as the storefront's signup, and for the same reason: the title a
+         browser had on screen is not the catalog's answer. Both columns move
+         together or the row starts claiming one book and displaying another. */
+      if (request.bookId === null) {
+        details.bookId = null;
+        details.bookTitleSnapshot = null;
+      } else {
+        const book = await this.dbService.db.query.books.findFirst({
+          where: eq(books.id, request.bookId),
+          columns: { id: true, title: true },
+        });
+
+        if (!book) throw new ResourceNotFoundError("Book", request.bookId);
+
+        details.bookId = book.id;
+        details.bookTitleSnapshot = book.title;
+      }
+    }
+
+    /* Checked here rather than left to the partial unique index, which fires
+       the same rule as an opaque 409 naming a constraint. Both halves of that
+       index are in play: a phone edit can collide on the entry's existing book,
+       and a book edit can collide on its existing phone. */
+    if (phone !== null || movingBook) {
+      await this.assertNotAlreadyWaiting(
+        id,
+        phone ?? existing.customerPhone,
+        request.bookId === undefined ? existing.bookId : request.bookId,
+      );
+    }
+
+    return details;
+  }
+
+  /** The other live entry this phone already has for this book, if any — see
+   *  `waitlist_entries_phone_book_idx` for why CONVERTED is excluded. */
+  private async assertNotAlreadyWaiting(
+    id: string,
+    phone: string,
+    bookId: string | null,
+  ): Promise<void> {
+    const clash = await this.dbService.db.query.waitlistEntries.findFirst({
+      where: and(
+        eq(waitlistEntries.customerPhone, phone),
+        bookId === null ? isNull(waitlistEntries.bookId) : eq(waitlistEntries.bookId, bookId),
+        ne(waitlistEntries.status, "CONVERTED"),
+        ne(waitlistEntries.id, id),
+      ),
+      columns: { id: true, customerName: true },
+    });
+
+    if (clash) {
+      throw new InvalidInputError(
+        `${clash.customerName} is already on this book's list with that number. Edit that entry instead.`,
+      );
+    }
   }
 }
 

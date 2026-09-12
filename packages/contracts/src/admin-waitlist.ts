@@ -106,6 +106,13 @@ export const adminWaitlistEntrySchema = z.object({
    *  from the snapshot, so it survives the book being renamed or delisted. */
   bookTitle: z.string().nullable(),
 
+  /** The catalog id behind that snapshot, or null — either the shop-wide list
+   *  or a book since deleted (the FK is `set null`, the snapshot is not).
+   *  Sent so the edit form can preselect the title staff are about to change;
+   *  `bookTitle` remains what a row *displays*, because it is the one of the
+   *  two that still reads correctly once the book is gone. */
+  bookId: z.string().uuid().nullable(),
+
   customerName: z.string(),
   customerEmail: z.string(),
   customerPhone: z.string(),
@@ -242,9 +249,20 @@ export const adminWaitlistNotifyResultSchema = z.object({
 export type AdminWaitlistNotifyResult = z.infer<typeof adminWaitlistNotifyResultSchema>;
 
 /**
- * Edit one entry. Both fields optional, at least one required — a PATCH with
+ * Edit one entry. Every field optional, at least one required — a PATCH with
  * an empty body is a request that means nothing, and silently returning the
  * unchanged row would hide a broken caller.
+ *
+ * What staff can correct here is what a customer can get wrong on the way in,
+ * or wrong over the phone afterwards: which title they meant, how many copies,
+ * and how to reach them. The validation mirrors `waitlistSubscribeRequestSchema`
+ * field for field on purpose — an entry typed by staff and an entry typed by a
+ * customer are the same row, and a phone the SMS gateway cannot dial is no more
+ * acceptable for being entered by the shop.
+ *
+ * `bookId` is the one nullable member: null moves an entry to the shop-wide
+ * list, which `undefined` cannot express. The server snapshots the title itself
+ * — see the service — so no caller ever sends one.
  */
 export const adminWaitlistUpdateRequestSchema = z
   .object({
@@ -253,10 +271,35 @@ export const adminWaitlistUpdateRequestSchema = z
      *  distinguish "clear it" from "leave it alone", which is what `undefined`
      *  already says. */
     internalNote: z.string().max(2000).optional(),
+
+    bookId: z.string().uuid("Choose a book from the list.").nullable().optional(),
+
+    quantity: z
+      .number()
+      .int("Enter a whole number.")
+      .min(1, "Enter at least 1.")
+      .max(20, "Enter 20 or fewer — contact us directly for bulk orders.")
+      .optional(),
+
+    customerName: z.string().trim().min(1, "Add a name.").max(120).optional(),
+    customerEmail: z
+      .string()
+      .trim()
+      .email("Use an address like you@example.com so we can reach them.")
+      .optional(),
+    /** Same rule as the storefront's: the server normalizes to E.164 before
+     *  storing, so this only has to reject what could never normalize. */
+    customerPhone: z
+      .string()
+      .trim()
+      .regex(/^(\+?88)?01[3-9]\d{8}$/, "Use a Bangladeshi mobile number, e.g. 01712345678.")
+      .optional(),
+    /** Which language the restock text goes out in. */
+    locale: z.enum(["bn", "en", "ja"]).optional(),
   })
   .refine(
-    (value) => value.status !== undefined || value.internalNote !== undefined,
-    "Send a status, a note, or both.",
+    (value) => Object.values(value).some((field) => field !== undefined),
+    "Send at least one field to change.",
   );
 
 export type AdminWaitlistUpdateRequest = z.infer<typeof adminWaitlistUpdateRequestSchema>;
