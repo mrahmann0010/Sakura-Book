@@ -113,6 +113,27 @@ export const orderSchema = z.object({
   paymentMethod: z.enum(paymentMethods),
   /** Which wallet a manual-transfer payment moved through. Null otherwise. */
   paymentProvider: z.enum(paymentProviders).nullable(),
+  /**
+   * The number the customer sent the transfer from. Null on cash on delivery,
+   * and on any transfer placed before the field was collected.
+   *
+   * Exposed for the downloadable receipt, which names the method and the
+   * paying number so the sheet is worth something as proof. The transaction
+   * ID deliberately stays server-side: lookup is single-factor (see
+   * orderLookupRequestSchema), and a payment reference is the one field on
+   * this order that could be replayed against the gateway by whoever reads
+   * it. The sending number is already the customer's own, and in almost every
+   * order is the same number `shipping.phone` already carries.
+   *
+   * Defaulted rather than merely nullable, so an absent field parses instead
+   * of throwing. The web validates every order response against this schema
+   * and turns a failure into an ApiContractError (see apiFetch), which means
+   * a required field here would break checkout outright for as long as a
+   * newly-deployed web was talking to an API that had not shipped yet. The
+   * API and the web deploy separately, so that window is real; a default
+   * makes the field additive and removes the ordering constraint.
+   */
+  paymentSenderNumber: z.string().nullable().default(null),
 
   shipping: z.object({
     fullName: z.string(),

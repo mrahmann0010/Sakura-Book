@@ -194,6 +194,7 @@
     },
     "payment": {
       "legend": "Payment",
+      "cash-on-delivery": "Cash on delivery",
       "manual-transfer": "bKash or bank transfer",
       "manual-transferMeta": "manual transfer",
       "manual-transferHint": "Send the total, then give us the sender number and transaction ID.",
@@ -644,5 +645,31 @@
       "description": "It may have expired or already been used. Contact us if you think this is a mistake.",
       "action": "Contact us"
     }
+  },
+  "receipt": {
+    "title": "Receipt",
+    "provisional": "Order confirmation",
+    "issued": "Issued",
+    "issuedTo": "Issued to",
+    "deliveredTo": "Delivered to",
+    "col": {
+      "item": "Item",
+      "qty": "Qty",
+      "unit": "Unit",
+      "amount": "Amount"
+    },
+    "paymentMethod": "Payment method",
+    "sentFrom": "Sent from",
+    "paymentStatus": "Payment status",
+    "status": {
+      "verified": "Verified",
+      "awaiting": "Awaiting verification",
+      "onDelivery": "Payable on delivery",
+      "paidOnDelivery": "Paid on delivery",
+      "cancelled": "Cancelled",
+      "refunded": "Refunded"
+    },
+    "thanks": "Thank you for reading with us.",
+    "page": "Page {{page}} of {{total}}"
   }
 }

@@ -59,6 +59,9 @@ export function toOrderResponse(row: OrderRow): Order {
 
     paymentMethod: row.paymentMethod as PaymentMethod,
     paymentProvider: row.provider as PaymentProvider | null,
+    // The paying number, but never `transactionId` beside it — see the
+    // contract's note on why the reference stays server-side.
+    paymentSenderNumber: row.senderNumber,
 
     shipping: {
       fullName: row.customerName,
