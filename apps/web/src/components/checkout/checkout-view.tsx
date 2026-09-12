@@ -274,8 +274,15 @@ export function CheckoutView({
      the flat placeholder rate, so the rail says so instead of showing a
      figure the shopper would read as final — and the total, which cannot be
      known without it, waits with it. Both fill in together the moment a
-     division is chosen. */
-  const deliveryKnown = divisionChosen;
+     division is chosen.
+
+     `cart.priced` is the other half of that, and the half this was missing:
+     choosing a division starts a requote, and until it lands `keepPreviousData`
+     is still serving the region-less quote — the flat rate, now rendered as
+     fact because a division *has* been chosen. If that requote fails it is
+     served indefinitely. So the figure waits for the quote that actually
+     priced this region, not merely for the division to be picked. */
+  const deliveryKnown = divisionChosen && cart.priced;
 
   const rows = summaryLines(
     cart,
@@ -430,6 +437,14 @@ export function CheckoutView({
               <Notice tone="error">{t("checkout.errorSummary")}</Notice>
             ) : null}
 
+            {/* A quote that could not be taken is shown here rather than left
+                silent. The alternative is what it replaces: the rail keeps
+                displaying the last total it managed to get, the customer reads
+                it as the price, and the first sign anything is wrong is the
+                order being refused — on the step where they were paying. */}
+            {cart.quoteFailed ? (
+              <Notice tone="error">{t("checkout.quoteFailed")}</Notice>
+            ) : null}
             {submitError ? <Notice tone="error">{submitError}</Notice> : null}
 
             {/* The lead carries the state, the body says what it means, and

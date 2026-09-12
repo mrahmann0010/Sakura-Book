@@ -45,6 +45,26 @@ export type UseCart = Cart & {
   entries: CartItem[];
   /** True while a quote is in flight for the current cart contents. */
   quoting: boolean;
+  /**
+   * Whether the totals above were priced for the cart and region being asked
+   * about *now*, rather than being the last answer to a different question.
+   *
+   * `keepPreviousData` is what makes this necessary. It exists so the recap
+   * does not blank out between quotes, and the cost of that is a window where
+   * the numbers on screen belong to the previous key — the previous basket,
+   * or, at checkout, the previous region. A delivery figure quoted before the
+   * customer named their division is the flat national fallback, which is not
+   * a rate this shop charges anybody: showing it as though it were the answer
+   * is how a customer reads one fee and is billed another.
+   *
+   * So a caller that is about to render money as fact checks this first, and
+   * shows a pending state while it is false. `quoting` is not the same thing
+   * and cannot replace it: a *failed* requote is not in flight and still
+   * leaves last key's numbers on screen.
+   */
+  priced: boolean;
+  /** The last quote attempt failed. The totals are stale or absent. */
+  quoteFailed: boolean;
   /** Entries the server could not price — delisted, unavailable, out of stock. */
   rejected: CartQuoteRejection[];
   /**
@@ -75,7 +95,12 @@ export function useCart(region?: string): UseCart {
      each firing their own. `region` joins the key on checkout, once the
      customer's division has resolved one, so the recap's delivery line prices
      against the same zone the order will actually be charged. */
-  const { data: quote, isLoading } = useQuery({
+  const {
+    data: quote,
+    isLoading,
+    isPlaceholderData,
+    isError,
+  } = useQuery({
     queryKey: ["cart-quote", items, region],
     queryFn: () => quoteCart(items, { region }),
     enabled: hydrated && items.length > 0,
@@ -98,6 +123,11 @@ export function useCart(region?: string): UseCart {
     hydrated,
     entries: items,
     quoting: hydrated && items.length > 0 && isLoading,
+    /* An empty cart is trivially priced — `emptyCart` above is not a stale
+       answer, it is the right one, and gating the recap on a quote that will
+       never be requested would leave "calculating" on screen forever. */
+    priced: items.length === 0 || (quote !== undefined && !isPlaceholderData),
+    quoteFailed: isError,
     rejected: quote?.rejected ?? [],
     /* The analytics calls live here rather than in the buttons because this is
        the only seam every cart mutation passes through — a future control that

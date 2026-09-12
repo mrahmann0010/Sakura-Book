@@ -225,6 +225,7 @@
     "placing": "Placing order",
     "missing": "Please fill in {{fields}}.",
     "errorSummary": "Check the fields marked below, then place the order again.",
+    "quoteFailed": "We couldn't work out your total just now — the delivery fee and total above may be out of date. Check your connection and try again before placing the order.",
     "submitError": "Something went wrong placing your order. Please try again.",
     "transactionIdReusedLead": "This payment is already on an order.",
     "transactionIdReused": "Transaction ID already used for order {{orderNumber}}. If that order is yours, there is nothing more to pay — otherwise send a new payment and enter the transaction ID from it.",
