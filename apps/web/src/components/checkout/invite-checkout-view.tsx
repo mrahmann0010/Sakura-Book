@@ -196,7 +196,14 @@ export function InviteCheckoutView({
      endpoint, so this page never shows a price it made up itself. Keyed on the
      basket and region exactly like useCart's own quote query; `items` is
      serialised into the key because its identity changes on every render. */
-  const { data: quote, isLoading } = useQuery({
+  const {
+    data: quote,
+    isLoading,
+    /* Serving the previous key's answer — a different basket, or the quote
+       taken before a division was chosen. See `deliveryKnown` below. */
+    isPlaceholderData,
+    isError: quoteFailed,
+  } = useQuery({
     queryKey: ["invite-quote", JSON.stringify(items), divisionChosen ? region : undefined],
     queryFn: () =>
       quoteCart(items, {
@@ -242,7 +249,13 @@ export function InviteCheckoutView({
   }
 
   const money = intlLocale(locale);
-  const deliveryKnown = divisionChosen;
+
+  /* Both halves, for the reason CheckoutView spells out: a division must have
+     been chosen, *and* the quote on screen must be the one taken for it.
+     Otherwise what is rendered is the flat national fallback — ৳100 against
+     real zone rates that are nothing like it — presented as the delivery fee,
+     and a failed requote leaves it there for good. */
+  const deliveryKnown = divisionChosen && !isPlaceholderData;
 
   const rows = summaryLines(
     cart,
@@ -451,6 +464,11 @@ export function InviteCheckoutView({
             {isSubmitted && !isValid ? (
               <Notice tone="error">{t("checkout.errorSummary")}</Notice>
             ) : null}
+            {/* Said out loud rather than swallowed. This page had no error
+                branch at all: a quote that failed left the previous total on
+                screen looking settled, which is how a customer ends up reading
+                one delivery fee and being charged another. */}
+            {quoteFailed ? <Notice tone="error">{t("checkout.quoteFailed")}</Notice> : null}
             {submitError ? <Notice tone="error">{submitError}</Notice> : null}
 
             <div className="hidden lg:block">

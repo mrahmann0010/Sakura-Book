@@ -105,6 +105,22 @@ export function CartView({ locale }: { locale: Locale }) {
      disagree about postage. The rail lags a removal by one round-trip, which
      is the honest thing to show — the customer is quoted a total only once the
      shop has actually quoted it. */
+  /* This page has no address and never will — postage is quoted per zone, and
+     the zone comes from a division chosen at checkout. So the quote behind
+     these rows was taken with no region, and its delivery figure is the flat
+     national fallback: a number that is not either zone's rate and that no
+     customer is charged. It was being drawn here as "Delivery", inside a total,
+     directly above a footer note promising postage is worked out at checkout.
+     The note was right and the numbers were wrong.
+
+     The waiver is the one part this page *can* state as fact: it is decided by
+     the subtotal alone, so a cart over the threshold posts free to anywhere and
+     its total is exact. Below the threshold, the honest answer is the subtotal
+     and an open "+ delivery" — not a precise-looking figure that changes on the
+     next screen. */
+  const deliveryWaived =
+    cart.freeDeliveryThreshold !== null && cart.subtotal >= cart.freeDeliveryThreshold;
+
   const rows = summaryLines(
     cart,
     {
@@ -116,11 +132,21 @@ export function CartView({ locale }: { locale: Locale }) {
           : t("cart.summary.deliveryFree", {
               threshold: formatMoney(cart.freeDeliveryThreshold, money),
             }),
+      /* Always a word rather than a figure here, in both directions: "Free"
+         when the waiver has already settled it, "at checkout" when only the
+         address can. Passing this also drops the waived-amount credit row,
+         which is what we want — that row's value is the same fallback rate,
+         so it would read "-৳100 delivery" off a postage price of ৳135. */
+      deliveryUnknown: deliveryWaived
+        ? t("cart.summary.deliveryFreeValue")
+        : t("cart.summary.deliveryAtCheckout"),
     },
     money,
   );
 
-  const total = formatMoney(cart.total, money);
+  const total = deliveryWaived
+    ? formatMoney(cart.total, money)
+    : t("cart.summary.totalPlusDelivery", { amount: formatMoney(cart.subtotal, money) });
 
   /* One node, rendered into the rail on desktop and the docked bar on mobile —
      the same button, never two that can drift apart. */
@@ -165,6 +191,14 @@ export function CartView({ locale }: { locale: Locale }) {
           {cart.rejected.length > 0 ? (
             <Notice tone="error" className="mb-6">
               {t("cart.rejectedNotice", { count: cart.rejected.length })}
+            </Notice>
+          ) : null}
+
+          {/* A quote that failed leaves the last one on screen — prices and
+              stock included — with nothing to say it is no longer current. */}
+          {cart.quoteFailed ? (
+            <Notice tone="error" className="mb-6">
+              {t("cart.quoteFailed")}
             </Notice>
           ) : null}
 

@@ -81,11 +81,26 @@ export class WaitlistController {
    * not spend the token, so reloading the page or opening it twice is safe.
    * The actual, single-use check happens where the order is created.
    *
-   * Throttled like `subscribe` — an unauthenticated endpoint that answers
-   * "does this identifier exist", the exact shape `StrictThrottle` exists for.
+   * Deliberately *not* `@StrictThrottle`, unlike `subscribe` above, even
+   * though it has the "does this identifier exist" shape the decorator exists
+   * for. Nobody calls this from a browser: the invite page is a server
+   * component, so every lookup in the shop arrives from the one web container,
+   * with no forwarded address to tell the callers apart. The strict bucket is
+   * keyed on `request.ip`, so ten a minute was not ten per customer — it was
+   * ten for the whole shop, and an SMS batch is precisely a crowd opening
+   * their links in the same minute. The eleventh customer got a 429, which the
+   * web app can only render as "something went wrong", on the page where they
+   * were about to pay. That is the cost side.
+   *
+   * There is nothing on the other side. The strict limit slows enumeration of
+   * a guessable space — an eight-character order number, a coupon code someone
+   * might have typed. An invite token is 55 bits from a CSPRNG
+   * (`generateInviteToken`), so guessing one at ten a minute and at ten
+   * million a minute are the same impossibility, and the global 300/minute
+   * bucket still catches a runaway client. Read-only, single-use spending
+   * happens at checkout, and a wrong token is a flat 404 either way.
    */
   @Get("invite/:token")
-  @StrictThrottle()
   @ApiOperation({ summary: "Look up an invite token, without spending it." })
   async invite(@Param("token") token: string): Promise<WaitlistInvite> {
     return this.waitlistInviteService.redeem(token);
