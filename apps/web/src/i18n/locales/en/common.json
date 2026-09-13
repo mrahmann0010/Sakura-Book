@@ -173,11 +173,12 @@
     "headerNote": "Secure checkout",
     "shipping": {
       "legend": "Shipping details",
+      "legendHint": "Enter the address where you want your book delivered.",
       "fullName": "Full name",
       "email": "Email",
       "phone": "Phone",
       "secondaryPhone": "Secondary phone (optional)",
-      "secondaryPhoneHint": "A second number the courier can try.",
+      "secondaryPhoneHint": "We'll call this number if the first one can't be reached.",
       "division": "Division",
       "divisionPlaceholder": "Select division",
       "district": "District",
@@ -185,7 +186,7 @@
       "upazila": "Upazila / Thana",
       "area": "Area / Village",
       "address": "Detailed address",
-      "addressHint": "House and road, any landmark.",
+      "addressHint": "Where the book will be delivered — house, road, any landmark.",
       "city": "City",
       "postCode": "Post code",
       "region": "Delivery zone",
@@ -206,7 +207,8 @@
       "nagad": "Nagad",
       "mobileMoneyLegend": "Mobile money",
       "mobileMoneyMeta": "manual transfer",
-      "sendTo": "Send the total to this {{provider}} number",
+      "sendMoneyBanner": "⚠️ Use \"SEND MONEY\" in your {{provider}} app — not Payment or Cash Out.",
+      "sendTo": "Send Money to this {{provider}} number",
       "amount": "Amount to send",
       "sendToHint": "Open your {{provider}} app, send the amount, then come back here.",
       "verifyHint": "Now enter the details from the payment you just sent.",
@@ -519,7 +521,9 @@
       },
       "refunds": {
         "title": "4. Cancellations & Refunds",
-        "body": ["Cancellations, returns, and refunds are handled under our Refund Policy."]
+        "body": [
+          "Cancellations, returns, and refunds are handled under our Refund Policy."
+        ]
       },
       "conduct": {
         "title": "5. Fair Use",

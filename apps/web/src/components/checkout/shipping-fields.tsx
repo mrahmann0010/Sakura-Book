@@ -126,6 +126,7 @@ export function ShippingFields({
   return (
     <fieldset className="min-w-0">
       <Eyebrow as="legend">{t("checkout.shipping.legend")}</Eyebrow>
+      <p className="text-body text-ink mt-1.5">{t("checkout.shipping.legendHint")}</p>
 
       <div className="mt-3.5 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
         <Input

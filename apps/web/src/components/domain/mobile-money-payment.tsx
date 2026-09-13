@@ -236,7 +236,16 @@ function TransferDetails({
         </div>
       ) : null}
 
-      <p className="text-caption text-secondary">
+      {/* Shoppers kept picking Payment or Cash Out in their wallet app; the
+          number only works with Send Money, so that is said loudest. */}
+      <p
+        role="note"
+        className="rounded-control border-clay bg-surface text-clay-deep mb-3.5 border-2 px-3.5 py-2.5 font-semibold"
+      >
+        {t("checkout.payment.sendMoneyBanner", { provider: providerLabel })}
+      </p>
+
+      <p className="text-body text-ink font-semibold">
         {t("checkout.payment.sendTo", { provider: providerLabel })}
       </p>
 
