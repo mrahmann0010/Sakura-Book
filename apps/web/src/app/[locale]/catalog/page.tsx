@@ -78,7 +78,7 @@ export default async function Catalog({ params, searchParams }: PageProps<"/[loc
       header={<AppNav />}
       footer={
         <SiteFooter
-          blurb="A small catalogue of books, chosen by hand and posted from Bristol."
+          blurb={t("footer.blurb")}
           columns={footerColumns}
           note={`© ${new Date().getFullYear()} Nihonova Books`}
         />

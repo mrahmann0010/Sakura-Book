@@ -52,7 +52,7 @@ export default async function WriteReviewPage({ params }: PageProps<"/[locale]/y
       header={<AppNav brandHref={path.home} />}
       footer={
         <SiteFooter
-          blurb={t("home.hero.subhead")}
+          blurb={t("footer.blurb")}
           columns={footerColumns.map((column) => ({
             ...column,
             links: localizeLinks(column.links, locale),

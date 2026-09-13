@@ -34,7 +34,7 @@ export default async function ContactPage({ params }: PageProps<"/[locale]/conta
       header={<AppNav brandHref={path.home} />}
       footer={
         <SiteFooter
-          blurb={t("home.hero.subhead")}
+          blurb={t("footer.blurb")}
           columns={footerColumns.map((column) => ({
             ...column,
             links: localizeLinks(column.links, locale),

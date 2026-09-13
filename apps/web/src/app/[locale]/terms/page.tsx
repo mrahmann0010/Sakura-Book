@@ -39,7 +39,7 @@ export default async function TermsPage({ params }: PageProps<"/[locale]/terms">
       header={<AppNav brandHref={path.home} />}
       footer={
         <SiteFooter
-          blurb={t("home.hero.subhead")}
+          blurb={t("footer.blurb")}
           columns={footerColumns.map((column) => ({
             ...column,
             links: localizeLinks(column.links, locale),

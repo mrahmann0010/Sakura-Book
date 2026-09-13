@@ -8,6 +8,7 @@ import { SiteFooter } from "@/components/layout";
 import { LinkButton, Wordmark } from "@/components/ui";
 import { footerColumns } from "@/lib/books";
 import { localizeLinks } from "@/lib/routes";
+import { getTranslation } from "@/i18n/server";
 import { defaultLocale } from "@/i18n/settings";
 
 /* global-not-found — the documented escape hatch for a root layout that
@@ -45,8 +46,13 @@ export const metadata: Metadata = {
   description: "The page you are looking for does not exist.",
 };
 
-export default function GlobalNotFound() {
+export default async function GlobalNotFound() {
   const home = `/${defaultLocale}`;
+
+  /* The footer says what the shop sells, and that sentence is translated like
+     every other one — with no params to read, it speaks the default locale the
+     rest of the page links to. */
+  const { t } = await getTranslation(defaultLocale);
 
   /* The nav is the app's client FloatingNav, which reads the cart from the
      store — there is no provider out here, so the header narrows to the
@@ -93,7 +99,7 @@ export default function GlobalNotFound() {
         </main>
 
         <SiteFooter
-          blurb="A small catalogue of books, chosen by hand and posted from Bristol."
+          blurb={t("footer.blurb")}
           columns={footerColumns.map((column) => ({
             ...column,
             /* Every path in the table is locale-relative; out here the default

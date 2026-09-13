@@ -44,7 +44,7 @@ export default async function OrderDetailPage({
       header={<AppNav brandHref={path.home} />}
       footer={
         <SiteFooter
-          blurb={t("home.hero.subhead")}
+          blurb={t("footer.blurb")}
           columns={localizeFooter(locale)}
           note={`© ${new Date().getFullYear()} Nihonova Books`}
         />

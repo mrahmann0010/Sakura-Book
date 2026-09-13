@@ -94,8 +94,9 @@ export const envSchema = z.object({
    * supporting a second one is a migration, not a config change.
    *
    * BDT, matching the delivery regions and the cash-on-delivery / bKash
-   * payment methods. The `£` in the placeholder catalog and the "posted from
-   * Bristol" copy are leftovers to be corrected, not a second currency.
+   * payment methods. The `£` in the placeholder catalog is a leftover to be
+   * corrected, not a second currency — as was the "posted from Bristol"
+   * footer copy, now replaced by the translated shop description.
    *
    * Note on minor units: the column names say `cents`, and for BDT the minor
    * unit is poisha. Amounts stay integers of 1/100 taka for consistency with

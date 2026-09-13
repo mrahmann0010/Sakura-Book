@@ -38,7 +38,7 @@ export default async function RefundPolicyPage({ params }: PageProps<"/[locale]/
       header={<AppNav brandHref={path.home} />}
       footer={
         <SiteFooter
-          blurb={t("home.hero.subhead")}
+          blurb={t("footer.blurb")}
           columns={footerColumns.map((column) => ({
             ...column,
             links: localizeLinks(column.links, locale),

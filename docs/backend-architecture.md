@@ -355,8 +355,9 @@ format per locale anyway. **This is a breaking change to the frontend** —
 the number back out of it to sort.
 
 **DECIDED: BDT.** It follows the delivery regions and the cash-on-delivery /
-bKash payment methods; the `£` prices and the "posted from Bristol" copy are
-leftovers from the placeholder data, not evidence of a second market. Set as
+bKash payment methods; the `£` prices and the since-removed "posted from
+Bristol" copy were leftovers from the placeholder data, not evidence of a
+second market. Set as
 `CURRENCY` in `config/env.schema.ts`.
 
 Two consequences worth stating, because both are easy to get wrong later:
@@ -741,8 +742,9 @@ job, structured metrics, load-check the catalog query.
 ## 7. Decisions still needed from you
 
 1. ~~**Currency.**~~ Decided: BDT — see §3.7. What it leaves open is content,
-   not architecture: the nine placeholder titles need taka prices, and the
-   Bristol copy needs rewriting.
+   not architecture: the nine placeholder titles need taka prices. (The
+   "posted from Bristol" footer copy has been replaced by the translated
+   `home.hero.subhead` on every page that has a footer.)
 2. **Ratings.** Real reviews table, imported/static ratings, or drop the feature?
 3. **Order number format.** The UI promises "eight characters, like MG-40718".
    Confirm, then it becomes a DB-generated unique column.

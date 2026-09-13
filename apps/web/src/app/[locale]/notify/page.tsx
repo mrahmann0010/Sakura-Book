@@ -102,7 +102,7 @@ export default async function NotifyPage({ params }: PageProps<"/[locale]/notify
       header={<AppNav brandHref={path.home} />}
       footer={
         <SiteFooter
-          blurb={t("home.hero.subhead")}
+          blurb={t("footer.blurb")}
           columns={footerColumns.map((column) => ({
             ...column,
             links: localizeLinks(column.links, locale),

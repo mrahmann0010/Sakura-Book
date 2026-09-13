@@ -264,7 +264,7 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
       header={<AppNav />}
       footer={
         <SiteFooter
-          blurb="A small catalogue of books, chosen by hand and posted from Bristol."
+          blurb={t("footer.blurb")}
           columns={footerColumns}
           note={`© ${new Date().getFullYear()} Nihonova Books`}
         />
