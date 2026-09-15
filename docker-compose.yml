@@ -1,19 +1,40 @@
-# `docker compose up` runs the frontend alone; the API sits in the
-# `backend` profile and stays stopped until asked for by name:
+# Every service starts together, with the plain commands and no flags:
 #
-#   docker compose up                      web only  (npm run docker:up)
-#   docker compose --profile backend up    web + api
+#   docker compose up -d     postgres + api + web
+#   docker compose down      stop them
 #
-# There is no postgres service. The database is the self-hosted Postgres on the
-# Coolify VPS in every environment, including local development — so a container
-# here would be a second database that drifts from the real one and quietly
-# answers queries nobody meant to send it. Point DATABASE_URL at the VPS; see
-# apps/api/.env.example.
+# The API used to sit in a `backend` profile so that a bare `docker compose up`
+# brought up the frontend alone. That is gone. A profiled service is invisible
+# to any command that does not repeat its profile flag, which meant `down` and
+# `logs` silently skipped the API unless you remembered `--profile backend` on
+# both ends — a footgun that cost more than the occasional saved container.
+# Run the whole stack, or name the one service you want: `docker compose up -d
+# postgres`.
 #
-# That database does not terminate TLS on its public port, so DATABASE_SSL is
-# `disable` rather than `require` — see db.service.ts, which passes the value
-# straight to postgres.js and fails the connection outright if it asks for SSL
-# the server will not offer.
+# There IS a postgres service now, reversing what this file used to say. The
+# old rule — point every environment, local development included, at the
+# self-hosted Postgres on the Coolify VPS — was there to stop a second database
+# drifting from the real one and quietly answering queries nobody meant to
+# send it. That risk is real and has not gone away; read the next paragraph as
+# the standing warning it is, not as a historical note.
+#
+# What changed is the trade. Developing against the production database means
+# every experiment, every half-written migration and every `db:seed` lands on
+# live customer orders, and the VPS port is not reachable from every network
+# the work happens on. So local development now runs against a container seeded
+# from a full dump of production — same schema, same rows, same
+# `__drizzle_migrations` state — and production is reached deliberately rather
+# than by default. apps/api/.env.prod-db keeps the VPS credentials verbatim for
+# when it is wanted; swapping that file back in is the whole reversal.
+#
+# The drift this guards against is one-directional: the local copy going stale.
+# Re-dump rather than trusting a container that has been up for weeks.
+#
+# The VPS database does not terminate TLS on its public port, so DATABASE_SSL
+# is `disable` rather than `require` — see db.service.ts, which passes the
+# value straight to postgres.js and fails the connection outright if it asks
+# for SSL the server will not offer. The local container does not terminate TLS
+# either, so `disable` is right for both and the setting does not move.
 #
 # Uploads (cover images, sample PDFs) go to the self-hosted Garage cluster over
 # its S3 API — the same cluster and the same bucket the academy app writes its
@@ -43,6 +64,50 @@
 # counters across.
 
 services:
+  # First in the file because everything else waits on it, and because it is
+  # the one service also needed when the API runs on the host under
+  # `npm run dev` rather than in a container: `docker compose up -d postgres`.
+  postgres:
+    # Pinned to the major version the VPS runs. A dump taken from 18 restores
+    # into 18; restoring it into a lower major fails outright, and a higher one
+    # would test the app against a server production does not run.
+    image: postgres:18
+    restart: unless-stopped
+    ports:
+      # 5433 on the host, not 5432. This machine already runs an EDB-installer
+      # Postgres 18 (/Library/PostgreSQL/18/data, a system launchd daemon owned
+      # by the `postgres` user) which holds 5432 and is nothing to do with this
+      # project. Moving this container rather than stopping that server is the
+      # reversible choice: no sudo, no risk to whatever else uses it.
+      #
+      # Inside the compose network the API still reaches it as postgres:5432 —
+      # only the host-side mapping moves, so DATABASE_URL differs between a
+      # host-run API (localhost:5433) and a containerised one (postgres:5432).
+      - "5433:5432"
+    environment:
+      # Role, database and password match the VPS exactly. That is what lets a
+      # plain `pg_dump | psql` restore carry ownership and GRANTs across
+      # without --no-owner rewriting, and it keeps one DATABASE_URL shape for
+      # both targets — only the host and port differ.
+      POSTGRES_USER: postgres_sakura_books
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: postgres
+    volumes:
+      # /var/lib/postgresql, NOT the /var/lib/postgresql/data that every
+      # pre-18 example shows. The 18 image puts the cluster in a versioned
+      # subdirectory so `pg_upgrade --link` can work across it, and refuses to
+      # start — "there appears to be PostgreSQL data in ... (unused
+      # mount/volume)" — when the old path is mounted instead.
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      # -U because the image's default user is `postgres`, which does not exist
+      # here; pg_isready would report the server down while it is perfectly up.
+      test: ["CMD-SHELL", "pg_isready -U postgres_sakura_books -d postgres"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
   web:
     build:
       context: .
@@ -83,15 +148,16 @@ services:
       - web_app_modules:/app/apps/web/node_modules
       - web_contracts_modules:/app/packages/contracts/node_modules
       - web_next_cache:/app/apps/web/.next
-    # Optional: only enforced when the api service is actually running, i.e.
-    # under --profile backend. Plain `docker compose up` still starts web alone.
+    # Still `required: false`, though the API is no longer profiled away: it
+    # keeps `docker compose up -d web` working as a way to run the frontend by
+    # itself against an API on the host, instead of dragging the whole stack up
+    # with it. Ordering only — the web container starts fine without one.
     depends_on:
       api:
         condition: service_started
         required: false
 
   api:
-    profiles: ["backend"]
     build:
       context: .
       dockerfile: apps/api/Dockerfile.dev
@@ -104,6 +170,23 @@ services:
         format: raw
     environment:
       PORT: 4000
+      # Overrides the two values env_file just supplied. apps/api/.env names
+      # the database as 127.0.0.1:5433, which is correct for an API run on the
+      # host and meaningless inside this container, where localhost is the
+      # container itself and the published host port does not exist.
+      #
+      # Safe to state here despite the interpolation warning at the top of this
+      # file: the local password is a plain word with no `$` for Compose to
+      # expand. The VPS password has both `%` escapes and a `#`, which is
+      # exactly why the production values stay in env_file.
+      DATABASE_URL: postgres://postgres_sakura_books:localdev@postgres:5432/postgres
+      DIRECT_DATABASE_URL: postgres://postgres_sakura_books:localdev@postgres:5432/postgres
+    # Waits for the healthcheck, not just for the container to exist: Postgres
+    # rejects connections for a second or two after the process starts, and the
+    # API opens its pool immediately on boot.
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - ./apps/api:/app/apps/api
       - ./packages/contracts:/app/packages/contracts
@@ -135,6 +218,11 @@ services:
 # different — sharing one would give whichever service started second the
 # other's dependencies.
 volumes:
+  # The database itself, and the one volume here that is not a disposable
+  # dependency tree: `down -v` throws away the restored production copy and
+  # costs another dump to get back. Everything else in this list is rebuilt by
+  # an install.
+  postgres_data:
   web_root_modules:
   web_app_modules:
   web_contracts_modules:

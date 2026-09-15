@@ -14,6 +14,17 @@ build/
 # credentials kept so the switch can be reversed. Same secrets, same treatment.
 .env.*-backup
 
+# The same idea again, for the other direction: .env.prod-db holds the VPS
+# Postgres credentials, kept verbatim while local development runs against a
+# Docker Postgres instead. Live production secrets — never committed.
+.env.prod-db
+
+# Database dumps taken from production to seed the local container. Real
+# customer orders, addresses and phone numbers — the most sensitive thing in
+# the repo's working tree, and never committed. Regenerate with pg_dump rather
+# than keeping one around; see docker-compose.yml.
+/.local-db/
+
 .turbo/
 *.tsbuildinfo
 next-env.d.ts

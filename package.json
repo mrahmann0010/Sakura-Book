@@ -17,8 +17,7 @@
     "format:check": "prettier --check .",
     "clean": "turbo run clean && rm -rf node_modules",
     "docker:up": "docker compose up -d",
-    "docker:up:all": "docker compose --profile backend up -d",
-    "docker:down": "docker compose --profile backend down",
+    "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f"
   },
   "devDependencies": {

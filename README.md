@@ -171,7 +171,7 @@ A full operations console at `/admin` — the surface that actually moved 500 or
 
 ## Infrastructure
 
-- **Deployed on a self-managed VPS via [Coolify](https://coolify.io)** — Docker images built from multi-stage Dockerfiles, `docker-compose.yml` with a `backend` profile for local parity.
+- **Deployed on a self-managed VPS via [Coolify](https://coolify.io)** — Docker images built from multi-stage Dockerfiles, `docker-compose.yml` bringing up the whole stack for local parity.
 - **Postgres** (managed) · **Redis** (throttling + cache) · **MongoDB** (payment ledger) · **Garage** (self-hosted, S3-compatible) for covers and PDF samples — the same bucket the academy app writes its lesson media into, this shop's files namespaced under a `sakura-book/` key prefix. Written through plain `fetch` and a small SigV4 signer rather than pulling the AWS SDK in for one PUT (the signer is pinned by a test against botocore's signature for the same request), and read by the browser straight from the Cloudflare domain in front of the bucket, so the origin is touched only on a cache MISS.
 - **GitHub Actions** on every push: lint → typecheck → test → migration-drift.
 
@@ -179,10 +179,15 @@ A full operations console at `/admin` — the surface that actually moved 500 or
 
 ```bash
 npm install
-npm run dev          # web only
-npm run dev:all      # web + api
-npm run docker:up:all
+npm run dev          # web only, on the host
+npm run dev:all      # web + api, on the host
+docker compose up -d # everything in containers: postgres + api + web
 ```
+
+The host commands still need the database, which lives in a container either
+way: `docker compose up -d postgres` first. It is restored from a dump of the
+production database rather than seeded — see the notes at the top of
+`docker-compose.yml`.
 
 | Script                                                         | Does                                     |
 | -------------------------------------------------------------- | ---------------------------------------- |
