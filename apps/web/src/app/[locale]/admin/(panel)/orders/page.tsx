@@ -37,17 +37,19 @@ type TabKey = (typeof TABS)[number]["key"];
  * `useSearchParams`, which would oblige this client screen to sit inside a
  * Suspense boundary to keep the build's prerender pass happy — a structural
  * change to a page that only wants to know its starting tab. The value is
- * checked against TABS, so an unknown or absent `tab` falls back to Pending,
- * which is where this screen has always opened.
+ * checked against TABS, so an unknown or absent `tab` falls back to Accepted —
+ * the first tab in the row, and the one an operator opening the queue cold is
+ * usually after. Pending is a worklist you go to deliberately, and the
+ * dashboard already links straight to it with `?tab=pending`.
  *
  * The tab is not pushed back into the URL as the operator switches: it is an
  * entry point for links from the dashboard, not a piece of shared state, and
  * writing to history on every tab click would make Back walk the tabs.
  */
 function initialTab(): TabKey {
-  if (typeof window === "undefined") return "pending";
+  if (typeof window === "undefined") return "accepted";
   const requested = new URLSearchParams(window.location.search).get("tab");
-  return TABS.some((t) => t.key === requested) ? (requested as TabKey) : "pending";
+  return TABS.some((t) => t.key === requested) ? (requested as TabKey) : "accepted";
 }
 
 export default function AdminOrdersPage() {
