@@ -91,9 +91,13 @@ export function BookCover({
       );
     }
 
+    /* `loading="lazy"` by hand: this path skips next/image, and skips its
+       default lazy loading with it. Without this the un-optimizable covers
+       were the only ones on a page fetched eagerly — the slowest images
+       treated as the most urgent. */
     /* eslint-disable-next-line @next/next/no-img-element -- an admin-pasted
        publisher URL, on a host next/image isn't configured to optimize. */
-    return <img src={src} alt={`${title} — cover`} className={shape} />;
+    return <img src={src} alt={`${title} — cover`} className={shape} loading="lazy" />;
   }
 
   if (fallback === "hatch") {

@@ -14,9 +14,26 @@
    -------------------------------------------------------------------------- */
 
 :root {
-  /* Accent — one accent, used sparingly (principle 02) */
-  --clay: #c96442;
-  --clay-deep: #b0553a;
+  /* Accent — one accent, used sparingly (principle 02)
+
+     Both steps are darker than the reference #c96442 / #b0553a, and the reason
+     is contrast rather than taste. The accent carries text in two directions:
+     white sits on it in filled buttons, and it sits on white wherever a price,
+     an error or an urgent figure is picked out. Contrast is symmetric, so both
+     readings scored the same 3.90:1 — under the 4.5:1 WCAG AA wants for text
+     at these sizes, and the shop renders Bengali and Japanese where thin
+     strokes make a borderline ratio worse rather than better.
+
+     #b85838 reaches 4.68:1 and keeps the hue; the hover step moves with it to
+     stay a visible darkening rather than collapsing into the resting colour.
+     The dark palette below is unaffected and keeps its own lifted values —
+     there the filled button puts dark --surface on light clay, which already
+     measured 6.21:1.
+
+     Changing these is a change to the brand's one accent. Do it deliberately,
+     and re-check both directions afterwards, not just the button. */
+  --clay: #b85838;
+  --clay-deep: #a04a2e;
 
   /* Neutrals */
   --page: #faf9f5;

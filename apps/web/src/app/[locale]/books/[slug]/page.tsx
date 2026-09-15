@@ -20,7 +20,7 @@ import { getBook } from "@/lib/api/catalog";
 import { ApiError } from "@/lib/api/client";
 import { getShippingTerms } from "@/lib/api/shipping";
 import { footerColumns } from "@/lib/books";
-import { toBookSummary } from "@/lib/book-view";
+import { languageName, toBookSummary } from "@/lib/book-view";
 import { toSearchParams } from "@/lib/catalog";
 import { CURRENCY, formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
@@ -130,7 +130,8 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
           }).format(new Date(book.publishedDate)),
         })
       : null,
-    t("book.meta.language", { language: book.language }),
+    /* The language named, not its ISO code — see languageName. */
+    t("book.meta.language", { language: languageName(book.language, locale) }),
   ].filter((item): item is string => item !== null);
 
   /* The buy card, rendered twice: inline under the title on narrow viewports,
@@ -169,10 +170,14 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
                 : t("book.stock.in")}
       </p>
 
-      {/* Reports the GA4 `view_item` event; renders nothing. */}
-      <ViewItemTracker id={book.id} title={book.title} priceCents={book.priceCents} />
-
-      <div className="mt-5">
+      {/* flex-col with a gap, not two stacked block elements: the buttons had
+          no vertical space between them at all, so a filled control and a
+          ghost one met edge to edge and read as a single two-storey slab. The
+          gap lives on the container rather than as a margin on the preview
+          trigger because BookPreview renders nothing when there is no sample —
+          a margin there is a margin that sometimes exists, while a flex gap
+          simply has nothing to space. */}
+      <div className="mt-5 flex flex-col gap-2.5">
         {/* Add to cart is commented out, not deleted — the audience doesn't
             shop from a cart, so Buy Now is the only purchase control now. */}
         {/* <AddToCartButton
@@ -182,6 +187,13 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
           size="md"
           block
         /> */}
+        {/* primary here, against the component's `secondary` default. That
+            default is right where the button appears in a grid of cards — a
+            page of filled clay buttons has no hierarchy at all — but this is
+            the one screen devoted to a single book, where buying it is the
+            page's purpose. Left as secondary it was an outline button directly
+            above a ghost one: two pale controls of near-identical weight, with
+            nothing saying which one the page wanted. */}
         <BuyNowButton
           bookId={book.id}
           title={book.title}
@@ -189,6 +201,7 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
           soldOut={view.soldOut}
           comingSoon={view.flag === "coming-soon"}
           size="md"
+          variant="primary"
           block
         />
 
@@ -270,6 +283,18 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
         />
       }
     >
+      {/* Reports the GA4 `view_item` event; renders nothing.
+
+          Here, in the page body, rather than inside `buyCard` where it used to
+          sit. The buy card is deliberately rendered twice — once inline for
+          narrow viewports, once in the sticky rail at `lg:` — so the tracker
+          went up twice with it, and `display: none` does not stop a component
+          mounting. Its own guard is a per-instance ref and `trackViewItem` has
+          no dedupe of its own, so both copies fired: every book view counted
+          as two, which halves the apparent conversion rate against real orders
+          and does so invisibly. One render, one event. */}
+      <ViewItemTracker id={book.id} title={book.title} priceCents={book.priceCents} />
+
       <script
         type="application/ld+json"
         /* Serialised, not spread into props: this is a <script> body, and JSON
@@ -313,8 +338,11 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
           rail={<div className="hidden lg:block">{buyCard}</div>}
         >
           {/* Neutral tone even for editor's-pick, unlike the catalog card: this
-              page also carries the clay Add to Cart button, and clay marks
-              exactly one thing per screen (DESIGN_SYSTEM.md principle 02). */}
+              page also carries the clay Buy Now button, and clay marks exactly
+              one thing per screen (DESIGN_SYSTEM.md principle 02). Add to Cart
+              is commented out and Buy Now was an outline control until
+              recently, which briefly left this reasoning describing a button
+              the page did not have. */}
           {view.flag ? (
             <p className="mb-4">
               <Badge tone="neutral">{t(`book.flags.${view.flag}`)}</Badge>
@@ -348,8 +376,11 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
 
           <BookMeta className="hairline mt-8 pt-8" items={meta} />
 
+          {/* Two columns before `sm:`, three after. Locked at three, each cover
+              was about a hundred points wide on a phone — too small to judge a
+              book by, which is the only thing a gallery is for. */}
           {book.galleryImageUrls.length > 0 ? (
-            <div className="mt-8 grid grid-cols-3 gap-4">
+            <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3">
               {book.galleryImageUrls.map((url) => (
                 <BookCover
                   key={url}

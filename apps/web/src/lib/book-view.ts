@@ -31,6 +31,32 @@ import { fileUrl } from "@/lib/storage-url";
 const LAST_COPY_AT = 1;
 
 /**
+ * An ISO language code as the name of that language, written in the reader's
+ * own language.
+ *
+ * The API stores `language` as a bare code — "en", "bn" — and the detail page
+ * was printing it raw, so an English reader was told the book is "In en" and a
+ * Bangla reader "en ভাষায়". A code is a database value, not a fact about a
+ * book that anyone would say out loud.
+ *
+ * `Intl.DisplayNames` is the right tool rather than a hand-kept map: it already
+ * knows all three of this shop's languages in all three, and it gives the
+ * endonyms a reader expects — বাংলা to a Bangla reader, 日本語 to a Japanese
+ * one, and "Bangla" rather than the dated "Bengali" in English.
+ *
+ * Falls back to the raw code if the runtime has no data for it. That is not a
+ * good string, but it is the string we were already showing, and a missing
+ * language name must not take the page down.
+ */
+export function languageName(code: string, locale: string): string {
+  try {
+    return new Intl.DisplayNames([locale], { type: "language" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+/**
  * At most one badge, and scarcity wins.
  *
  * A featured book down to its last copy is both, and "Last copy" is the one
