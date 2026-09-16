@@ -222,10 +222,14 @@
       "senderNumber": "Sender number",
       "transactionId": "Transaction ID"
     },
+    "items": {
+      "legend": "Your books",
+      "each": "{{price}} each",
+      "quantity": "Quantity, {{title}}"
+    },
     "recap": {
       "title": "Your order",
       "edit": "Edit cart",
-      "note": "read-only · quantity shown as ×n",
       "mobile_one": "{{count}} book · show order",
       "mobile_other": "{{count}} books · show order"
     },

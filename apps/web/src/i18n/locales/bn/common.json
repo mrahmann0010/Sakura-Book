@@ -222,10 +222,14 @@
       "senderNumber": "সেন্ডার নম্বর",
       "transactionId": "ট্রানজেকশন আইডি"
     },
+    "items": {
+      "legend": "আপনার বই",
+      "each": "প্রতিটি {{price}}",
+      "quantity": "সংখ্যা, {{title}}"
+    },
     "recap": {
       "title": "আপনার অর্ডার",
       "edit": "কার্ট সম্পাদনা",
-      "note": "শুধু দেখার জন্য · সংখ্যা ×n আকারে",
       "mobile_one": "{{count}}টি বই · অর্ডার দেখুন",
       "mobile_other": "{{count}}টি বই · অর্ডার দেখুন"
     },

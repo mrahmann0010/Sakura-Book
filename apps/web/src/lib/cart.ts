@@ -1,4 +1,4 @@
-import type { CartQuote } from "@sakura/contracts";
+import { MAX_LINE_QUANTITY, type CartQuote } from "@sakura/contracts";
 
 import type { BookSummary } from "@/components/domain";
 
@@ -53,6 +53,13 @@ export type CartLine = {
   /** Minor units. */
   unitPrice: number;
   lineTotal: number;
+  /**
+   * The most copies this shopper can order — a stepper's ceiling. The quote's
+   * stock for a shelf title, the line cap for a pre-order (which has no stock
+   * to run out of yet). Never below the quantity already asked for, so a line
+   * that has run short can still be stepped down rather than locking up.
+   */
+  maxQuantity: number;
 };
 
 export type CartTotals = {
@@ -118,6 +125,10 @@ export function cartFromQuote(quote: CartQuote): Cart {
     quantity: line.quantity,
     unitPrice: line.unitPriceCents,
     lineTotal: line.lineTotalCents,
+    maxQuantity:
+      line.availability === "pre_order"
+        ? MAX_LINE_QUANTITY
+        : Math.max(line.quantity, Math.min(line.stockQuantity, MAX_LINE_QUANTITY)),
   }));
 
   return {

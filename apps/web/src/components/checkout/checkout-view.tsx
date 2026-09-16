@@ -34,6 +34,7 @@ import { summaryLines } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 
+import { CheckoutItems } from "./checkout-items";
 import { PaymentSection } from "./payment-section";
 import {
   PaymentVerificationModal,
@@ -45,11 +46,11 @@ import { ShippingFields } from "./shipping-fields";
    The checkout page's one job: say where the books go and how they are paid
    for.
 
-   It cannot change the order. The cart's contents appear here as a read-only
-   recap with a single link back — quantity as "×n", no steppers, no remove.
-   That separation is the whole reason these are two pages: one is for deciding
-   what to buy, this one is for committing to it, and mixing them gives a page
-   where the shopper edits and commits in the same breath.
+   Buy Now skips /cart and lands here, so the delivery step also carries the
+   books with a quantity stepper (CheckoutItems) — otherwise nobody arriving
+   that way could order more than one copy. The payment step does not: by
+   then the total may already have been sent, and it must not move under the
+   shopper. The rail and the mobile recap stay read-only summaries.
    -------------------------------------------------------------------------- */
 
 export function CheckoutView({
@@ -381,7 +382,6 @@ export function CheckoutView({
               title={t("checkout.recap.title")}
               editAction={editCart}
               lines={recapLines}
-              note={t("checkout.recap.note")}
               rows={rows}
               totalLabel={t("cart.summary.total")}
               totalValue={total}
@@ -396,6 +396,15 @@ export function CheckoutView({
             onSubmit={handleSubmit(placeOrder, onInvalid)}
             className="mt-9 flex flex-col gap-10"
           >
+            {step === "delivery" ? (
+              <CheckoutItems
+                lines={cart.lines}
+                money={money}
+                onQuantityChange={cart.setQuantity}
+                onRemove={cart.remove}
+              />
+            ) : null}
+
             <div className={step === "delivery" ? undefined : "hidden"}>
               <ShippingFields
                 register={register}

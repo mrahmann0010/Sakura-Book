@@ -220,10 +220,14 @@
       "senderNumber": "送金番号",
       "transactionId": "取引ID"
     },
+    "items": {
+      "legend": "ご注文の本",
+      "each": "1冊 {{price}}",
+      "quantity": "数量、{{title}}"
+    },
     "recap": {
       "title": "ご注文内容",
       "edit": "カートを編集",
-      "note": "閲覧のみ · 数量は ×n 表記",
       "mobile_one": "{{count}}冊 · 注文内容を見る",
       "mobile_other": "{{count}}冊 · 注文内容を見る"
     },
