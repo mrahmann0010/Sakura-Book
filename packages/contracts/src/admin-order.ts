@@ -202,7 +202,15 @@ export const adminOrderSummarySchema = z.object({
 
 export type AdminOrderSummary = z.infer<typeof adminOrderSummarySchema>;
 
-export const adminOrderListSchema = paginated(adminOrderSummarySchema);
+export const adminOrderListSchema = paginated(adminOrderSummarySchema).extend({
+  /**
+   * Copies across every order the filters matched, not just this page.
+   *
+   * Beside `total` because the two answer the questions a dispatch day starts
+   * from together: how many parcels, and how many books go into them.
+   */
+  totalCopies: z.number().int().nonnegative(),
+});
 
 export type AdminOrderList = z.infer<typeof adminOrderListSchema>;
 

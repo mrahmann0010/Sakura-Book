@@ -82,7 +82,7 @@ export class AdminOrdersService {
     const where = adminOrderFilters(query);
     const offset = (query.page - 1) * query.pageSize;
 
-    const [rows, [{ total }]] = await Promise.all([
+    const [rows, [{ total }], [{ totalCopies }]] = await Promise.all([
       this.dbService.db
         .select({
           id: orders.id,
@@ -108,6 +108,14 @@ export class AdminOrdersService {
         .select({ total: sql<number>`count(*)::int` })
         .from(orders)
         .where(where),
+      /* Copies over the whole filtered set. Its own statement for the same
+         reason the item counts are: joined into the page query, the items
+         would multiply the rows LIMIT is counting. */
+      this.dbService.db
+        .select({ totalCopies: sql<number>`coalesce(sum(${orderItems.quantity}), 0)::int` })
+        .from(orderItems)
+        .innerJoin(orders, eq(orderItems.orderId, orders.id))
+        .where(where),
     ]);
 
     /* Three page-wide lookups rather than three per row. The queue renders
@@ -131,6 +139,7 @@ export class AdminOrdersService {
         ),
       ),
       total,
+      totalCopies,
       page: query.page,
       // Zero, not one, when nothing matched — see the same note in the catalog.
       totalPages: Math.ceil(total / query.pageSize),

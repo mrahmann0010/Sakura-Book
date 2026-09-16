@@ -58,6 +58,7 @@ export default function AdminOrdersPage() {
   const [tab, setTab] = useState<TabKey>(initialTab);
   const [items, setItems] = useState<AdminOrderSummary[]>([]);
   const [total, setTotal] = useState(0);
+  const [totalCopies, setTotalCopies] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [q, setQ] = useState("");
@@ -128,6 +129,7 @@ export default function AdminOrdersPage() {
       });
       setItems(list.items);
       setTotal(list.total);
+      setTotalCopies(list.totalCopies);
       setTotalPages(list.totalPages);
       setPage(list.page);
     } catch (err) {
@@ -141,7 +143,10 @@ export default function AdminOrdersPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-h2 text-ink font-serif">Orders</h1>
-        <p className="text-13.5 text-secondary mt-1">{total} in this view.</p>
+        <p className="text-13.5 text-secondary mt-1">
+          {total} {total === 1 ? "order" : "orders"}, {totalCopies}{" "}
+          {totalCopies === 1 ? "copy" : "copies"} in this view.
+        </p>
       </div>
 
       <div className="border-rule flex gap-1 border-b">
@@ -194,7 +199,7 @@ export default function AdminOrdersPage() {
       {error ? <p className="text-13.5 text-clay-deep">{error}</p> : null}
 
       <div className="rounded-container border-rule bg-surface overflow-x-auto border">
-        <table className="text-13.5 w-full min-w-[940px] text-left">
+        <table className="text-13.5 w-full min-w-[1000px] text-left">
           <thead>
             <tr className="border-rule-strong text-caption text-muted border-b uppercase">
               <th className="px-4 py-3 font-medium">Order</th>
@@ -206,13 +211,14 @@ export default function AdminOrdersPage() {
                     parked past the total is one nobody scans on a busy
                     morning. */}
               <th className="px-4 py-3 font-medium">Receipt</th>
+              <th className="px-4 py-3 text-right font-medium">Copies</th>
               <th className="px-4 py-3 font-medium">Total</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
-            {loading ? <AdminTableRows columns={8} /> : null}
+            {loading ? <AdminTableRows columns={9} /> : null}
             {items.map((order) => (
               <tr key={order.orderNumber} className="border-rule border-b last:border-0">
                 <td className="text-ink px-4 py-3 font-mono">{order.orderNumber}</td>
@@ -229,6 +235,7 @@ export default function AdminOrdersPage() {
                 <td className="px-4 py-3">
                   <PaymentSafetyBadges receipt={order.receipt} verification={order.verification} />
                 </td>
+                <td className="text-ink px-4 py-3 text-right tabular-nums">{order.itemCount}</td>
                 <td className="text-ink px-4 py-3">
                   {formatMoney(order.totalCents, "en-GB", order.currency)}
                 </td>
@@ -245,7 +252,7 @@ export default function AdminOrdersPage() {
             ))}
             {!loading && items.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-muted px-4 py-6 text-center">
+                <td colSpan={9} className="text-muted px-4 py-6 text-center">
                   No orders in this view.
                 </td>
               </tr>

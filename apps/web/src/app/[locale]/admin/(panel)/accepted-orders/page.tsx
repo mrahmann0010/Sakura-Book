@@ -196,6 +196,9 @@ export default function AdminAcceptedOrdersPage() {
   const [to, setTo] = useState("");
   const [items, setItems] = useState<AdminOrderSummary[]>([]);
   const [total, setTotal] = useState(0);
+  /* Copies across the whole filtered set, not the page — the number that says
+     how many books go on the van, where `total` says how many parcels. */
+  const [totalCopies, setTotalCopies] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [q, setQ] = useState("");
@@ -256,6 +259,7 @@ export default function AdminAcceptedOrdersPage() {
       });
       setItems(list.items);
       setTotal(list.total);
+      setTotalCopies(list.totalCopies);
       setTotalPages(list.totalPages);
       setPage(list.page);
     } catch (err) {
@@ -301,6 +305,7 @@ export default function AdminAcceptedOrdersPage() {
 
       setItems((current) => current.filter((row) => row.orderNumber !== order.orderNumber));
       setTotal((current) => Math.max(0, current - 1));
+      setTotalCopies((current) => Math.max(0, current - order.itemCount));
       setJustShipped((current) => [...current, order.orderNumber]);
     } catch (err) {
       // The tick is left un-ticked, which is the honest rendering: the order
@@ -368,7 +373,8 @@ export default function AdminAcceptedOrdersPage() {
       <div>
         <h1 className="text-h2 text-ink font-serif">Accepted Orders</h1>
         <p className="text-13.5 text-secondary mt-1">
-          {total} {noun} {total === 1 ? "order" : "orders"}
+          {total} {noun} {total === 1 ? "order" : "orders"}, {totalCopies}{" "}
+          {totalCopies === 1 ? "copy" : "copies"}
           {divisionLabel ? ` bound for ${divisionLabel} division` : " across every division"}
           {rangeLabel}.
         </p>
@@ -569,7 +575,7 @@ export default function AdminAcceptedOrdersPage() {
       ) : null}
 
       <div className="rounded-container border-rule bg-surface overflow-x-auto border">
-        <table className="text-13.5 w-full min-w-[880px] text-left">
+        <table className="text-13.5 w-full min-w-[940px] text-left">
           <thead>
             <tr className="border-rule-strong text-caption text-muted border-b uppercase">
               {activeTab.shippable ? (
@@ -587,13 +593,14 @@ export default function AdminAcceptedOrdersPage() {
               <th className="px-4 py-3 font-medium">District</th>
               <th className="px-4 py-3 font-medium">Placed</th>
               <th className="px-4 py-3 font-medium">Payment</th>
+              <th className="px-4 py-3 text-right font-medium">Copies</th>
               <th className="px-4 py-3 font-medium">Total</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
-            {loading ? <AdminTableRows columns={9} /> : null}
+            {loading ? <AdminTableRows columns={activeTab.shippable ? 10 : 9} /> : null}
             {items.map((order) => (
               <tr key={order.orderNumber} className="border-rule border-b last:border-0">
                 {activeTab.shippable ? (
@@ -627,6 +634,7 @@ export default function AdminAcceptedOrdersPage() {
                 <td className="text-secondary px-4 py-3">
                   {order.paymentProvider ?? order.paymentMethod}
                 </td>
+                <td className="text-ink px-4 py-3 text-right tabular-nums">{order.itemCount}</td>
                 <td className="text-ink px-4 py-3">
                   {formatMoney(order.totalCents, "en-GB", order.currency)}
                 </td>
@@ -644,7 +652,7 @@ export default function AdminAcceptedOrdersPage() {
             {!loading && items.length === 0 ? (
               <tr>
                 <td
-                  colSpan={activeTab.shippable ? 9 : 8}
+                  colSpan={activeTab.shippable ? 10 : 9}
                   className="text-muted px-4 py-6 text-center"
                 >
                   {divisionLabel
