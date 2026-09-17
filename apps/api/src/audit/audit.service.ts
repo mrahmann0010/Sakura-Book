@@ -31,7 +31,12 @@ export type AuditAction =
    * be able to ask "how often are we accepting payments that had not arrived"
    * as a filter on this column rather than as a text search.
    */
-  | "PAYMENT_REVERT";
+  | "PAYMENT_REVERT"
+  /**
+   * A member of staff reopened an order rejected by mistake, putting it back
+   * to PENDING with a written reason. See `AdminOrdersService.reopen`.
+   */
+  | "ORDER_REOPEN";
 
 /**
  * Who acted.

@@ -18,6 +18,7 @@ import {
   adminOrderQuerySchema,
   adminOrderTransitionRequestSchema,
   adminRecordRefundRequestSchema,
+  adminReopenOrderRequestSchema,
   adminRevertPaymentRequestSchema,
   type AdminOrderDetail,
   type AdminOrderList,
@@ -34,6 +35,7 @@ class AdminOrderTransitionDto extends createZodDto(adminOrderTransitionRequestSc
 class AdminConfirmPaymentDto extends createZodDto(adminConfirmPaymentRequestSchema) {}
 class AdminRecordRefundDto extends createZodDto(adminRecordRefundRequestSchema) {}
 class AdminRevertPaymentDto extends createZodDto(adminRevertPaymentRequestSchema) {}
+class AdminReopenOrderDto extends createZodDto(adminReopenOrderRequestSchema) {}
 class AdminInternalNoteDto extends createZodDto(adminInternalNoteRequestSchema) {}
 
 /**
@@ -203,6 +205,27 @@ export class AdminOrdersController {
       body,
       contextOf(admin, request),
     );
+  }
+
+  /**
+   * Put an order rejected by mistake back to PENDING.
+   *
+   * Open to STAFF, unlike the revert above. Rejecting is a staff action, and
+   * undoing it moves no money and erases no record — it takes the copies back
+   * off the shelf and puts the order in front of whoever checks payments,
+   * which is the same person. The rules on which orders qualify are enforced
+   * in the service, not by who is asking.
+   */
+  @Post(":orderNumber/reopen")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Reopen an order rejected by mistake, back to pending." })
+  async reopen(
+    @Param("orderNumber") orderNumber: string,
+    @Body() body: AdminReopenOrderDto,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminOrderDetail> {
+    return this.adminOrdersService.reopen(orderNumber, body, contextOf(admin, request));
   }
 
   /**

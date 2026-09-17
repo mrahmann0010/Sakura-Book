@@ -284,6 +284,20 @@ export const adminOrderDetailSchema = orderSchema.extend({
    */
   releasesStockOnCancel: z.boolean(),
 
+  /**
+   * Whether a cancelled order can be put back to PENDING, and if not, why.
+   *
+   * Covers the rules that do not move under the operator's feet — rejected
+   * from PENDING, by staff, within the window. Stock and the TrxID are checked
+   * again when Reopen is pressed, because either can change in the meantime.
+   * `blockedReason` is null when `allowed` is true, and also for any order
+   * that is not cancelled, where the question does not arise.
+   */
+  reopen: z.object({
+    allowed: z.boolean(),
+    blockedReason: z.string().nullable(),
+  }),
+
   /** The same two indicators the queue row carries, so the panel renders one shape. */
   receipt: receiptUniquenessSchema,
   verification: adminOrderVerificationStateSchema,
@@ -428,6 +442,19 @@ export const adminRevertPaymentRequestSchema = z.object({
 });
 
 export type AdminRevertPaymentRequest = z.infer<typeof adminRevertPaymentRequestSchema>;
+
+/**
+ * Reopening an order rejected by mistake, back to PENDING.
+ *
+ * `reason` is staff-facing and goes to the audit log; `note`, when given, is
+ * what the customer's tracking page shows — the same split as the revert above.
+ */
+export const adminReopenOrderRequestSchema = z.object({
+  reason: z.string().trim().min(10, "Say why this order is being reopened.").max(500),
+  note: z.string().trim().max(280).optional(),
+});
+
+export type AdminReopenOrderRequest = z.infer<typeof adminReopenOrderRequestSchema>;
 
 /**
  * Recording a refund that has been issued elsewhere.

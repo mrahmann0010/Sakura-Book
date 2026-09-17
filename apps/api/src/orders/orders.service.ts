@@ -19,7 +19,8 @@ import {
   settlesWaitlist,
   type OrderStatus,
 } from "./order-status.machine";
-import { InvalidStatusTransitionError } from "./order.errors";
+import { InvalidStatusTransitionError, TransactionIdAlreadyUsedError } from "./order.errors";
+import { findTransactionIdClaim } from "./transaction-id-claim";
 import { ORDER_STATUS_CHANGED } from "../common/events";
 import type { OrderStatusChangedEvent } from "./order.events";
 
@@ -177,6 +178,74 @@ export class OrdersService {
     await tx.insert(orderStatusHistory).values({ orderId, status: next, note: note ?? null });
 
     return next;
+  }
+
+  /**
+   * Put a cancelled order back to PENDING, taking its copies off the shelf
+   * again.
+   *
+   * The only way out of CANCELLED, and deliberately not an edge in the machine
+   * — see `order-reopen.ts`. Whether the order *may* be reopened (rejected from
+   * PENDING, by staff, recently) is the caller's to decide; this does what
+   * reopening physically requires, and refuses when it cannot:
+   *
+   * - **The receipt must still be free.** Cancelling released the order's
+   *   claim on its TrxID, and another order may have taken it since. Checked
+   *   here to name that order; the partial unique index is the backstop.
+   * - **The copies must still be available.** Cancelling returned them, and
+   *   they may have sold. `decrement` throws `OutOfStockError` for the first
+   *   line that is short, and the transaction rolls back the lines before it.
+   *
+   * Waitlist entries released by the cancellation are not relinked: they are
+   * back in the queue and may already have been invited again. The coupon was
+   * never given back, so there is nothing to take.
+   *
+   * Takes a `Transaction` like `transition`, so the admin audit entry commits
+   * with it. The caller emits after commit.
+   */
+  async reopen(orderId: string, tx: Transaction, note: string): Promise<void> {
+    const order = await tx.query.orders.findFirst({
+      where: (row, { eq: equals }) => equals(row.id, orderId),
+      columns: { status: true, transactionId: true },
+    });
+
+    if (!order) throw new ResourceNotFoundError("Order", orderId);
+    if (order.status !== "CANCELLED") {
+      throw new InvalidStatusTransitionError(orderId, order.status, "PENDING");
+    }
+
+    const claim = await findTransactionIdClaim(tx, order.transactionId, {
+      excludeOrderId: orderId,
+    });
+    if (claim) {
+      throw new TransactionIdAlreadyUsedError(order.transactionId ?? "", claim.orderNumber);
+    }
+
+    const updated = await tx
+      .update(orders)
+      .set({ status: "PENDING" })
+      .where(and(eq(orders.id, orderId), eq(orders.status, "CANCELLED")))
+      .returning({ id: orders.id });
+
+    // Someone reopened it a moment ago — the same zero-rows guard `transition` uses.
+    if (updated.length === 0) {
+      throw new InvalidStatusTransitionError(orderId, "CANCELLED", "PENDING");
+    }
+
+    const items = await tx.query.orderItems.findMany({
+      where: (item, { eq: equals }) => equals(item.orderId, orderId),
+      columns: { bookId: true, quantity: true },
+    });
+
+    for (const item of items) {
+      // A deleted title was never restocked by the cancellation either, so
+      // there is nothing to take back — the line keeps its snapshot.
+      if (!item.bookId) continue;
+
+      await this.inventoryService.decrement(item.bookId, item.quantity, tx);
+    }
+
+    await tx.insert(orderStatusHistory).values({ orderId, status: "PENDING", note });
   }
 
   /**

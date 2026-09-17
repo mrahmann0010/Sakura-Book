@@ -17,6 +17,7 @@ import {
   confirmAdminOrderPayment,
   getAdminOrder,
   recordAdminOrderRefund,
+  reopenAdminOrder,
   revertAdminOrderPayment,
   setAdminOrderNote,
   transitionAdminOrder,
@@ -70,6 +71,10 @@ export default function AdminOrderDetailPage() {
    */
   const [reverting, setReverting] = useState(false);
   const [revertReason, setRevertReason] = useState("");
+
+  /** The reason for reopening a rejected order — collapsed the same way. */
+  const [reopening, setReopening] = useState(false);
+  const [reopenReason, setReopenReason] = useState("");
 
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
@@ -204,6 +209,20 @@ export default function AdminOrderDetailPage() {
 
     setReverting(false);
     setRevertReason("");
+  }
+
+  async function reopen() {
+    const reason = reopenReason.trim();
+    if (reason.length < 10) {
+      setError("Say why this order is being reopened.");
+      return;
+    }
+
+    const ok = await run(() => reopenAdminOrder(orderNumber, { reason }));
+    if (!ok) return;
+
+    setReopening(false);
+    setReopenReason("");
   }
 
   async function refund() {
@@ -464,6 +483,62 @@ export default function AdminOrderDetailPage() {
               ))
             )}
           </div>
+        </section>
+      ) : null}
+
+      {order.status === "CANCELLED" ? (
+        <section className="rounded-container border-rule bg-surface p-card border">
+          <h2 className="text-h4 text-ink font-serif">Rejected by mistake?</h2>
+          {order.reopen.allowed ? (
+            <>
+              <p className="text-13.5 text-secondary mt-1">
+                Puts the order back to Pending so the payment can be checked again. The copies are
+                taken off the shelf again, and the transaction ID is claimed again for this order.
+              </p>
+
+              {reopening ? (
+                <>
+                  <Textarea
+                    label="Why is this being reopened? (staff-only, goes to the audit log)"
+                    value={reopenReason}
+                    onChange={(event) => setReopenReason(event.target.value)}
+                    rows={2}
+                    className="mt-3"
+                    error={
+                      reopenReason.trim().length > 0 && reopenReason.trim().length < 10
+                        ? "Say why this order is being reopened."
+                        : undefined
+                    }
+                  />
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button type="button" loading={busy} onClick={() => void reopen()}>
+                      Reopen order
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setReopening(false);
+                        setReopenReason("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="mt-3">
+                  <Button type="button" variant="secondary" onClick={() => setReopening(true)}>
+                    Reopen order
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-13.5 text-secondary mt-1">
+              This order cannot be reopened. {order.reopen.blockedReason}
+            </p>
+          )}
         </section>
       ) : null}
 

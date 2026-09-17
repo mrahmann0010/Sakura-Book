@@ -9,14 +9,21 @@ import type {
   AdminOrderTransitionRequest,
   AdminOrderVerifyPaymentResult,
   AdminRecordRefundRequest,
+  AdminReopenOrderRequest,
   AdminRevertPaymentRequest,
 } from "@sakura/contracts";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { InvalidInputError, ResourceNotFoundError } from "../../common/errors";
 import type { Env } from "../../config/env.schema";
 import { DbService } from "../../db/db.service";
-import { orderItems, orders } from "../../db/schema";
-import { findOrder, findTransactionIdClaim, forwardPathTo, type OrderRow } from "../../orders";
+import { auditLog, orderItems, orders } from "../../db/schema";
+import {
+  findOrder,
+  findTransactionIdClaim,
+  forwardPathTo,
+  reopenBlocker,
+  type OrderRow,
+} from "../../orders";
 import { OrdersService, PaymentVerificationLogService } from "../../orders";
 import { PaymentsService } from "../../payments";
 import { AuditService } from "../../audit";
@@ -217,7 +224,7 @@ export class AdminOrdersService {
   async detail(orderNumber: string): Promise<AdminOrderDetail> {
     const row = await this.requireOrder(orderNumber);
 
-    const [paymentRows, claim, verifications, latest] = await Promise.all([
+    const [paymentRows, claim, verifications, latest, reopen] = await Promise.all([
       this.paymentsService.forOrder(row.id),
       /* One order, so the named lookup is affordable here in a way it is not
          for a page of the queue — and the name is the useful half of the
@@ -229,6 +236,7 @@ export class AdminOrdersService {
       // the wire record deliberately omits, since a customer-facing shape has
       // no business naming staff.
       this.verificationLog.latestFor([row.id]),
+      this.reopenState(row),
     ]);
 
     const receipt = receiptUniquenessOf(
@@ -245,6 +253,7 @@ export class AdminOrdersService {
       receipt,
       PaymentVerificationLogService.stateOf(latest, row.id),
       verifications,
+      reopen,
     );
   }
 
@@ -688,6 +697,98 @@ export class AdminOrdersService {
     );
 
     return this.detail(orderNumber);
+  }
+
+  /**
+   * Put an order rejected by mistake back to PENDING, for another look.
+   *
+   * The rules for *whether* it may be reopened live in `reopenBlocker` and are
+   * re-checked here rather than trusted from the page, which may be minutes
+   * old. What reopening *takes* — the copies back off the shelf, the TrxID
+   * claimed again — is `OrdersService.reopen`, and it refuses if either has
+   * gone to someone else in the meantime.
+   *
+   * One transaction for the order and the audit entry, the atomic form
+   * `revertPaymentConfirmation` uses: nothing else records why a rejection
+   * was undone.
+   *
+   * The event is announced for the same reason every status change is, though
+   * no listener acts on CANCELLED → PENDING today: the sale was never counted
+   * (it was cancelled from PENDING) and no email is sent until confirmation.
+   */
+  async reopen(
+    orderNumber: string,
+    request: AdminReopenOrderRequest,
+    context: AdminContext,
+  ): Promise<AdminOrderDetail> {
+    const order = await this.requireOrder(orderNumber);
+
+    const { blockedReason } = await this.reopenState(order);
+    if (blockedReason) {
+      throw new InvalidInputError(blockedReason, { orderNumber, status: order.status });
+    }
+
+    const note = request.note ?? "Order reopened for review";
+
+    await this.dbService.db.transaction(async (tx) => {
+      await this.ordersService.reopen(order.id, tx, note);
+
+      await this.auditService.record(
+        {
+          ...auditContext(context),
+          action: "ORDER_REOPEN",
+          entityType: "orders",
+          entityId: order.orderNumber,
+          before: { status: order.status },
+          after: { status: "PENDING" },
+          note: request.reason,
+        },
+        tx,
+      );
+    });
+
+    this.ordersService.announceStatusChange({
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      from: order.status,
+      to: "PENDING",
+    });
+
+    this.logger.log(
+      `Order ${order.orderNumber} reopened by ${context.actor.email}: ${request.reason}`,
+    );
+
+    return this.detail(order.orderNumber);
+  }
+
+  /**
+   * `reopenBlocker`, fed with when staff cancelled this order.
+   *
+   * Only an admin cancellation writes a TRANSITION audit entry, so its
+   * presence is what tells a desk rejection from a customer's own cancel.
+   * Skipped for any order that is not cancelled — the detail page loads for
+   * every order, and only these need the query.
+   */
+  private async reopenState(row: OrderRow): Promise<AdminOrderDetail["reopen"]> {
+    if (row.status !== "CANCELLED") return { allowed: false, blockedReason: null };
+
+    const [entry] = await this.dbService.db
+      .select({ createdAt: auditLog.createdAt })
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.entityType, "orders"),
+          eq(auditLog.entityId, row.orderNumber),
+          eq(auditLog.action, "TRANSITION"),
+          sql`${auditLog.after}->>'status' = 'CANCELLED'`,
+        ),
+      )
+      .orderBy(desc(auditLog.createdAt))
+      .limit(1);
+
+    const blockedReason = reopenBlocker(row.status, row.statusHistory, entry?.createdAt ?? null);
+
+    return { allowed: blockedReason === null, blockedReason };
   }
 
   /**

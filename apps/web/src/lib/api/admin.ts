@@ -13,6 +13,7 @@ import {
   adminPaymentNumbersSchema,
   adminRestockScheduleSchema,
   adminRecordRefundRequestSchema,
+  adminReopenOrderRequestSchema,
   adminRevertPaymentRequestSchema,
   adminRegionSchema,
   adminReviewListSchema,
@@ -61,6 +62,7 @@ import {
   type AdminWaitlistBook,
   type WaitlistBooksUpdate,
   type AdminRecordRefundRequest,
+  type AdminReopenOrderRequest,
   type AdminRevertPaymentRequest,
   type AdminRegion,
   type AdminRegionCreate,
@@ -533,6 +535,22 @@ export function revertAdminOrderPayment(
   const validated = validate(adminRevertPaymentRequestSchema, request);
   return adminFetch(
     `/admin/orders/${encodeURIComponent(orderNumber)}/payments/revert`,
+    adminOrderDetailSchema,
+    { method: "POST", body: validated },
+  );
+}
+
+/**
+ * Reopen an order rejected by mistake. Refused with the API's own message when
+ * the copies have sold or the TrxID has been used on another order since.
+ */
+export function reopenAdminOrder(
+  orderNumber: string,
+  request: AdminReopenOrderRequest,
+): Promise<AdminOrderDetail> {
+  const validated = validate(adminReopenOrderRequestSchema, request);
+  return adminFetch(
+    `/admin/orders/${encodeURIComponent(orderNumber)}/reopen`,
     adminOrderDetailSchema,
     { method: "POST", body: validated },
   );

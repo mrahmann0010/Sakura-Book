@@ -199,4 +199,8 @@ export const auditActionEnum = pgEnum("audit_action", [
      "how often are we confirming payments that had not arrived" is a question
      the shop should be able to ask as a filter. */
   "PAYMENT_REVERT",
+  /* Staff reopened an order that had been rejected by mistake, putting it back
+     to PENDING with a written reason. Its own value so "how often do we reject
+     orders we should not have" is a filter, like the revert above. */
+  "ORDER_REOPEN",
 ]);

@@ -28,6 +28,7 @@ export {
 // lookup the admin queue's badges are computed from.
 export { PaymentVerificationLogService } from "./payment-verification-log.service";
 export { ORDER_STATUS_CHANGED, type OrderStatusChangedEvent } from "./order.events";
+export { REOPEN_WINDOW_DAYS, reopenBlocker } from "./order-reopen";
 export {
   ORDER_STATUS_TRANSITIONS,
   STOCK_HELD_STATUSES,

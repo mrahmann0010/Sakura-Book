@@ -121,6 +121,7 @@ export function toAdminOrderDetail(
   receipt: ReceiptUniqueness,
   verification: AdminOrderVerificationState,
   verifications: PaymentVerificationRecord[],
+  reopen: AdminOrderDetail["reopen"],
 ): AdminOrderDetail {
   const customerView = toOrderResponse(row);
 
@@ -150,6 +151,8 @@ export function toAdminOrderDetail(
      * the machine's own tests rather than assumed here.
      */
     releasesStockOnCancel: releasesStock(row.status, "CANCELLED"),
+
+    reopen,
 
     receipt,
     verification,
