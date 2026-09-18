@@ -380,7 +380,7 @@ export default function AdminAcceptedOrdersPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-h2 text-ink font-serif">Accepted Orders</h1>
+        <h1 className="text-h2 text-ink font-serif">Processing</h1>
         <p className="text-13.5 text-secondary mt-1">
           {total} {noun} {total === 1 ? "order" : "orders"}, {totalCopies}{" "}
           {totalCopies === 1 ? "copy" : "copies"}

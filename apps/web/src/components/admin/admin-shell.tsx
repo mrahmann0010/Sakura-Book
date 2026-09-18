@@ -24,96 +24,81 @@ import { useAdminGate } from "@/lib/use-admin-gate";
 const SESSION_REFRESH_INTERVAL_MS = 45 * 60 * 1000;
 
 /**
- * The rail, in groups.
+ * The rail, in clusters separated by space alone.
  *
- * The order is unchanged and still the order the work happens in; the headings
- * are new. Nine flat links made the reader scan the whole list to find the one
- * they wanted, because nothing said where the order screens stopped and the
- * catalog began — and the answer was already there in the reasoning below,
- * just not on screen. A group with one item (Catalog) still earns its heading:
- * it is what makes Books visibly not another order queue.
+ * The headings are gone. They were eyebrows — 10px uppercase muted labels —
+ * and an eyebrow over a single link is more chrome than the link it
+ * introduces. Six of them over ten entries meant a third of the rail was
+ * furniture explaining the rest.
  *
- * `label: null` is the Dashboard's group — a heading over a single entry at
- * the very top would be chrome above chrome.
+ * Space can only carry the grouping if the groups are big enough to read as
+ * groups, which the old ones were not: Catalog, Inventory, Waitlist and
+ * Feedback held one entry each, so deleting their headings would have left
+ * four lone links adrift between generous gaps that no longer explained
+ * themselves. So the clusters were merged into a 1 / 3 / 3 / 3 cadence, and
+ * the gap between them widened to carry the separation the labels used to.
+ *
+ *   Dashboard                    — where you land
+ *   Orders · Processing · Revenue — one order's life, in the order it happens
+ *   Books · Stock · Waitlist      — the shelf: what is on it, how many, who is waiting
+ *   Reviews · SMS · Settings      — everything else, ending in configuration
+ *
+ * Books and Stock sit together now, and the old Inventory heading's reasoning
+ * survives the merge intact: they are still separate *screens* because a title
+ * is edited a handful of times in its life while its stock count changes every
+ * restock morning, and correcting a count should not mean opening a form full
+ * of fields you had no intention of touching. Waitlist joins them because
+ * Stock already reads it — a copy promised to someone waiting is not a fact
+ * about the title, which is exactly why it was never filed under Catalog.
  */
-const NAV_GROUPS = [
-  {
-    label: null,
-    items: [{ href: "", label: "Dashboard" }],
-  },
-  {
-    label: "Orders",
-    items: [
-      { href: "/orders", label: "Orders" },
-      // Its own entry directly under Orders, not a tab inside it: the triage
-      // queue and the dispatch list are worked by different people at different
-      // points in the week, and the one that filters by destination division
-      // only makes sense after the accept decision.
-      { href: "/accepted-orders", label: "Accepted Orders" },
-      // Named Revenue, not Payments, and that is the whole point of the name.
-      // The shop has real payment *work* — verifying receipts, reverting a
-      // confirmation — and all of it lives on the order detail page. A tab
-      // called Payments in this group promised that queue and delivered a
-      // chart. It also collided with Settings → Payments, which edits wallet
-      // numbers; placement alone could not keep those apart, because nothing
-      // about placement survives someone saying "it's in Payments".
-      //
-      // Under the two order screens because it is what they added up to, read
-      // by whoever is reconciling the week.
-      { href: "/revenue", label: "Revenue" },
-    ],
-  },
-  {
-    label: "Catalog",
-    items: [{ href: "/books", label: "Books" }],
-  },
-  {
-    /**
-     * Its own section, not a second entry under Catalog.
+const NAV_CLUSTERS = [
+  [{ href: "", label: "Dashboard" }],
+  [
+    { href: "/orders", label: "Orders" },
+    // Its own entry, not a tab inside Orders: the triage queue and the packing
+    // list are worked by different people at different points in the week, and
+    // the one that filters by destination division only makes sense after the
+    // accept decision.
+    //
+    // Named for the work, matching its first tab — see that screen's header
+    // comment. The route is still /accepted-orders: it is a URL people have
+    // bookmarked, and renaming it would break those to no one's benefit.
+    { href: "/accepted-orders", label: "Processing" },
+    // Named Revenue, not Payments, and that is the whole point of the name.
+    // The shop has real payment *work* — verifying receipts, reverting a
+    // confirmation — and all of it lives on the order detail page. A tab
+    // called Payments here promised that queue and delivered a chart. It also
+    // collided with Settings → Payments, which edits wallet numbers; placement
+    // alone could not keep those apart, because nothing about placement
+    // survives someone saying "it's in Payments".
+    { href: "/revenue", label: "Revenue" },
+  ],
+  [
+    { href: "/books", label: "Books" },
+    { href: "/stock", label: "Stock" },
+    { href: "/waitlist", label: "Waitlist" },
+    /* Invite Waitlist — taken out of the rail, not deleted.
      *
-     * Catalog is what a title *is* — cover, price, blurb, SEO — and it is
-     * edited a handful of times in a book's life. Inventory is how many copies
-     * exist and who they are owed to, which changes every restock morning and
-     * every time somebody buys. Filing them together made the daily job a
-     * visitor inside the rare one, and it dragged the whole book form along
-     * with it: to correct a stock count you opened a page of fields you had no
-     * intention of touching, any one of which you could change by accident.
+     * The screen and its API are untouched and still work; only the way in is
+     * gone, so /admin/waitlist/invite-batch still answers to anyone who types
+     * it or has it bookmarked. Restoring it is uncommenting this line.
      *
-     * The split is also what the numbers say. Inventory reads the waitlist as
-     * much as the catalog — a copy promised to someone waiting is not a fact
-     * about the title at all — so there was never one parent it belonged
-     * under.
+     * What it was for: the narrower "first 20 sign-ups, send them the link"
+     * question a restock morning asks, as against the Waitlist page above,
+     * which filters and pages through everyone.
      */
-    label: "Inventory",
-    items: [{ href: "/stock", label: "Stock" }],
-  },
-  {
-    label: "Waitlist",
-    items: [
-      { href: "/waitlist", label: "Waitlist" },
-      // Split out from the list above: that page filters and pages through
-      // everyone, this one answers the narrower "first 20 sign-ups, send them
-      // the link" question a restock morning actually asks.
-      { href: "/waitlist/invite-batch", label: "Invite Waitlist" },
-    ],
-  },
-  {
-    label: "Feedback",
-    items: [{ href: "/reviews", label: "Reviews" }],
-  },
-  {
-    label: "Shop",
-    items: [
-      { href: "/sms", label: "Send SMS" },
-      // Last, and one entry rather than four: payments, shipping, the reopening
-      // date, and the notify page's book list are all configuration, edited a
-      // few times a month. As separate entries they made this list ten items
-      // long and gave forms the same weight as Orders, which is opened many
-      // times a day. They are tabs inside the page now — see
-      // `settings-shell.tsx`.
-      { href: "/settings", label: "Shop Settings" },
-    ],
-  },
+    // { href: "/waitlist/invite-batch", label: "Invite Waitlist" },
+  ],
+  [
+    { href: "/reviews", label: "Reviews" },
+    { href: "/sms", label: "Send SMS" },
+    // Last, and one entry rather than four: payments, shipping, the reopening
+    // date, and the notify page's book list are all configuration, edited a
+    // few times a month. As separate entries they gave forms the same weight
+    // as Orders, which is opened many times a day. They are tabs inside the
+    // page now — see `settings-shell.tsx`.
+    { href: "/settings", label: "Shop Settings" },
+  ],
 ] as const;
 
 /**
@@ -197,43 +182,49 @@ export function AdminShell({ children }: { children: ReactNode }) {
     router.push(`${base}/login`);
   }
 
+  /* The "Admin" line under the wordmark is gone for the same reason the group
+     headings are: it was a 10px uppercase eyebrow, and the dark rail, the
+     locked theme and the URL all say where you are more plainly than a caption
+     does. What is left is the shop's name, at full weight. */
   const wordmark = (
     <div className="px-5 py-6">
       <p className="text-h4 text-rail-ink font-serif leading-none">Nihonova</p>
-      <p className="text-10 tracking-label text-rail-muted mt-1.5 uppercase">Admin</p>
     </div>
   );
 
+  /* gap-7 between clusters against gap-0.5 within them: a 14:1 step, which is
+     what it takes for proximity alone to do the grouping a label used to
+     announce. The old gap-5 was tuned to sit under a heading, and reads as one
+     long list without one. */
   const nav = (
-    <nav aria-label="Admin sections" className="flex flex-1 flex-col gap-5 overflow-y-auto px-3">
-      {NAV_GROUPS.map((group, index) => (
-        <div key={group.label ?? `group-${index}`} className="flex flex-col gap-0.5">
-          {group.label ? (
-            <p className="text-10 tracking-label text-rail-muted mb-1 px-3 uppercase">
-              {group.label}
-            </p>
-          ) : null}
-
-          {group.items.map((item) => {
+    <nav aria-label="Admin sections" className="flex flex-1 flex-col gap-7 overflow-y-auto px-3">
+      {/* A list per cluster, not a div: with the headings gone the grouping is
+          carried by space, which a screen reader cannot see. Four lists of
+          "3 items" restore the same structure without putting a label back on
+          screen. */}
+      {NAV_CLUSTERS.map((cluster) => (
+        <ul key={cluster[0].href} className="flex flex-col gap-0.5">
+          {cluster.map((item) => {
             const href = `${base}${item.href}`;
             const active = item.href === "" ? pathname === base : pathname.startsWith(href);
 
             return (
-              <Link
-                key={item.href}
-                href={href}
-                aria-current={active ? "page" : undefined}
-                className={`rounded-control text-13.5 px-3 py-2.5 transition-colors ${
-                  active
-                    ? "bg-rail-active text-rail-ink font-medium"
-                    : "text-rail-secondary hover:bg-rail-hover hover:text-rail-ink"
-                }`}
-              >
-                {item.label}
-              </Link>
+              <li key={item.href}>
+                <Link
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  className={`rounded-control text-13.5 block px-3 py-2.5 transition-colors ${
+                    active
+                      ? "bg-rail-active text-rail-ink font-medium"
+                      : "text-rail-secondary hover:bg-rail-hover hover:text-rail-ink"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              </li>
             );
           })}
-        </div>
+        </ul>
       ))}
     </nav>
   );
@@ -269,10 +260,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         data-rail
         className="bg-rail border-rail-rule flex items-center justify-between border-b px-4 py-3 lg:hidden"
       >
-        <div>
-          <p className="text-h4 text-rail-ink font-serif leading-none">Nihonova</p>
-          <p className="text-10 tracking-label text-rail-muted mt-1 uppercase">Admin</p>
-        </div>
+        <p className="text-h4 text-rail-ink font-serif leading-none">Nihonova</p>
         <button
           type="button"
           onClick={() => setNavOpen((open) => !open)}
