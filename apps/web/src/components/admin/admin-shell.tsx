@@ -290,10 +290,25 @@ export function AdminShell({ children }: { children: ReactNode }) {
         </div>
       ) : null}
 
-      {/* Persistent sidebar at `lg` and up. */}
+      {/* Persistent sidebar at `lg` and up.
+       *
+       * `lg:sticky lg:top-0 lg:h-screen` is what keeps it on screen, and the
+       * height is the load-bearing part. Without it the aside had no height of
+       * its own: the row above is `min-h-screen`, flex stretches its children,
+       * and so the rail grew to match whatever the page beside it was. On a
+       * long orders table that made the rail thousands of pixels tall, and
+       * `mt-auto` duly pinned Appearance and Sign out to the bottom of the
+       * *document* — so reaching them meant scrolling the entire table.
+       *
+       * It also switches the nav's own `overflow-y-auto` on, which until now
+       * could never fire for the same reason: an element that grows to fit its
+       * content never overflows. Now the rail is exactly one viewport, the
+       * links scroll inside it when a short window cannot hold ten of them,
+       * and the footer stays where it is.
+       */}
       <aside
         data-rail
-        className="bg-rail border-rail-rule hidden w-60 shrink-0 flex-col border-r lg:flex"
+        className="bg-rail border-rail-rule hidden w-60 shrink-0 flex-col border-r lg:sticky lg:top-0 lg:flex lg:h-screen"
       >
         {rail}
       </aside>
