@@ -27,20 +27,24 @@ import { formatMoney } from "@/lib/money";
    this week, and what has already gone.
 
    Two tabs, and the split between them is the day's work rather than a filter.
-   To do holds the orders that have been accepted and not yet handed over;
-   ticking one moves it to Shipped, where it stops being work and starts being
-   a record. An order leaves the first list the moment it is ticked, because a
-   packing list that still shows the parcels already on the van is a packing
-   list nobody trusts.
+   Processing holds the orders that are paid and not yet handed over — the ones
+   being picked and packed; ticking one moves it to Shipped, where it stops
+   being work and starts being a record. An order leaves the first list the
+   moment it is ticked, because a packing list that still shows the parcels
+   already on the van is a packing list nobody trusts.
 
-   DELIVERED sits under Shipped, not under To do. It is past dispatch, so it is
-   not work — and leaving it in the first tab would put orders there that have
-   nothing left to tick.
+   DELIVERED sits under Shipped, not under Processing. It is past dispatch, so
+   it is not work — and leaving it in the first tab would put orders there that
+   have nothing left to tick.
 
-   /admin/orders' own "Accepted" tab still spans all four statuses, and that is
-   not drift: that screen is answering "what happened to this order", where
-   shipped and delivered are both outcomes of accepting it. Here the question
-   is "what do I hand over today", and shipped is the answer to a different day.
+   The first tab is named for the work rather than for the verdict that let it
+   start. "Accepted" said only that somebody had approved the payment, which is
+   a fact about a decision already made on another screen; Processing says what
+   the person opening this list is about to do with the books. It also stops
+   the word "Accepted" meaning one thing here and a wider one on /admin/orders,
+   whose own Accepted tab spans all four post-payment statuses because that
+   screen answers "what happened to this order" rather than "what am I packing
+   today".
 
    The division filter is applied by the API (see admin-order.query.ts), not
    here: an order stores its district, the division→district mapping lives in
@@ -62,8 +66,13 @@ import { formatMoney } from "@/lib/money";
 
 const TABS = [
   {
-    key: "todo",
-    label: "Accepted",
+    key: "processing",
+    label: "Processing",
+    /* Both statuses, because both mean the same thing to the person at the
+       packing table: paid for, still here. PROCESSING is the one an order
+       reaches when somebody has started on it, but the shop picks and hands
+       over in one session, so splitting them into two tabs would charge a
+       second tick for what is usually one motion. */
     statuses: ["PAYMENT_CONFIRMED", "PROCESSING"],
     /* Ticking a row here ships it. Only on this tab: the Shipped tab is a
        record of what has gone, and nothing there has a next step that a
@@ -185,7 +194,7 @@ function dateParams(
 export default function AdminAcceptedOrdersPage() {
   const { locale } = useParams<{ locale: string }>();
 
-  const [tab, setTab] = useState<TabKey>("todo");
+  const [tab, setTab] = useState<TabKey>("processing");
   const [division, setDivision] = useState("");
   /* "All dates" is the default rather than "Today", because this screen opens
      as a packing list: everything still to go out, however long it has been
@@ -350,7 +359,7 @@ export default function AdminAcceptedOrdersPage() {
   }
 
   const divisionLabel = bdDivisions.find((d) => d.value === division)?.label;
-  const noun = tab === "shipped" ? "shipped" : "accepted";
+  const noun = tab === "shipped" ? "shipped" : "processing";
 
   /**
    * The active range as a clause for the heading and the empty state.
