@@ -50,10 +50,17 @@ const NAV_GROUPS = [
       // points in the week, and the one that filters by destination division
       // only makes sense after the accept decision.
       { href: "/accepted-orders", label: "Accepted Orders" },
-      // Under the two order screens rather than beside Payment Settings: this
-      // is what the accepted orders above it added up to, read by whoever is
-      // reconciling the week — not a form for editing wallet numbers.
-      { href: "/payments", label: "Payments" },
+      // Named Revenue, not Payments, and that is the whole point of the name.
+      // The shop has real payment *work* — verifying receipts, reverting a
+      // confirmation — and all of it lives on the order detail page. A tab
+      // called Payments in this group promised that queue and delivered a
+      // chart. It also collided with Settings → Payments, which edits wallet
+      // numbers; placement alone could not keep those apart, because nothing
+      // about placement survives someone saying "it's in Payments".
+      //
+      // Under the two order screens because it is what they added up to, read
+      // by whoever is reconciling the week.
+      { href: "/revenue", label: "Revenue" },
     ],
   },
   {

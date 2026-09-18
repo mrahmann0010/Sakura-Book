@@ -97,7 +97,7 @@ type TabKey = (typeof TABS)[number]["key"];
 /* --------------------------------------------------------------------------
    Dates.
 
-   Presets plus a custom pair, the same control the Payments screen uses, so
+   Presets plus a custom pair, the same control the Revenue screen uses, so
    the two dated admin screens read as one design. The presets are there
    because the day's actual questions are "today" and "this week" — typing two
    ISO dates to ask them is a control that technically works and nobody uses.

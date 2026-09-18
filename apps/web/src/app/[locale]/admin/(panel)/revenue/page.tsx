@@ -8,8 +8,13 @@ import { AdminApiError, getAdminPaymentBreakdown } from "@/lib/api/admin";
 import { formatCredit, formatMoney } from "@/lib/money";
 
 /* --------------------------------------------------------------------------
-   Payments: what the accepted orders added up to, and where the money came
+   Revenue: what the accepted orders added up to, and where the money came
    from.
+
+   A report, not a queue — nothing here is actionable, and the name says so.
+   Verifying a receipt, or reverting a confirmation made in error, happens on
+   the order detail page; this screen only counts what those decisions
+   produced.
 
    Read top-down, and deliberately so — the page is three answers at three
    depths, and someone reconciling a week should be able to stop after any one
@@ -80,7 +85,7 @@ function todayIso(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
-export default function AdminPaymentsPage() {
+export default function AdminRevenuePage() {
   const [range, setRange] = useState<PaymentBreakdownRange>("all");
   const [from, setFrom] = useState(todayIso());
   const [to, setTo] = useState(todayIso());
@@ -134,7 +139,7 @@ export default function AdminPaymentsPage() {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-h2 text-ink font-serif">Payments</h1>
+        <h1 className="text-h2 text-ink font-serif">Revenue</h1>
         <p className="text-13.5 text-secondary mt-1">
           {data ? `${describeRange(data)} · accepted orders only` : "Loading…"}
         </p>
