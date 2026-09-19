@@ -12,7 +12,7 @@ import type {
   AdminReopenOrderRequest,
   AdminRevertPaymentRequest,
 } from "@sakura/contracts";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { InvalidInputError, ResourceNotFoundError } from "../../common/errors";
 import type { Env } from "../../config/env.schema";
 import { DbService } from "../../db/db.service";
@@ -30,6 +30,14 @@ import { AuditService } from "../../audit";
 import { PaymentVerificationService, type PaymentVerification } from "../../payment-verification";
 import type { AccessClaims } from "../auth/tokens";
 import { adminOrderFilters, adminOrderOrder } from "./admin-order.query";
+import {
+  fulfillmentOrderScope,
+  fulfillmentTransitionBlocker,
+  isFulfillment,
+  isInFulfillmentScope,
+  redactDetailForFulfillment,
+  redactSummaryForFulfillment,
+} from "./fulfillment-scope";
 import { receiptUniquenessOf, toAdminOrderDetail, toAdminOrderSummary } from "./admin-order.mapper";
 import { toPathaoCsv } from "./pathao-export";
 
@@ -61,6 +69,15 @@ export type AdminContext = {
  *
  * What this service adds is the part the domain genuinely does not have: an
  * authenticated actor, and an audit entry recording what they did.
+ *
+ * ## Who is asking
+ *
+ * Every read takes the caller's claims, because a FULFILLMENT account sees a
+ * narrower desk: only orders past payment and not long gone, with the payment
+ * side blanked out. See fulfillment-scope.ts, which holds all of it. The
+ * narrowing happens here, on the data, and not in the controller: the guard
+ * can say which routes a packer may call, but only the service knows which
+ * order a route is about to return.
  */
 @Injectable()
 export class AdminOrdersService {
@@ -85,8 +102,8 @@ export class AdminOrdersService {
    * page, and the per-order item counts as a separate grouped query so the
    * one-to-many join cannot multiply the rows LIMIT is counting.
    */
-  async list(query: AdminOrderQuery): Promise<AdminOrderList> {
-    const where = adminOrderFilters(query);
+  async list(query: AdminOrderQuery, viewer: AccessClaims): Promise<AdminOrderList> {
+    const where = this.scopedFilters(query, viewer);
     const offset = (query.page - 1) * query.pageSize;
 
     const [rows, [{ total }], [{ totalCopies }]] = await Promise.all([
@@ -136,15 +153,19 @@ export class AdminOrdersService {
       this.verificationLog.latestFor(rows.map((row) => row.id)),
     ]);
 
+    const redact = isFulfillment(viewer.role) ? redactSummaryForFulfillment : undefined;
+
     return {
-      items: rows.map((row) =>
-        toAdminOrderSummary(
+      items: rows.map((row) => {
+        const summary = toAdminOrderSummary(
           row,
           counts.get(row.id),
           receiptUniquenessOf(row, duplicated),
           PaymentVerificationLogService.stateOf(verifications, row.id),
-        ),
-      ),
+        );
+
+        return redact ? redact(summary) : summary;
+      }),
       total,
       totalCopies,
       page: query.page,
@@ -175,7 +196,7 @@ export class AdminOrdersService {
    * rows if it were joined in — the same shape, and the same reason, as
    * `list()` above.
    */
-  async exportPathaoCsv(query: AdminOrderQuery): Promise<string> {
+  async exportPathaoCsv(query: AdminOrderQuery, viewer: AccessClaims): Promise<string> {
     const rows = await this.dbService.db
       .select({
         id: orders.id,
@@ -188,7 +209,7 @@ export class AdminOrdersService {
         customerNote: orders.customerNote,
       })
       .from(orders)
-      .where(adminOrderFilters(query))
+      .where(this.scopedFilters(query, viewer))
       .orderBy(...adminOrderOrder(query.sort))
       .limit(EXPORT_LIMIT);
 
@@ -221,8 +242,8 @@ export class AdminOrdersService {
    * as it does on the storefront — there is no reason for the admin panel to
    * be the thing that leaks it into URLs and browser history.
    */
-  async detail(orderNumber: string): Promise<AdminOrderDetail> {
-    const row = await this.requireOrder(orderNumber);
+  async detail(orderNumber: string, viewer: AccessClaims): Promise<AdminOrderDetail> {
+    const row = await this.requireOrder(orderNumber, viewer);
 
     const [paymentRows, claim, verifications, latest, reopen] = await Promise.all([
       this.paymentsService.forOrder(row.id),
@@ -247,7 +268,7 @@ export class AdminOrdersService {
       claim?.orderNumber ?? null,
     );
 
-    return toAdminOrderDetail(
+    const detail = toAdminOrderDetail(
       row,
       paymentRows,
       receipt,
@@ -255,6 +276,8 @@ export class AdminOrdersService {
       verifications,
       reopen,
     );
+
+    return isFulfillment(viewer.role) ? redactDetailForFulfillment(detail) : detail;
   }
 
   /**
@@ -275,7 +298,7 @@ export class AdminOrdersService {
     orderNumber: string,
     context: AdminContext,
   ): Promise<AdminOrderVerifyPaymentResult> {
-    const order = await this.requireOrder(orderNumber);
+    const order = await this.requireOrder(orderNumber, context.actor);
 
     if (!order.transactionId) {
       return {
@@ -437,7 +460,7 @@ export class AdminOrdersService {
     request: AdminOrderTransitionRequest,
     context: AdminContext,
   ): Promise<AdminOrderDetail> {
-    const order = await this.requireOrder(orderNumber);
+    const order = await this.requireOrder(orderNumber, context.actor);
     const from = order.status;
 
     /* Which statuses this request will actually put the order into.
@@ -469,6 +492,21 @@ export class AdminOrdersService {
        Asked of the route rather than of `request.status` for that same reason:
        `advance` to SHIPPED from PENDING passes through PAYMENT_CONFIRMED, and
        a guard that only reads the destination is a third door left open. */
+    /* Before anything else runs, including the duplicate-receipt check below,
+       which writes an audit entry when overridden. A packer's request that is
+       going to be refused should leave nothing behind but the refusal. */
+    if (isFulfillment(context.actor.role)) {
+      const blocked = fulfillmentTransitionBlocker(
+        from,
+        entering,
+        request.duplicateReceiptOverride,
+      );
+
+      if (blocked) {
+        throw new InvalidInputError(blocked, { orderNumber, from, requested: request.status });
+      }
+    }
+
     if (entering.includes("PAYMENT_CONFIRMED")) {
       await this.guardDuplicateReceipt(order, request.duplicateReceiptOverride, context);
     }
@@ -517,7 +555,7 @@ export class AdminOrdersService {
       note: request.note,
     });
 
-    return this.detail(orderNumber);
+    return this.detail(orderNumber, context.actor);
   }
 
   /**
@@ -539,7 +577,7 @@ export class AdminOrdersService {
     request: AdminConfirmPaymentRequest,
     context: AdminContext,
   ): Promise<AdminOrderDetail> {
-    const order = await this.requireOrder(orderNumber);
+    const order = await this.requireOrder(orderNumber, context.actor);
 
     if (order.paymentMethod === "cash-on-delivery") {
       throw new InvalidInputError(
@@ -586,7 +624,7 @@ export class AdminOrdersService {
       this.logger.log(`Manual confirmation for ${orderNumber} was a replay; order unchanged`);
     }
 
-    return this.detail(orderNumber);
+    return this.detail(orderNumber, context.actor);
   }
 
   /**
@@ -642,7 +680,7 @@ export class AdminOrdersService {
     request: AdminRevertPaymentRequest,
     context: AdminContext,
   ): Promise<AdminOrderDetail> {
-    const order = await this.requireOrder(orderNumber);
+    const order = await this.requireOrder(orderNumber, context.actor);
 
     const note = request.note ?? "Payment confirmation withdrawn";
 
@@ -696,7 +734,7 @@ export class AdminOrdersService {
         `(${voidedCount} payment row(s) voided): ${request.reason}`,
     );
 
-    return this.detail(orderNumber);
+    return this.detail(orderNumber, context.actor);
   }
 
   /**
@@ -721,7 +759,7 @@ export class AdminOrdersService {
     request: AdminReopenOrderRequest,
     context: AdminContext,
   ): Promise<AdminOrderDetail> {
-    const order = await this.requireOrder(orderNumber);
+    const order = await this.requireOrder(orderNumber, context.actor);
 
     const { blockedReason } = await this.reopenState(order);
     if (blockedReason) {
@@ -758,7 +796,7 @@ export class AdminOrdersService {
       `Order ${order.orderNumber} reopened by ${context.actor.email}: ${request.reason}`,
     );
 
-    return this.detail(order.orderNumber);
+    return this.detail(order.orderNumber, context.actor);
   }
 
   /**
@@ -814,7 +852,7 @@ export class AdminOrdersService {
     request: AdminRecordRefundRequest,
     context: AdminContext,
   ): Promise<AdminOrderDetail> {
-    const order = await this.requireOrder(orderNumber);
+    const order = await this.requireOrder(orderNumber, context.actor);
 
     if (request.amountCents > order.totalCents) {
       throw new InvalidInputError("A refund cannot exceed the order total.", {
@@ -865,7 +903,7 @@ export class AdminOrdersService {
       to: "REFUNDED",
     });
 
-    return this.detail(orderNumber);
+    return this.detail(orderNumber, context.actor);
   }
 
   /**
@@ -881,7 +919,7 @@ export class AdminOrdersService {
     request: AdminInternalNoteRequest,
     context: AdminContext,
   ): Promise<AdminOrderDetail> {
-    const order = await this.requireOrder(orderNumber);
+    const order = await this.requireOrder(orderNumber, context.actor);
     const next = request.note?.trim() || null;
 
     await this.dbService.db.transaction(async (tx) => {
@@ -900,7 +938,7 @@ export class AdminOrdersService {
       );
     });
 
-    return this.detail(orderNumber);
+    return this.detail(orderNumber, context.actor);
   }
 
   /**
@@ -913,14 +951,35 @@ export class AdminOrdersService {
    * a staff member types it off the same printed confirmation the customer
    * reads from.
    */
-  private async requireOrder(orderNumber: string): Promise<OrderRow> {
+  private async requireOrder(orderNumber: string, viewer: AccessClaims): Promise<OrderRow> {
     const normalised = orderNumber.trim().toUpperCase();
 
     const row = await findOrder(this.dbService.db, eq(orders.orderNumber, normalised));
 
     if (!row) throw new ResourceNotFoundError("Order", normalised);
 
+    /* The same 404 as an order that does not exist, not a 403. A packer
+       typing numbers into the URL learns nothing about which ones are real
+       and merely outside their view — and every write in this service goes
+       through here first, so an out-of-scope order cannot be acted on either. */
+    if (isFulfillment(viewer.role) && !isInFulfillmentScope(row)) {
+      throw new ResourceNotFoundError("Order", normalised);
+    }
+
     return row;
+  }
+
+  /**
+   * The caller's filters, narrowed to the packer's scope when the caller is
+   * a packer. `list` and `exportPathaoCsv` both read through this, so the
+   * courier manifest can never carry an order the queue would not have shown.
+   */
+  private scopedFilters(query: AdminOrderQuery, viewer: AccessClaims): SQL | undefined {
+    const filters = adminOrderFilters(query);
+
+    if (!isFulfillment(viewer.role)) return filters;
+
+    return filters ? and(filters, fulfillmentOrderScope()) : fulfillmentOrderScope();
   }
 
   /** Line and copy counts per order, in one grouped query for the whole page. */

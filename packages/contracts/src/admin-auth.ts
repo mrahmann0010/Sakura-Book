@@ -9,20 +9,25 @@ import { z } from "zod";
    -------------------------------------------------------------------------- */
 
 /**
- * Two roles, and deliberately not a permission matrix.
+ * Three roles, and still deliberately not a permission matrix.
  *
- * `STAFF` is the daily fulfilment job: read orders, move them through the
- * status machine, adjust stock, moderate reviews. `ADMIN` is that plus the
- * things that change what the shop *sells* or *charges* — catalog, prices,
- * coupons, delivery rates, and the admin users themselves.
+ * `STAFF` is the daily desk job: read orders, check and confirm payments,
+ * move orders through the status machine, adjust stock, moderate reviews.
+ * `ADMIN` is that plus the things that change what the shop *sells* or
+ * *charges* — catalog, prices, coupons, delivery rates, refunds, and the admin
+ * users themselves. The split between those two is drawn at "can this person
+ * change what a customer pays?".
  *
- * The split is drawn at "can this person change what a customer pays?", which
- * is the only boundary the shop actually has today. A finer-grained
- * permissions table can be added the day someone needs a role that does not
- * fall on one side of it; adding one now would be a table nobody queries with
- * a UI nobody fills in.
+ * `FULFILLMENT` is the packing table, and it is not a third rung on the same
+ * ladder. It is a different *shape* of access: a packer works only orders
+ * whose payment someone else has already verified, moves them forward only
+ * (packed, then handed to the courier), and sees what a parcel needs — name,
+ * phone, address, books, the COD amount — but never the receipt, the payment
+ * record, or anything else in the panel. So where the other two roles are
+ * allowed everywhere not marked `@Roles("ADMIN")`, FULFILLMENT is allowed
+ * nowhere not marked `@AllowFulfillment()`. See AdminRolesGuard.
  */
-export const ADMIN_ROLES = ["STAFF", "ADMIN"] as const;
+export const ADMIN_ROLES = ["STAFF", "ADMIN", "FULFILLMENT"] as const;
 
 export type AdminRole = (typeof ADMIN_ROLES)[number];
 

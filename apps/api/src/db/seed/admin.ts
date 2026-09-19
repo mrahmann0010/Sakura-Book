@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import type { AdminRole } from "@sakura/contracts";
 import { eq } from "drizzle-orm";
 import { hashPassword } from "../../admin/auth/password";
 import { adminUsers } from "../schema";
@@ -14,6 +15,10 @@ import type { Database } from "../db.types";
  * command during setup". Every subsequent account is created by this one
  * through `/admin/users`, where it is an audited action by a known person.
  *
+ * Also the engine behind `npm run db:admin-create`, which passes a `role` to
+ * add a packer or a staff account from the server until the panel has a
+ * screen for it. Without one, the account is ADMIN, for the reason below.
+ *
  * Idempotent: re-running with an existing email leaves the account untouched
  * rather than resetting its password. A seed script that silently rewrote a
  * live credential every time a pipeline ran would be a way to lock the shop's
@@ -21,7 +26,7 @@ import type { Database } from "../db.types";
  */
 export async function seedAdmin(
   db: Database,
-  input: { email: string; name: string; password?: string },
+  input: { email: string; name: string; password?: string; role?: AdminRole },
 ): Promise<{ created: boolean; email: string; password?: string }> {
   const email = input.email.trim().toLowerCase();
 
@@ -47,9 +52,9 @@ export async function seedAdmin(
     email,
     name: input.name,
     passwordHash: await hashPassword(password),
-    // The bootstrap account is the one that creates the others, so it cannot
-    // be STAFF — nothing else would be able to grant the ADMIN role.
-    role: "ADMIN",
+    // The bootstrap account is the one that creates the others, so by default
+    // it cannot be STAFF — nothing else would be able to grant the ADMIN role.
+    role: input.role ?? "ADMIN",
   });
 
   return { created: true, email, password: input.password ? undefined : password };

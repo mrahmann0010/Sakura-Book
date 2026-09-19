@@ -7,8 +7,16 @@ import { useEffect, useState, type ReactNode } from "react";
 import { CloseIcon, MenuIcon } from "@/components/admin/icons";
 import { AdminScreenSkeleton } from "@/components/admin/skeletons";
 import { AdminRailThemeSwitch } from "@/components/admin/theme-control";
+import type { AdminRole } from "@sakura/contracts";
+
 import { adminLogout, adminRefreshSession } from "@/lib/api/admin";
-import { ADMIN_AUTHED_KEY } from "@/lib/admin-auth";
+import {
+  ADMIN_AUTHED_KEY,
+  ADMIN_ROLE_KEY,
+  FULFILLMENT_HOME,
+  isPathAllowedForRole,
+} from "@/lib/admin-auth";
+import { AdminRoleContext } from "@/lib/admin-role";
 import { useAdminGate } from "@/lib/use-admin-gate";
 
 /**
@@ -101,6 +109,26 @@ const NAV_CLUSTERS = [
   ],
 ] as const;
 
+type NavItem = { href: string; label: string };
+
+/**
+ * The packing table's rail: the queue it works and the shelf it reads.
+ *
+ * One cluster of two rather than the owner's rail with entries removed —
+ * filtering the four clusters would leave Stock alone in a gap sized for a
+ * group, which reads as a mistake rather than as a smaller desk.
+ */
+const FULFILLMENT_NAV: readonly (readonly NavItem[])[] = [
+  [
+    { href: FULFILLMENT_HOME, label: "Processing" },
+    { href: "/stock", label: "Stock" },
+  ],
+];
+
+function navFor(role: AdminRole | null): readonly (readonly NavItem[])[] {
+  return role === "FULFILLMENT" ? FULFILLMENT_NAV : NAV_CLUSTERS;
+}
+
 /**
  * The chrome every authenticated admin page renders inside: a persistent
  * sidebar, a sign-out control, and the dark-themed surface `theme-lock.tsx`
@@ -123,7 +151,7 @@ const NAV_CLUSTERS = [
  * synchronously.
  */
 export function AdminShell({ children }: { children: ReactNode }) {
-  const status = useAdminGate();
+  const { status, role } = useAdminGate();
   const { locale } = useParams<{ locale: string }>();
   const pathname = usePathname();
   const router = useRouter();
@@ -155,6 +183,20 @@ export function AdminShell({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, [status]);
 
+  const base = `/${locale}/admin`;
+
+  /**
+   * A packer on a page outside the packing table — the dashboard they land on
+   * from an old bookmark, or a URL typed by hand — is sent to Processing
+   * instead of being shown a screen whose every request the API refuses.
+   * `children` are held back meanwhile, so those requests are never made.
+   */
+  const pathAllowed = isPathAllowedForRole(role, pathname.slice(base.length) || "/");
+
+  useEffect(() => {
+    if (status === "allowed" && !pathAllowed) router.replace(`${base}${FULFILLMENT_HOME}`);
+  }, [status, pathAllowed, base, router]);
+
   /**
    * `denied` covers both the hydration render, before localStorage can be
    * read, and a real rejection with a redirect already in flight.
@@ -169,9 +211,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
    * `children` are still withheld: they must not mount and fetch until the
    * session is established.
    */
-  const gated = status !== "allowed";
-
-  const base = `/${locale}/admin`;
+  const gated = status !== "allowed" || !pathAllowed;
 
   async function signOut() {
     await adminLogout().catch(() => {
@@ -179,6 +219,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       // docs on why a stale/unknown token on the server is not an error here.
     });
     window.localStorage.removeItem(ADMIN_AUTHED_KEY);
+    window.localStorage.removeItem(ADMIN_ROLE_KEY);
     router.push(`${base}/login`);
   }
 
@@ -202,7 +243,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           carried by space, which a screen reader cannot see. Four lists of
           "3 items" restore the same structure without putting a label back on
           screen. */}
-      {NAV_CLUSTERS.map((cluster) => (
+      {navFor(role).map((cluster) => (
         <ul key={cluster[0].href} className="flex flex-col gap-0.5">
           {cluster.map((item) => {
             const href = `${base}${item.href}`;
@@ -314,7 +355,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-        {gated ? <AdminScreenSkeleton /> : children}
+        <AdminRoleContext.Provider value={role}>
+          {gated ? <AdminScreenSkeleton /> : children}
+        </AdminRoleContext.Provider>
       </main>
     </div>
   );

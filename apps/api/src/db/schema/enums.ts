@@ -94,9 +94,9 @@ export const paymentStatusEnum = pgEnum("payment_status", [
  * Staff roles. SCREAMING_SNAKE like the other internal enums — unlike
  * `payment_method`, these are our words, not a contract with a form control.
  * The values mirror `ADMIN_ROLES` in @sakura/contracts; see the comment there
- * for why there are two of them and not a permissions table.
+ * for what each one may do and why that is not a permissions table.
  */
-export const adminRoleEnum = pgEnum("admin_role", ["STAFF", "ADMIN"]);
+export const adminRoleEnum = pgEnum("admin_role", ["STAFF", "ADMIN", "FULFILLMENT"]);
 
 /**
  * What an audited action did. Coarse on purpose: the *what* is already in the

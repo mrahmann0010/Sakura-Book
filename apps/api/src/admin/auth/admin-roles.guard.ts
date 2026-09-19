@@ -1,12 +1,13 @@
 import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import type { AdminRole } from "@sakura/contracts";
-import { REQUIRED_ROLES_KEY } from "./admin-auth.decorators";
+import { ALLOW_FULFILLMENT_KEY, REQUIRED_ROLES_KEY } from "./admin-auth.decorators";
 import { InsufficientRoleError } from "./auth.errors";
 import type { AccessClaims } from "./tokens";
 
 /**
- * Enforces `@Roles(...)`, after AdminJwtGuard has established who is calling.
+ * Enforces `@Roles(...)` and `@AllowFulfillment()`, after AdminJwtGuard has
+ * established who is calling.
  *
  * Registered second, and the ordering is a correctness requirement rather than
  * a preference: this guard reads `request.admin`, which only exists because
@@ -19,25 +20,44 @@ import type { AccessClaims } from "./tokens";
  * request, not when the token expires, and this guard gets that for free
  * without a second lookup.
  *
- * No `@Roles` on a route means any authenticated admin may call it. That is
- * the deliberate default — STAFF exists to do the daily work, and requiring an
- * explicit annotation for the common case would mean the annotation gets
- * copy-pasted rather than considered.
+ * ## Two defaults, one per kind of role
+ *
+ * For STAFF and ADMIN, no `@Roles` on a route means any of them may call it.
+ * That is the deliberate default — STAFF exists to do the daily work, and
+ * requiring an explicit annotation for the common case would mean the
+ * annotation gets copy-pasted rather than considered.
+ *
+ * For FULFILLMENT the default is the opposite: refused unless the route says
+ * `@AllowFulfillment()`. See that decorator for why. The two rules compose
+ * rather than compete — an `@AllowFulfillment()` route that also carries
+ * `@Roles` must list FULFILLMENT there too, so opting a route in can never
+ * quietly override a restriction someone else put on it.
  */
 @Injectable()
 export class AdminRolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const required = this.reflector.getAllAndOverride<AdminRole[] | undefined>(REQUIRED_ROLES_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-
-    if (!required?.length) return true;
+    const targets = [context.getHandler(), context.getClass()];
+    const required = this.reflector.getAllAndOverride<AdminRole[] | undefined>(
+      REQUIRED_ROLES_KEY,
+      targets,
+    );
+    const allowsFulfillment =
+      this.reflector.getAllAndOverride<boolean | undefined>(ALLOW_FULFILLMENT_KEY, targets) ===
+      true;
 
     const request = context.switchToHttp().getRequest<{ admin?: AccessClaims }>();
     const admin = request.admin;
+
+    if (!required?.length) {
+      // Nothing to check for STAFF and ADMIN. Nor for an absent admin: an
+      // unrestricted route is either @Public, or behind the JWT guard, which
+      // has already refused a request it could not identify.
+      if (admin?.role !== "FULFILLMENT" || allowsFulfillment) return true;
+
+      throw new InsufficientRoleError(["STAFF", "ADMIN"], admin.role);
+    }
 
     // No claims on a role-restricted route means this guard ran without the
     // JWT guard ahead of it — a wiring bug, not a request. Refusing is the
@@ -46,6 +66,10 @@ export class AdminRolesGuard implements CanActivate {
     if (!admin) throw new InsufficientRoleError(required, "anonymous");
 
     if (!required.includes(admin.role)) throw new InsufficientRoleError(required, admin.role);
+
+    if (admin.role === "FULFILLMENT" && !allowsFulfillment) {
+      throw new InsufficientRoleError(required, admin.role);
+    }
 
     return true;
   }

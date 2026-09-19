@@ -1,10 +1,11 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import { adminRoleSchema, type AdminRole } from "@sakura/contracts";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { AdminApiError, adminMe } from "@/lib/api/admin";
-import { ADMIN_AUTHED_KEY } from "@/lib/admin-auth";
+import { ADMIN_AUTHED_KEY, ADMIN_ROLE_KEY } from "@/lib/admin-auth";
 
 /**
  * Whether the panel may render.
@@ -44,6 +45,15 @@ function readFlagOnServer(): boolean {
   return false;
 }
 
+/** The recorded role, as a raw string: a stable snapshot, parsed by the caller. */
+function readStoredRole(): string | null {
+  return window.localStorage.getItem(ADMIN_ROLE_KEY);
+}
+
+function readStoredRoleOnServer(): string | null {
+  return null;
+}
+
 /**
  * The panel's client-side gate, in one place because there is now more than
  * one admin page and a gate that each page reimplements is a gate one page
@@ -67,10 +77,20 @@ function readFlagOnServer(): boolean {
  * flag renders no panel at all, so nobody watches a screen paint its empty
  * state on the way to the login form.
  */
-export function useAdminGate(): AdminGateStatus {
+export function useAdminGate(): { status: AdminGateStatus; role: AdminRole | null } {
   const router = useRouter();
   const { locale } = useParams<{ locale: string }>();
   const signedInHere = useSyncExternalStore(subscribe, readFlag, readFlagOnServer);
+  const storedRole = useSyncExternalStore(subscribe, readStoredRole, readStoredRoleOnServer);
+
+  /**
+   * The role `/me` answered with, which outranks the stored one.
+   *
+   * The stored role exists so a packer's first paint is already the packing
+   * rail rather than the owner's; this is what corrects it when the account
+   * was changed since, or when this browser has never recorded one.
+   */
+  const [confirmedRole, setConfirmedRole] = useState<AdminRole | null>(null);
 
   // Set only by a `/me` that came back rejecting the session. It stops the
   // screen rendering stale data during the frames between that answer and the
@@ -87,26 +107,34 @@ export function useAdminGate(): AdminGateStatus {
 
     let cancelled = false;
 
-    adminMe().catch((error: unknown) => {
-      if (cancelled) return;
+    adminMe()
+      .then((session) => {
+        if (cancelled) return;
 
-      /**
-       * Only an actual rejection signs anyone out.
-       *
-       * This used to treat every failure as a dead session, so a dropped
-       * connection, a sleeping laptop, or one 500 from the API threw away the
-       * local flag and bounced a working session to the login form — a session
-       * whose cookies were still perfectly good. `adminFetch` has already
-       * refreshed and retried once by the time a 401 reaches here, so a 401 is
-       * the one answer that means the cookies really are spent; anything else
-       * is the network's problem and the panel's own requests will report it.
-       */
-      if (!(error instanceof AdminApiError) || error.status !== 401) return;
+        window.localStorage.setItem(ADMIN_ROLE_KEY, session.user.role);
+        setConfirmedRole(session.user.role);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
 
-      window.localStorage.removeItem(ADMIN_AUTHED_KEY);
-      setRejected(true);
-      router.replace(login);
-    });
+        /**
+         * Only an actual rejection signs anyone out.
+         *
+         * This used to treat every failure as a dead session, so a dropped
+         * connection, a sleeping laptop, or one 500 from the API threw away the
+         * local flag and bounced a working session to the login form — a session
+         * whose cookies were still perfectly good. `adminFetch` has already
+         * refreshed and retried once by the time a 401 reaches here, so a 401 is
+         * the one answer that means the cookies really are spent; anything else
+         * is the network's problem and the panel's own requests will report it.
+         */
+        if (!(error instanceof AdminApiError) || error.status !== 401) return;
+
+        window.localStorage.removeItem(ADMIN_AUTHED_KEY);
+        window.localStorage.removeItem(ADMIN_ROLE_KEY);
+        setRejected(true);
+        router.replace(login);
+      });
 
     return () => {
       cancelled = true;
@@ -116,5 +144,7 @@ export function useAdminGate(): AdminGateStatus {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return signedInHere && !rejected ? "allowed" : "denied";
+  const role = confirmedRole ?? adminRoleSchema.safeParse(storedRole).data ?? null;
+
+  return { status: signedInHere && !rejected ? "allowed" : "denied", role };
 }

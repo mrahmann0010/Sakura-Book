@@ -13,6 +13,7 @@ import type { AccessClaims } from "./tokens";
 
 export const IS_PUBLIC_KEY = "admin:isPublic";
 export const REQUIRED_ROLES_KEY = "admin:requiredRoles";
+export const ALLOW_FULFILLMENT_KEY = "admin:allowFulfillment";
 
 /**
  * Exempt a route from AdminJwtGuard.
@@ -38,6 +39,24 @@ export const Public = (): MethodDecorator & ClassDecorator => SetMetadata(IS_PUB
  */
 export const Roles = (...roles: AdminRole[]): MethodDecorator & ClassDecorator =>
   SetMetadata(REQUIRED_ROLES_KEY, roles);
+
+/**
+ * Open a route to FULFILLMENT accounts, which are refused everywhere else.
+ *
+ * The inverse of `@Roles`, and deliberately so. STAFF and ADMIN are trusted
+ * with the panel by default and fenced off from the few routes that change
+ * what a customer pays. A packer is trusted with the packing table and nothing
+ * else, so for that role the default has to be *no*: the admin surface grows
+ * with every feature, and a new screen reaching the packing table's accounts
+ * because nobody remembered to exclude them is the failure worth designing
+ * out. Opting in is one word a reviewer can grep for.
+ *
+ * It says nothing about STAFF or ADMIN, and it does not narrow the data — the
+ * services do that, from the caller's role, because "may call this route" and
+ * "may see this order" are different questions.
+ */
+export const AllowFulfillment = (): MethodDecorator & ClassDecorator =>
+  SetMetadata(ALLOW_FULFILLMENT_KEY, true);
 
 /**
  * The verified claims of the calling admin.

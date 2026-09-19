@@ -12,7 +12,7 @@ import { createZodDto } from "nestjs-zod";
 import { StrictThrottle } from "../../common/throttling/strict-throttle.decorator";
 import type { Env } from "../../config/env.schema";
 import { AdminAuthService, type IssuedSession, type RequestContext } from "./admin-auth.service";
-import { CurrentAdmin, Public } from "./admin-auth.decorators";
+import { AllowFulfillment, CurrentAdmin, Public } from "./admin-auth.decorators";
 import { SessionExpiredError } from "./auth.errors";
 import type { AccessClaims } from "./tokens";
 
@@ -101,6 +101,9 @@ export class AdminAuthController {
    * load, not when the token expires.
    */
   @Get("me")
+  // Every signed-in account needs to know who it is, the packing table's
+  // included — the panel draws its rail from this answer.
+  @AllowFulfillment()
   @ApiOperation({ summary: "The signed-in admin." })
   async me(@CurrentAdmin() admin: AccessClaims): Promise<AdminSession> {
     const user = await this.authService.findById(admin.sub);

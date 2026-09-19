@@ -23,6 +23,7 @@ import {
   transitionAdminOrder,
   verifyAdminOrderPayment,
 } from "@/lib/api/admin";
+import { useAdminRole } from "@/lib/admin-role";
 import { formatMoney } from "@/lib/money";
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
@@ -36,6 +37,10 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
 };
 
 export default function AdminOrderDetailPage() {
+  /* A packer's copy of this page shows what the parcel needs and leaves out
+     the payment desk: the API has already blanked those fields and refuses
+     those actions for them, so drawing the controls would only draw errors. */
+  const isPacker = useAdminRole() === "FULFILLMENT";
   const { orderNumber, locale } = useParams<{ orderNumber: string; locale: string }>();
 
   const [order, setOrder] = useState<AdminOrderDetail | null>(null);
@@ -283,7 +288,7 @@ export default function AdminOrderDetailPage() {
           <h2 className="text-h4 text-ink font-serif">Customer</h2>
           <dl className="text-13.5 mt-4 flex flex-col gap-2">
             <Row label="Name" value={order.shipping.fullName} />
-            <Row label="Email" value={order.customerEmail} />
+            {order.customerEmail ? <Row label="Email" value={order.customerEmail} /> : null}
             <Row label="Phone" value={order.shipping.phone} />
             {order.shipping.secondaryPhone ? (
               <Row label="Secondary phone" value={order.shipping.secondaryPhone} />
@@ -301,16 +306,27 @@ export default function AdminOrderDetailPage() {
           <dl className="text-13.5 mt-4 flex flex-col gap-2">
             <Row label="Method" value={order.paymentMethod} />
             {order.paymentProvider ? <Row label="Wallet" value={order.paymentProvider} /> : null}
-            <Row label="Total" value={formatMoney(order.totalCents, "en-GB", order.currency)} />
+            {/* Labelled for the packer by what they do with it: on a cash order
+                it is the figure the courier collects and the label must carry. */}
+            <Row
+              label={
+                isPacker && order.paymentMethod === "cash-on-delivery"
+                  ? "Collect on delivery"
+                  : "Total"
+              }
+              value={formatMoney(order.totalCents, "en-GB", order.currency)}
+            />
             {order.senderNumber ? <Row label="Sent from" value={order.senderNumber} /> : null}
-            <Row label="Transaction ID" value={order.transactionId ?? "No receipt on file"} />
+            {isPacker ? null : (
+              <Row label="Transaction ID" value={order.transactionId ?? "No receipt on file"} />
+            )}
           </dl>
 
           {/* Present on load, before anyone presses anything. The old panel
                 said nothing about a receipt until an admin ran a check, which
                 meant the duplicate case — the one that needs no gateway to
                 detect — was invisible right up to the moment of confirming. */}
-          {order.paymentMethod === "manual-transfer" ? (
+          {order.paymentMethod === "manual-transfer" && !isPacker ? (
             <div className="border-rule mt-4 flex flex-col gap-2 border-t pt-4">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-13.5 text-muted">Receipt</span>
@@ -339,7 +355,7 @@ export default function AdminOrderDetailPage() {
             </div>
           ) : null}
 
-          {order.paymentMethod === "manual-transfer" ? (
+          {order.paymentMethod === "manual-transfer" && !isPacker ? (
             <div className="mt-4">
               <Button
                 type="button"
