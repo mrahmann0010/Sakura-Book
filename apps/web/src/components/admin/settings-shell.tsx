@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { useAdminRole } from "@/lib/admin-role";
+
 /**
  * The tabs, in the order staff reach for them: money first, then fulfilment,
  * then the waitlist pair (which answer "when do we reopen" and "for which
@@ -21,7 +23,11 @@ const TABS = [
   // of it. It is here because it is where a setting gets looked for, not
   // because it belongs to the same category.
   { href: "/settings/appearance", label: "Appearance" },
-] as const;
+  // Last, and ADMIN only: it decides who else can open this page at all.
+  // Hidden rather than shown-and-refused for STAFF, because a tab whose whole
+  // content is "you may not" is noise on a screen they otherwise use.
+  { href: "/settings/users", label: "User Management", adminOnly: true },
+] as const satisfies readonly { href: string; label: string; adminOnly?: boolean }[];
 
 /**
  * One home for everything that configures the shop.
@@ -41,6 +47,7 @@ const TABS = [
 export function AdminSettingsShell({ children }: { children: ReactNode }) {
   const { locale } = useParams<{ locale: string }>();
   const pathname = usePathname();
+  const isAdmin = useAdminRole() === "ADMIN";
 
   const base = `/${locale}/admin`;
 
@@ -58,7 +65,7 @@ export function AdminSettingsShell({ children }: { children: ReactNode }) {
           one design rather than a per-screen one. Links, not buttons: each
           tab is a real route, and staff bookmark and share them. */}
       <div className="border-rule flex gap-1 overflow-x-auto border-b">
-        {TABS.map((tab) => {
+        {TABS.filter((tab) => isAdmin || !("adminOnly" in tab)).map((tab) => {
           const href = `${base}${tab.href}`;
           const active = pathname.startsWith(href);
 

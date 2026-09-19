@@ -1,5 +1,15 @@
 import {
   adminBookCreateRequestSchema,
+  adminCreateStaffRequestSchema,
+  adminStaffCredentialResultSchema,
+  adminStaffListSchema,
+  adminStaffMemberSchema,
+  adminUpdateStaffRequestSchema,
+  type AdminCreateStaffRequest,
+  type AdminStaffCredentialResult,
+  type AdminStaffList,
+  type AdminStaffMember,
+  type AdminUpdateStaffRequest,
   adminBookDetailSchema,
   adminBookListSchema,
   adminBookUpdateRequestSchema,
@@ -718,6 +728,50 @@ export function deactivateAdminRegion(slug: string): Promise<AdminRegion> {
   return adminFetch(`/admin/settings/regions/${encodeURIComponent(slug)}`, adminRegionSchema, {
     method: "DELETE",
   });
+}
+
+/* --------------------------------------------------------------------------
+   Staff accounts — Settings → User Management. ADMIN only on the server.
+   -------------------------------------------------------------------------- */
+
+export function listAdminStaff(): Promise<AdminStaffList> {
+  return adminFetch("/admin/users", adminStaffListSchema);
+}
+
+export function createAdminStaff(
+  request: AdminCreateStaffRequest,
+): Promise<AdminStaffCredentialResult> {
+  const validated = validate(adminCreateStaffRequestSchema, request);
+  return adminFetch("/admin/users", adminStaffCredentialResultSchema, {
+    method: "POST",
+    body: validated,
+  });
+}
+
+export function updateAdminStaff(
+  id: string,
+  changes: AdminUpdateStaffRequest,
+): Promise<AdminStaffMember> {
+  const validated = validate(adminUpdateStaffRequestSchema, changes);
+  return adminFetch(`/admin/users/${encodeURIComponent(id)}`, adminStaffMemberSchema, {
+    method: "PATCH",
+    body: validated,
+  });
+}
+
+export function setAdminStaffEnabled(id: string, enabled: boolean): Promise<AdminStaffMember> {
+  const action = enabled ? "enable" : "disable";
+  return adminFetch(`/admin/users/${encodeURIComponent(id)}/${action}`, adminStaffMemberSchema, {
+    method: "POST",
+  });
+}
+
+export function resetAdminStaffPassword(id: string): Promise<AdminStaffCredentialResult> {
+  return adminFetch(
+    `/admin/users/${encodeURIComponent(id)}/reset-password`,
+    adminStaffCredentialResultSchema,
+    { method: "POST" },
+  );
 }
 
 /* --------------------------------------------------------------------------
