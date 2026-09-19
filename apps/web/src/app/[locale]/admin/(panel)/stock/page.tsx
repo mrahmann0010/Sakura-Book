@@ -17,6 +17,7 @@ import {
   resizeAdminWaitlistAllocation,
   updateAdminBook,
 } from "@/lib/api/admin";
+import { useAdminRole } from "@/lib/admin-role";
 
 /* --------------------------------------------------------------------------
    The stock desk.
@@ -69,6 +70,7 @@ function rowFlag(row: AdminStockRow): { tone: "error" | "warn"; text: string } |
 }
 
 export default function AdminStockPage() {
+  const isPacker = useAdminRole() === "FULFILLMENT";
   const params = useParams<{ locale: string }>();
   const locale = params?.locale ?? "en";
 
@@ -316,14 +318,18 @@ export default function AdminStockPage() {
                     ) : null}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => setOpenRow(row)}
-                      className="text-clay hover:text-clay-deep"
-                    >
-                      Manage
-                    </button>
+                    {/* Read-only for the packing table: they see the shelf
+                        running low, and tell the owner, who restocks. */}
+                    {isPacker ? null : (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setOpenRow(row)}
+                        className="text-clay hover:text-clay-deep"
+                      >
+                        Manage
+                      </button>
+                    )}
                   </td>
                 </tr>
               );

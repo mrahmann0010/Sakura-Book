@@ -1,0 +1,1 @@
+ALTER TYPE "public"."admin_role" ADD VALUE 'FULFILLMENT';

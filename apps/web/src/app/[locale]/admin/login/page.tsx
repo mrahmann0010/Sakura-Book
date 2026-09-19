@@ -6,7 +6,7 @@ import { useState, type FormEvent } from "react";
 
 import { Button, Input, Notice, PasswordInput } from "@/components/ui";
 import { adminLogin, AdminApiError } from "@/lib/api/admin";
-import { ADMIN_AUTHED_KEY } from "@/lib/admin-auth";
+import { ADMIN_AUTHED_KEY, ADMIN_ROLE_KEY, homePathFor } from "@/lib/admin-auth";
 import { routes } from "@/lib/routes";
 
 /**
@@ -50,13 +50,16 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      await adminLogin({ email, password });
+      const session = await adminLogin({ email, password });
       // The session itself lives in the httpOnly cookies the API just set —
       // this flag is only a client-side "did I sign in" hint so the protected
       // page knows to check, rather than always attempting a request. The
       // actual gate is the API's 401 on a missing/expired cookie.
       window.localStorage.setItem(ADMIN_AUTHED_KEY, "1");
-      router.push(`/${locale}/admin`);
+      // Likewise a hint: it lets a packer's first paint be the packing table
+      // rather than a dashboard the API is about to refuse them.
+      window.localStorage.setItem(ADMIN_ROLE_KEY, session.user.role);
+      router.push(`/${locale}/admin${homePathFor(session.user.role)}`);
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Sign-in failed.");
       setAttempt((count) => count + 1);

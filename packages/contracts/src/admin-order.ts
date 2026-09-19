@@ -509,3 +509,39 @@ export const adminOrderVerifyPaymentResultSchema = z.object({
 });
 
 export type AdminOrderVerifyPaymentResult = z.infer<typeof adminOrderVerifyPaymentResultSchema>;
+
+/* --------------------------------------------------------------------------
+   The packing table: what a FULFILLMENT account may see and do.
+
+   Here rather than only in the API because the panel draws the packer's
+   screens from the same constants, so the tabs it offers and the orders the
+   server will hand over cannot come to disagree.
+   -------------------------------------------------------------------------- */
+
+/**
+ * The statuses a packer works, in the order an order passes through them.
+ *
+ * Everything before PAYMENT_CONFIRMED is someone else's decision (was this
+ * paid?) and everything after SHIPPED is the courier's. SHIPPED is included
+ * only for a short trailing window (below), so a packer can see today's
+ * handovers and catch a mistake, but cannot browse the shop's order history.
+ */
+export const FULFILLMENT_ORDER_STATUSES = ["PAYMENT_CONFIRMED", "PROCESSING", "SHIPPED"] as const;
+
+/**
+ * How long a shipped order stays visible to a packer, in days.
+ *
+ * Long enough to cover a weekend between a Friday pickup and a Sunday
+ * question about it; short enough that a packer's account is not a search box
+ * over every customer's address.
+ */
+export const FULFILLMENT_SHIPPED_WINDOW_DAYS = 3;
+
+/**
+ * The only moves a packer may make: forward, one step or two.
+ *
+ * No CANCELLED, no REFUNDED, no DELIVERED (the courier's fact, not the
+ * packer's), and nothing backward. A packer who finds a problem leaves a note
+ * for the owner rather than acting on the order.
+ */
+export const FULFILLMENT_TRANSITION_TARGETS = ["PROCESSING", "SHIPPED"] as const;

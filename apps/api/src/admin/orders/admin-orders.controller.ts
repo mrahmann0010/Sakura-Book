@@ -26,7 +26,7 @@ import {
 } from "@sakura/contracts";
 import type { Request, Response } from "express";
 import { createZodDto } from "nestjs-zod";
-import { CurrentAdmin, Roles } from "../auth/admin-auth.decorators";
+import { AllowFulfillment, CurrentAdmin, Roles } from "../auth/admin-auth.decorators";
 import type { AccessClaims } from "../auth/tokens";
 import { AdminOrdersService, type AdminContext } from "./admin-orders.service";
 
@@ -51,6 +51,13 @@ class AdminInternalNoteDto extends createZodDto(adminInternalNoteRequestSchema) 
  * to ship anything unless the owner is at a keyboard. The exception is the
  * refund, below.
  *
+ * FULFILLMENT accounts reach five routes here, each marked
+ * `@AllowFulfillment()`: the queue, the courier CSV, one order, a forward
+ * transition, and the note. Which orders and fields they get through those is
+ * decided in the service (see fulfillment-scope.ts), not here — and payment
+ * checks, confirmations, reopening and refunds stay closed to them by the
+ * guard's default.
+ *
  * Addressed by order number throughout. It is what staff have in front of
  * them, and it keeps the UUID out of URLs and browser history on the admin
  * side exactly as the storefront keeps it out on the customer side.
@@ -68,9 +75,13 @@ export class AdminOrdersController {
    * working from a sixty-second-old queue will both pick the same order.
    */
   @Get()
+  @AllowFulfillment()
   @ApiOperation({ summary: "Browse orders: filter by status, method, date, free text." })
-  async list(@Query() query: AdminOrderQueryDto): Promise<AdminOrderList> {
-    return this.adminOrdersService.list(query);
+  async list(
+    @Query() query: AdminOrderQueryDto,
+    @CurrentAdmin() admin: AccessClaims,
+  ): Promise<AdminOrderList> {
+    return this.adminOrdersService.list(query, admin);
   }
 
   /**
@@ -91,12 +102,14 @@ export class AdminOrdersController {
    * open to STAFF.
    */
   @Get("export.csv")
+  @AllowFulfillment()
   @ApiOperation({ summary: "Export the filtered orders as a Pathao bulk-order CSV." })
   async exportPathaoCsv(
     @Query() query: AdminOrderQueryDto,
+    @CurrentAdmin() admin: AccessClaims,
     @Res({ passthrough: true }) response: Response,
   ): Promise<string> {
-    const csv = await this.adminOrdersService.exportPathaoCsv(query);
+    const csv = await this.adminOrdersService.exportPathaoCsv(query, admin);
     const stamp = new Date().toISOString().slice(0, 10);
 
     response.setHeader("content-type", "text/csv; charset=utf-8");
@@ -106,9 +119,13 @@ export class AdminOrdersController {
   }
 
   @Get(":orderNumber")
+  @AllowFulfillment()
   @ApiOperation({ summary: "Full order, with payments and the transitions it allows." })
-  async detail(@Param("orderNumber") orderNumber: string): Promise<AdminOrderDetail> {
-    return this.adminOrdersService.detail(orderNumber);
+  async detail(
+    @Param("orderNumber") orderNumber: string,
+    @CurrentAdmin() admin: AccessClaims,
+  ): Promise<AdminOrderDetail> {
+    return this.adminOrdersService.detail(orderNumber, admin);
   }
 
   /**
@@ -147,6 +164,7 @@ export class AdminOrdersController {
    * guessing and refetching.
    */
   @Post(":orderNumber/transition")
+  @AllowFulfillment()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Move an order to a new status, through the state machine." })
   async transition(
@@ -255,6 +273,9 @@ export class AdminOrdersController {
    * existing resource, and nothing is created.
    */
   @Patch(":orderNumber/note")
+  // Open to the packing table: it is how a packer tells the owner an address
+  // is unclear or a copy is damaged, without being able to act on the order.
+  @AllowFulfillment()
   @ApiOperation({ summary: "Replace the internal note. Previous value goes to the audit log." })
   async setNote(
     @Param("orderNumber") orderNumber: string,
