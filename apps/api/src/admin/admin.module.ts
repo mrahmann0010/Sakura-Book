@@ -23,6 +23,7 @@ import { AdminReviewsController, AdminReviewsService } from "./reviews";
 import { AdminSettingsController, AdminSettingsService } from "./settings";
 import { AdminSmsController, AdminSmsService } from "./sms";
 import { AdminStockController, AdminStockService } from "./stock";
+import { AdminUsersController, AdminUsersService } from "./users";
 import {
   AdminWaitlistAllocationService,
   AdminWaitlistController,
@@ -121,6 +122,7 @@ import {
     AdminStockController,
     AdminReviewsController,
     AdminSmsController,
+    AdminUsersController,
   ],
   providers: [
     AdminAuthService,
@@ -136,6 +138,7 @@ import {
     AdminStockService,
     AdminReviewsService,
     AdminSmsService,
+    AdminUsersService,
     { provide: APP_GUARD, useClass: AdminJwtGuard },
     { provide: APP_GUARD, useClass: AdminRolesGuard },
   ],

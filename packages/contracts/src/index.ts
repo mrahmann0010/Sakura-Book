@@ -26,6 +26,7 @@ export * from "./order";
 export * from "./shipping";
 export * from "./bd-geo";
 export * from "./admin-auth";
+export * from "./admin-users";
 export * from "./admin-order";
 export * from "./admin-settings";
 export * from "./admin-dashboard";
