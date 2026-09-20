@@ -400,7 +400,7 @@
       "cancellation": {
         "title": "1. Order Cancellation & Refund",
         "body": [
-          "For prepaid orders, if an order is cancelled before delivery, the amount paid by the customer will be refunded, subject to eligibility.",
+          "For prepaid orders, a cancellation request must reach us before the book is handed over to the courier service. If you notify us within that window, the amount paid will be refunded. Once the book has been handed to the courier, cancellation requests can no longer be accepted.",
           "If we are unable to fulfill an order for any reason, or fail to deliver the order within the promised timeframe, the amount paid by the customer will be processed for a refund."
         ]
       },
