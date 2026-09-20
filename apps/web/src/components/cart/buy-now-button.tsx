@@ -3,7 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 
-import { Button } from "@/components/ui";
+import { BagIcon, Button } from "@/components/ui";
 import { useCart } from "@/hooks/use-cart";
 import { useMounted } from "@/hooks/use-mounted";
 import { routes } from "@/lib/routes";
@@ -33,6 +33,7 @@ export function BuyNowButton({
   size = "sm",
   variant = "secondary",
   block = false,
+  icon = false,
 }: {
   bookId: string;
   /** Spoken but not shown — see `AddToCartButton`'s `title` for why. */
@@ -55,6 +56,14 @@ export function BuyNowButton({
    */
   variant?: "primary" | "secondary";
   block?: boolean;
+  /**
+   * Draws the bag glyph before the label. Off by default, and deliberately
+   * opt-in rather than always-on: the grid call sites render this at `sm`
+   * inside a card that is about 160pt wide on a phone, where an 18px glyph
+   * plus its gap is enough to wrap a Bangla label onto a second line. The
+   * book page has a full-width button and the room for it.
+   */
+  icon?: boolean;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -87,6 +96,10 @@ export function BuyNowButton({
       variant={variant}
       size={size}
       block={block}
+      /* Only on the live button. The sold-out and coming-soon branches above
+         stay wordmark-only on purpose: a bag on a control that cannot be
+         pressed offers a purchase the shop cannot complete. */
+      leading={icon ? <BagIcon /> : undefined}
       onClick={() => {
         /* Already in the cart means no add, and so no `add_to_cart` — the
            book was counted when it went in, and counting it again on every

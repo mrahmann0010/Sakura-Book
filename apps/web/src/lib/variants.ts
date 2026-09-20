@@ -33,6 +33,20 @@ export const button = cva(
         secondary:
           "bg-surface text-ink border border-rule hover:border-ink disabled:bg-page disabled:text-muted disabled:border-rule",
         ghost: "bg-transparent text-secondary hover:bg-tint hover:text-ink disabled:text-muted",
+        /* The companion action beside a primary — where `secondary` cannot go.
+           `secondary` fills with `surface`, so inside a Card, which is also
+           `surface`, its fill is invisible and all that remains is a `rule`
+           hairline at roughly 9% contrast against white. On the cream `page`
+           that variant reads fine; on a white card it disappears, which is
+           exactly what happened to "Read a sample" under Buy Now.
+
+           So: a `tint` fill, which is a real block against both surfaces, and
+           the accent carried as a 1px border and the label rather than a
+           second solid slab. Against principle 02 this is still one primary —
+           filled clay outranks outlined clay the way it does in any two-tier
+           button set — but it is the closest this file comes to the line, and
+           it belongs to a screen with one buy button, not to a grid. */
+        soft: "bg-tint text-clay-deep border border-clay hover:bg-rule hover:text-clay disabled:bg-page disabled:text-muted disabled:border-rule",
         destructive: "bg-transparent text-clay hover:bg-tint disabled:text-muted",
       },
       size: {

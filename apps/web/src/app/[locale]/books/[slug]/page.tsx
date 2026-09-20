@@ -203,17 +203,31 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
           size="md"
           variant="primary"
           block
+          /* The bag glyph, which the grid call sites leave off — see the
+             `icon` prop. Here the button is full width and the label has
+             room beside it, and a label alone on a card this sparse gave
+             the page's one purchase control nothing to be recognised by
+             before it is read. */
+          icon
         />
 
         {/* Read-before-you-buy, under the purchase control rather than above
-            it: it is the quieter question, and a ghost control leaves Buy Now
-            as the card's one primary (§2). Renders nothing when the shop has
-            not uploaded a sample, so the card does not grow a dead row. */}
+            it: it is the quieter question, and an outline control leaves Buy
+            Now as the card's one clay primary (§2). Renders nothing when the
+            shop has not uploaded a sample, so the card does not grow a dead
+            row.
+
+            `soft`, against the component's ghost default: a borderless grey
+            label sitting under a solid clay button had no edge to it and was
+            being missed entirely, and `secondary` did not fix it — its white
+            fill is this Card's own colour. Reading a few pages is how someone
+            decides on a title they have not seen in a shop, so it has to look
+            pressable. See the prop's note and variants.ts. */}
         {/* The sample is handed to the reader as this shop's own
             `/api/files/…` path, never the storage provider's URL — which also
             makes it a same-origin fetch, so the reader no longer relies on the
             bucket's CORS header. See lib/storage-url.ts. */}
-        <BookPreview pdfUrl={fileUrl(book.pdfUrl)} bookTitle={book.title} />
+        <BookPreview pdfUrl={fileUrl(book.pdfUrl)} bookTitle={book.title} variant="soft" />
       </div>
 
       {/* Reassurance at the decision moment — the same delivery facts the

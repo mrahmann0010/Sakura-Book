@@ -24,6 +24,8 @@ export type { CopyButtonProps } from "./copy-button";
 export { Field, FieldFrame } from "./field";
 export type { FieldFrameProps, FieldProps } from "./field";
 
+export { BagIcon, BookOpenIcon } from "./icons";
+
 export { IconButton } from "./icon-button";
 export type { IconButtonProps } from "./icon-button";
 

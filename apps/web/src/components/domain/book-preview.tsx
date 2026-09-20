@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { Button, Spinner } from "@/components/ui";
+import { BookOpenIcon, Button, Spinner } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 /* pdf.js is around half a megabyte and belongs to nobody who does not open a
@@ -47,10 +47,29 @@ export function BookPreview({
   pdfUrl,
   /** Titles the reader, so the dialog says which book this is a sample of. */
   bookTitle,
+  /**
+   * How loud the trigger is. Ghost by default — it is the quieter question
+   * wherever this is dropped into a dense layout — but `soft` where the
+   * sample is a real part of the decision, as it is on the book page.
+   *
+   * Ghost is `bg-transparent text-secondary` with no border, so beneath a
+   * solid clay Buy Now on a white card it had no edge and no ink: grey text
+   * centred at full width, directly after the highest-contrast thing on the
+   * page. It read as a caption under the button rather than a second control,
+   * which is the wrong answer for the one thing that lets a reader judge an
+   * unfamiliar title before paying.
+   *
+   * `soft` rather than `secondary`, which was the first attempt and did not
+   * work: `secondary` fills with `surface` and the buy card is a `surface`
+   * Card, so the fill cancelled out and left a `rule` hairline nobody could
+   * see. `soft` brings a `tint` fill and a clay border — see variants.ts.
+   */
+  variant = "ghost",
   className,
 }: {
   pdfUrl: string | null;
   bookTitle: string;
+  variant?: "ghost" | "secondary" | "soft";
   className?: string;
 }) {
   const { t } = useTranslation();
@@ -109,9 +128,13 @@ export function BookPreview({
     <>
       <Button
         type="button"
-        variant="ghost"
+        variant={variant}
         size="md"
         block
+        /* An open book, not a closed one: the page already carries a cover
+           image, and the two shapes are told apart at 18px only by the spine
+           down the middle of this one. */
+        leading={<BookOpenIcon />}
         aria-haspopup="dialog"
         onClick={(event) => {
           returnFocusRef.current = event.currentTarget;
