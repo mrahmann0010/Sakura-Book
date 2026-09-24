@@ -1,7 +1,11 @@
 import { gaMeasurementId } from "@/lib/analytics";
+import { metaPixelId } from "@/lib/meta-pixel";
 
 /**
- * The Google Analytics measurement ID, read at request time.
+ * The Google Analytics measurement ID and the Meta Pixel ID, read at request
+ * time. Both IDs travel together because both tags face the identical
+ * build-time problem described below, and one small request is cheaper than
+ * two identical ones.
  *
  * This route exists because of *when* the ID is read, not because the browser
  * could not have been handed it directly. Rendering it into the page from the
@@ -21,15 +25,15 @@ import { gaMeasurementId } from "@/lib/analytics";
  * hosting panel gives you. This is the same trade the payment numbers already
  * make by coming from `GET /payments/numbers` rather than a baked-in env var.
  *
- * The ID is not a secret — it ships in the page source of every GA site on the
- * web — so there is nothing to protect here beyond not inventing a value when
- * there isn't one.
+ * Neither ID is a secret — both ship in the page source of every site that
+ * uses them — so there is nothing to protect here beyond not inventing a
+ * value when there isn't one.
  */
 export const dynamic = "force-dynamic";
 
 export function GET() {
   return Response.json(
-    { measurementId: gaMeasurementId() ?? null },
+    { measurementId: gaMeasurementId() ?? null, pixelId: metaPixelId() ?? null },
     {
       /* A CDN or proxy caching this would pin the ID for everyone until the
          cache expired, which is exactly the redeploy-free change this route

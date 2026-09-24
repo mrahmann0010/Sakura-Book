@@ -3,6 +3,12 @@ import type { Order } from "@sakura/contracts";
 import { locales } from "@/i18n/settings";
 
 import type { CartLine, CartTotals } from "./cart";
+import {
+  pixelAddToCart,
+  pixelInitiateCheckout,
+  pixelPurchase,
+  pixelViewContent,
+} from "./meta-pixel";
 import { CURRENCY } from "./money";
 
 /* --------------------------------------------------------------------------
@@ -127,6 +133,12 @@ export function isTrackablePath(pathname: string): boolean {
       client-side guess at revenue and the order's is the money. A GA property
       whose revenue disagrees with the shop's own books is worse than one with
       no revenue in it at all.
+
+   These four also fan out to the Meta Pixel (lib/meta-pixel.ts). The fan-out
+   lives here, inside the existing functions, rather than at each call site:
+   one business event is one call, the two vendors cannot drift apart, and a
+   page that starts sending `add_to_cart` gets both without remembering to.
+   The unit conversion above happens once and both are handed the result.
    -------------------------------------------------------------------------- */
 
 /** Minor units → the decimal GA4 expects. Rounded, because 1/3 of a taka is
@@ -179,6 +191,7 @@ export function trackViewItem(book: { id: string; title: string; priceCents: num
     value: major(book.priceCents),
     items: [{ item_id: book.id, item_name: book.title, price: major(book.priceCents), quantity: 1 }],
   });
+  pixelViewContent({ id: book.id, title: book.title, price: major(book.priceCents) });
 }
 
 /**
@@ -212,6 +225,10 @@ export function trackAddToCart(item: {
       },
     ],
   });
+  pixelAddToCart(
+    { id: item.id, title: item.title, price, quantity: item.quantity },
+    CURRENCY,
+  );
 }
 
 /** Removal from the cart page, and the stepper reaching zero. */
@@ -239,6 +256,16 @@ export function trackBeginCheckout(cart: CartTotals & { lines: CartLine[] }) {
     value: major(cart.subtotal),
     items: itemsFromCartLines(cart.lines),
   });
+  pixelInitiateCheckout(
+    cart.lines.map((line) => ({
+      id: line.book.id,
+      title: line.book.title,
+      price: major(line.unitPrice),
+      quantity: line.quantity,
+    })),
+    CURRENCY,
+    major(cart.subtotal),
+  );
 }
 
 /**
@@ -268,5 +295,19 @@ export function trackPurchase(order: Order) {
     shipping: major(order.deliveryCents),
     ...(order.couponCode ? { coupon: order.couponCode } : {}),
     items: itemsFromOrderLines(order.lines),
+  });
+
+  /* Built from the same order rows GA is given, so the two properties can
+     never report different revenue for one sale. */
+  pixelPurchase({
+    orderNumber: order.orderNumber,
+    currency: order.currency,
+    value: major(order.totalCents),
+    items: itemsFromOrderLines(order.lines).map((item) => ({
+      id: item.item_id,
+      title: item.item_name,
+      price: item.price,
+      quantity: item.quantity,
+    })),
   });
 }
