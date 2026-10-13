@@ -69,7 +69,7 @@ export function orderConfirmationEmail(order: OrderRow): { subject: string; html
 
       <p style="margin-top:24px;">
         যেকোনো প্রশ্নে এই ইমেইলে রিপ্লাই করুন অথবা লিখুন
-        <a href="mailto:info@nihonovaacademy.com" style="color:#1a1a1a;">info@nihonovaacademy.com</a>-এ।
+        <a href="mailto:contact@nihonovaacademy.com" style="color:#1a1a1a;">contact@nihonovaacademy.com</a>-এ।
       </p>
 
       <p>শুভকামনায়,<br/>Nihonova Academy</p>

@@ -354,7 +354,7 @@ export function ReceiptSheet({ order }: { order: Order }) {
  * visit, so a postal address on a receipt would be either a private home or
  * an invention, and both are worse than the email that actually answers.
  */
-const SHOP_EMAIL = "nihonovaacademy@gmail.com";
+const SHOP_EMAIL = "contact@nihonovaacademy.com";
 
 /* --------------------------------------------------------------------------
    Ink on paper.

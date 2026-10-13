@@ -186,7 +186,7 @@ export const footerColumns = [
     heading: "Contact",
     links: [
       { href: "/contact", label: "Contact" },
-      { href: "mailto:info@nihonovaacademy.com", label: "info@nihonovaacademy.com" },
+      { href: "mailto:contact@nihonovaacademy.com", label: "contact@nihonovaacademy.com" },
       {
         href: "https://maps.google.com/?q=Uttara,+Dhaka+1230",
         label: "Uttara, Dhaka 1230",

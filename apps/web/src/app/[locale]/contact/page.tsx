@@ -8,7 +8,7 @@ import { footerColumns } from "@/lib/books";
 import { localizeLinks, routes } from "@/lib/routes";
 import { localeAlternates } from "@/lib/site";
 
-const email = "info@nihonovaacademy.com";
+const email = "contact@nihonovaacademy.com";
 const messengerHref = "https://m.me/nihonovaacademy";
 const facebookHref = "https://www.facebook.com/nihonovaacademy/";
 
