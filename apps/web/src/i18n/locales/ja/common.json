@@ -562,6 +562,9 @@
     "messenger": {
       "label": "Messenger",
       "action": "Facebookでメッセージを送る"
+    },
+    "facebook": {
+      "label": "Facebook"
     }
   },
   "notify": {

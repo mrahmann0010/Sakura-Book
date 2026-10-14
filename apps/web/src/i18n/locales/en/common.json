@@ -564,6 +564,9 @@
     "messenger": {
       "label": "Messenger",
       "action": "Message us on Facebook"
+    },
+    "facebook": {
+      "label": "Facebook"
     }
   },
   "notify": {

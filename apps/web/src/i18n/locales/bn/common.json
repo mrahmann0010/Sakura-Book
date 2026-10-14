@@ -564,6 +564,9 @@
     "messenger": {
       "label": "মেসেঞ্জার",
       "action": "ফেসবুকে মেসেজ করুন"
+    },
+    "facebook": {
+      "label": "ফেসবুক"
     }
   },
   "notify": {
