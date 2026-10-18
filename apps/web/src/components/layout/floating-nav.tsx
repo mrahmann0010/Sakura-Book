@@ -397,8 +397,16 @@ export function FloatingNav({
                        the long "Track Order" label, the locale pill and the
                        Cart link all arrive at once and the bar is still only
                        640 wide — the gap between labels is what pays for them.
-                       It opens back up to 14px at `lg`, where there is room. */
-                    "text-13.5 rounded-pill flex items-center gap-1.5 px-1.5 py-2 whitespace-nowrap lg:px-3.5",
+                       It opens back up to 14px at `lg`, where there is room.
+
+                       Below `sm` the padding goes back up to 8px: there the
+                       wordmark is hidden, the labels are the short forms and
+                       the only other things in the bar are two 32px pucks, so
+                       the items can afford to breathe. The step is a bump DOWN
+                       at `sm`, not up — unusual, but it matches where the
+                       pressure actually is rather than widening the one range
+                       that has none to spare. */
+                    "text-13.5 rounded-pill flex items-center gap-1.5 px-2 py-2 whitespace-nowrap sm:px-1.5 lg:px-3.5",
                     "transition-colors duration-(--duration-press)",
                     /* The base :focus-visible rule squares the outline to
                      --radius-xs; the pill's radius is restated so the ring
