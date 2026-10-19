@@ -93,7 +93,7 @@ describe("orderValuesFrom", () => {
         phone: "01700000000",
         address: "12 Green Road",
         city: "Dhaka",
-        zone: "dhanmondi",
+        zone: "dhaka-city",
         method: "manual-transfer",
         ...customer,
       },
@@ -110,7 +110,7 @@ describe("orderValuesFrom", () => {
 
   it("snapshots the zone, its tier and the parcel weight onto the address", () => {
     const values = orderValuesFrom(
-      request({ zone: "savar", city: "Faridpur", region: "inside-dhaka" }),
+      request({ zone: "savar-keraniganj", city: "Faridpur", region: "inside-dhaka" }),
       { ...(priced as object), parcelWeightGrams: 498 } as never,
       "idem-z",
     );
@@ -119,7 +119,7 @@ describe("orderValuesFrom", () => {
        a payload claiming inside-Dhaka for a Savar address must not be what the
        order records. */
     expect(values.shippingAddress).toMatchObject({
-      zone: "savar",
+      zone: "savar-keraniganj",
       tier: "SUBURB",
       region: "dhaka-suburb",
       city: "Dhaka",

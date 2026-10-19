@@ -429,23 +429,13 @@ describe("amountToCollect", () => {
 });
 
 describe("orders placed with a delivery zone", () => {
-  it("takes the zone from the list rather than reading it out of the address", () => {
-    // An address line that would mislead the guesser: its last part is a
-    // landmark, not a zone.
+  it("takes the zone from the thana the customer typed, not the price zone", () => {
+    // "Dhaka city" is a price tier, not a Pathao zone; the typed thana is.
     const place = recipientPlace(
-      shipping({ address: "House 4, near Star Kabab", zone: "dhanmondi", area: "Road 27" }),
+      shipping({ zone: "dhaka-city", upazila: "Dhanmondi", area: "Road 27" }),
     );
 
     expect(place).toEqual({ zone: "Dhanmondi", area: "Road 27" });
-  });
-
-  it("falls back to the typed upazila for a whole-district pick outside Dhaka", () => {
-    // "Sylhet" names the city, not Pathao's zone, so it is not a zone answer.
-    const place = recipientPlace(
-      shipping({ city: "Sylhet", zone: "sylhet", upazila: "Beanibazar", area: "" }),
-    );
-
-    expect(place).toEqual({ zone: "Beanibazar", area: "" });
   });
 
   it("writes the weight checkout priced the parcel at", () => {

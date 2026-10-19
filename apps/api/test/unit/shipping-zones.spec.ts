@@ -9,6 +9,7 @@ import {
   tierOfRegion,
   tierOfZone,
   zoneById,
+  zonesInDistrict,
 } from "@sakura/contracts";
 import { describe, expect, it } from "vitest";
 
@@ -50,8 +51,26 @@ describe("the zone list", () => {
     // and the division-based rule charged them the inside-Dhaka rate.
     expect(tierOfZone("faridpur")).toBe("OSD");
     expect(tierOfZone("tangail")).toBe("OSD");
-    expect(tierOfZone("savar")).toBe("SUBURB");
-    expect(tierOfZone("mirpur")).toBe("ISD");
+    expect(tierOfZone("savar-keraniganj")).toBe("SUBURB");
+    expect(tierOfZone("dhaka-city")).toBe("ISD");
+  });
+
+  it("splits only the districts whose price changes inside them", () => {
+    // Dhaka: city, Savar/Keraniganj ring, Dohar/Nawabganj. Munshiganj:
+    // Gazaria or the rest. Gazipur and Narayanganj are one suburb price each.
+    expect(zonesInDistrict("Dhaka").map((zone) => zone.tier)).toEqual(["ISD", "SUBURB", "OSD"]);
+    expect(
+      zonesInDistrict("Munshiganj")
+        .map((zone) => zone.tier)
+        .sort(),
+    ).toEqual(["OSD", "SUBURB"]);
+    expect(zonesInDistrict("Gazipur").map((zone) => zone.tier)).toEqual(["SUBURB"]);
+    expect(zonesInDistrict("Narayanganj").map((zone) => zone.tier)).toEqual(["SUBURB"]);
+
+    for (const district of districts) {
+      if (district === "Dhaka" || district === "Munshiganj") continue;
+      expect(zonesInDistrict(district), district).toHaveLength(1);
+    }
   });
 
   it("maps each tier to its delivery_regions slug and back", () => {

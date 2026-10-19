@@ -3,7 +3,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
   RATE_LADDER,
-  SHIPPING_ZONES,
   shippingCentsFor,
   shippingTiers,
   TIER_REGION_SLUG,
@@ -47,9 +46,12 @@ const TIER_NAMES: Record<ShippingTier, string> = {
 
 const TIER_SORT: Record<ShippingTier, number> = { ISD: 1, SUBURB: 2, OSD: 3 };
 
-const ZONE_COUNTS = Object.fromEntries(
-  shippingTiers.map((tier) => [tier, SHIPPING_ZONES.filter((zone) => zone.tier === tier).length]),
-) as Record<ShippingTier, number>;
+/** What each tier covers, as checkout offers it — see shipping-zones. */
+const TIER_COVERS: Record<ShippingTier, string> = {
+  ISD: "Dhaka city (City Corporation)",
+  SUBURB: "Savar, Ashulia, Keraniganj, Dhamrai, Gazipur, Narayanganj, Gazaria",
+  OSD: "Every other district, plus Dohar and Nawabganj",
+};
 
 function money(cents: number): string {
   return `৳${(cents / 100).toLocaleString("en-US")}`;
@@ -258,7 +260,7 @@ export default function AdminShippingSettingsPage() {
                   <div key={tier} className="flex flex-col gap-1.5">
                     <div className="flex items-end gap-3">
                       <Input
-                        label={`${TIER_NAMES[tier]} · ${ZONE_COUNTS[tier]} areas`}
+                        label={TIER_NAMES[tier]}
                         inputMode="decimal"
                         placeholder={String(RATE_LADDER[tier].startCents / 100)}
                         value={regionRates[slug] ?? ""}
@@ -277,6 +279,7 @@ export default function AdminShippingSettingsPage() {
                         {savingSlug === slug ? "Saving…" : region ? "Save" : "Set up"}
                       </Button>
                     </div>
+                    <p className="text-caption text-secondary">{TIER_COVERS[tier]}</p>
                     <p className="text-caption text-secondary">
                       {Number.isNaN(preview) ? "Enter a number." : ladderLine(tier, preview)}
                       {region && !region.isActive ? " · switched off, checkout refuses it" : ""}
