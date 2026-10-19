@@ -1,3 +1,4 @@
+import type { ShippingTier } from "@sakura/contracts";
 import { relations, sql } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { orderStatusEnum, paymentMethodEnum, paymentProviderEnum } from "../enums";
@@ -24,8 +25,28 @@ import { payments } from "./payment";
 export type ShippingAddress = {
   address: string;
   city: string;
-  /** Region slug, as sent — validated against the regions table at checkout. */
+  /**
+   * The tier's `delivery_regions` slug — `inside-dhaka`, `dhaka-suburb` or
+   * `outside-dhaka`. Derived from `zone` at checkout since zones shipped; sent
+   * by the customer before that.
+   */
   region: string;
+
+  /**
+   * The delivery zone the order was priced for, by id from the shared zone
+   * list, and the tier it fell in at the time.
+   *
+   * The tier is denormalised on purpose. The zone list will be edited — Pathao
+   * moves zones between tiers as it opens hubs — and "why was this order ৳130?"
+   * has to be answerable six months after it has been. The weight is kept for
+   * the same reason, and because it is the figure the courier manifest wants.
+   *
+   * In the jsonb rather than columns of their own so that this shipped without
+   * a schema migration. Absent on every order placed before zones existed.
+   */
+  zone?: string;
+  tier?: ShippingTier;
+  parcelWeightGrams?: number;
 
   /**
    * The address form's own fields, stored beside the line they compose.

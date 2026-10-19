@@ -119,13 +119,12 @@ export function CheckoutView({
     mode: "onBlur",
   });
 
-  /* Only the delivery fields — `region` is derived from the address picker
-     rather than typed, so it validates along with the rest of the address
-     but never blocks Next on its own before a division is chosen. */
-  const deliveryFields = ["fullName", "email", "phone", "address", "city", "region"] as const;
+  /* Only the delivery fields. `city` and `region` are not among them: the
+     server derives both from `zone`, so `zone` is the one that has to pass. */
+  const deliveryFields = ["fullName", "email", "phone", "zone", "address"] as const;
 
-  /* Which form field each name points at on screen. `city` and `region` are
-     never typed — the district and division pickers write them — so the toast
+  /* Which form field each name points at on screen. `zone` is never typed as
+     such — the area picker writes it — so the toast
      names the control the shopper has to touch, not the schema field behind
      it, which they would look for and never find. */
   const fieldLabels: Partial<Record<keyof CheckoutValues, string>> = {
@@ -133,8 +132,7 @@ export function CheckoutView({
     email: t("checkout.shipping.email"),
     phone: t("checkout.shipping.phone"),
     address: t("checkout.shipping.address"),
-    city: t("checkout.shipping.district"),
-    region: t("checkout.shipping.division"),
+    zone: t("checkout.shipping.zone"),
     provider: t("checkout.payment.mobileMoneyLegend"),
     senderNumber: t("checkout.payment.senderNumber"),
     transactionId: t("checkout.payment.transactionId"),
@@ -180,14 +178,12 @@ export function CheckoutView({
   /* useWatch rather than `watch()`: watch returns a fresh function each render,
      which opts the whole component out of the React Compiler's memoisation. */
   const method = useWatch({ control, name: "method" }) as AcceptedPaymentMethod;
-  /* The region the address form derived from the chosen division. */
-  const region = useWatch({ control, name: "region" });
-  /* Whether the shopper has actually chosen a division. Not derivable from
-     `region`: checkoutDefaults seeds it to "inside-dhaka", so it is a real
-     zone from the first render and would price delivery before anyone said
-     where the books are going. ShippingFields reports the choice up. */
-  const [divisionChosen, setDivisionChosen] = useState(false);
-  const cart = useCart(divisionChosen ? region || undefined : undefined);
+  /* The delivery zone picked in the address form, "" until one is. Postage
+     is quoted for it only once it exists — before that the quote carries the
+     flat placeholder rate, which the rail labels as pending. */
+  const zone = useWatch({ control, name: "zone" });
+  const zoneChosen = Boolean(zone);
+  const cart = useCart(zone || undefined);
 
   useCartStepEvent("begin_checkout", cart);
 
@@ -270,20 +266,18 @@ export function CheckoutView({
      cannot end up formatted for a different locale than the total below it. */
   const money = intlLocale(locale);
 
-  /* Delivery is priced per zone, and the zone comes from the division the
-     address picker resolves. Until that happens the quote is still carrying
-     the flat placeholder rate, so the rail says so instead of showing a
-     figure the shopper would read as final — and the total, which cannot be
-     known without it, waits with it. Both fill in together the moment a
-     division is chosen.
+  /* Delivery is priced per zone and parcel weight. Until a zone is picked the
+     quote is still carrying the flat placeholder rate, so the rail says so
+     instead of showing a figure the shopper would read as final — and the
+     total, which cannot be known without it, waits with it.
 
-     `cart.priced` is the other half of that, and the half this was missing:
-     choosing a division starts a requote, and until it lands `keepPreviousData`
-     is still serving the region-less quote — the flat rate, now rendered as
-     fact because a division *has* been chosen. If that requote fails it is
-     served indefinitely. So the figure waits for the quote that actually
-     priced this region, not merely for the division to be picked. */
-  const deliveryKnown = divisionChosen && cart.priced;
+     `cart.priced` is the other half: picking a zone starts a requote, and
+     until it lands `keepPreviousData` is still serving the zone-less quote —
+     the flat rate, now rendered as fact because a zone *has* been chosen. If
+     that requote fails it is served indefinitely. So the figure waits for the
+     quote that actually priced this zone, not merely for the zone to be
+     picked. */
+  const deliveryKnown = zoneChosen && cart.priced;
 
   const rows = summaryLines(
     cart,
@@ -410,7 +404,6 @@ export function CheckoutView({
                 register={register}
                 errors={errors}
                 setValue={setValue}
-                onDivisionChange={(division) => setDivisionChosen(Boolean(division))}
               />
             </div>
 
@@ -482,7 +475,7 @@ export function CheckoutView({
       </Shell>
 
       <StickyBar
-        /* The total only earns its line once there is one. Before a division
+        /* The total only earns its line once there is one. Before a zone
            the figure is "—", so on the address step the bar was spending a
            row, a gap and a hairline to say nothing while sitting on top of
            the form being typed into. It collapses to just the button there,
@@ -493,7 +486,7 @@ export function CheckoutView({
            only on the payment step. On a phone the docked bar sits on top of
            whatever is being typed, and three extra rows plus a hairline left
            the address form almost no room to work in. There is also nothing
-           to read yet: delivery has no figure until a division is chosen, so
+           to read yet: delivery has no figure until a zone is chosen, so
            on the delivery step the breakdown costs a third of the screen to
            say "not known". By the payment step it is priced, and it is the
            figure being typed into a banking app. */

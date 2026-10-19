@@ -1,14 +1,15 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { TIER_REGION_SLUG, zoneById } from "@sakura/contracts";
 import { useState } from "react";
 import type { FieldErrors, UseFormRegister, UseFormSetValue } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
-import { Eyebrow, Field, Input, Select, Textarea } from "@/components/ui";
-import { getShippingTerms } from "@/lib/api/shipping";
-import { bdDivisions, deliveryZoneFor, districtsFor } from "@/lib/bd-geo";
+import { Eyebrow, Input, Textarea } from "@/components/ui";
+import { divisionOfDistrict } from "@/lib/bd-geo";
 import type { CheckoutValues } from "@/lib/checkout";
+
+import { ZonePicker } from "./zone-picker";
 
 /* --------------------------------------------------------------------------
    The shipping half of the checkout form.
@@ -18,103 +19,79 @@ import type { CheckoutValues } from "@/lib/checkout";
    `register` and `errors` rather than owning a form: there is one form on the
    page, one submit, and one source of truth for validity.
 
-   The Bangladesh address block (Division → District → Upazila/Thana →
-   Area/Village → detailed address → post code) is client-side structure over
-   the existing `address` and `city` schema fields, not new schema fields:
-   division/district drive a cascading picker, and everything below it is
-   composed into `address`/`city` on change. That keeps the shared
-   checkoutSchema — validated identically by the API — untouched while the
-   customer still fills in a properly BD-shaped address. Upazila/Area stay
-   free text: there is no wired-in authoritative upazila list to drive a third
-   dropdown from.
+   The address block is built around the delivery zone — one searchable pick
+   from the shared zone list (@sakura/contracts' shipping-zones), which is
+   what postage is priced off and what the Pathao manifest is filled from.
+   Inside Dhaka and the suburbs the zone is the thana, so there is nothing
+   more to ask; outside Dhaka the zone is a whole district, so the upazila is
+   asked for as free text below it. Everything is then composed into the
+   single `address` line a customer and a rider read, with the parts kept
+   alongside it unjoined for the manifest.
    -------------------------------------------------------------------------- */
 
 export function ShippingFields({
   register,
   errors,
   setValue,
-  onDivisionChange,
 }: {
   register: UseFormRegister<CheckoutValues>;
   errors: FieldErrors<CheckoutValues>;
   setValue: UseFormSetValue<CheckoutValues>;
-  /**
-   * Fires with the chosen division, "" until one is.
-   *
-   * The recap needs to know whether a division has actually been picked, and
-   * `region` cannot tell it: that field is seeded to "inside-dhaka" by
-   * `checkoutDefaults`, so it is truthy before the shopper has chosen
-   * anything. This local state is the only honest signal, so it is reported
-   * up rather than re-derived.
-   */
-  onDivisionChange?: (division: string) => void;
 }) {
   const { t } = useTranslation();
 
-  /* Where the shop is shipping from right now — an admin setting, not a
-     constant, so the zone below tracks it instead of assuming Dhaka.
-     Defaults to "dhaka" while the request is in flight: the same value
-     WAREHOUSE_DIVISION itself defaults to, so an unloaded query and an
-     unconfigured shop compute the same (correct, for today) zone rather than
-     the form flashing a wrong one. */
-  const { data: terms } = useQuery({
-    queryKey: ["shipping-terms"],
-    queryFn: getShippingTerms,
-    staleTime: 5 * 60 * 1000,
-  });
-  const originDivision = terms?.originDivision ?? "dhaka";
-
-  const [division, setDivision] = useState("");
-  const [district, setDistrict] = useState("");
+  const [zoneId, setZoneId] = useState("");
   const [upazila, setUpazila] = useState("");
   const [area, setArea] = useState("");
   const [detail, setDetail] = useState("");
   const [postCode, setPostCode] = useState("");
 
-  const districts = districtsFor(division);
+  const zone = zoneById(zoneId);
+  /* A district-level pick names the city but not the thana — the case where
+     the upazila still has to be typed. */
+  const needsUpazila = zone ? zone.name === zone.city : false;
 
   function sync(next: {
-    division?: string;
-    district?: string;
+    zoneId?: string;
     upazila?: string;
     area?: string;
     detail?: string;
     postCode?: string;
   }) {
-    const divisionLabel =
-      bdDivisions.find((d) => d.value === (next.division ?? division))?.label ?? "";
+    const chosen = zoneById(next.zoneId ?? zoneId);
+    const districtLevel = chosen ? chosen.name === chosen.city : false;
     const merged = {
-      district: next.district ?? district,
-      upazila: next.upazila ?? upazila,
+      upazila: districtLevel ? (next.upazila ?? upazila) : "",
       area: next.area ?? area,
       detail: next.detail ?? detail,
       postCode: next.postCode ?? postCode,
     };
+    const city = chosen?.city ?? "";
+    const divisionLabel = chosen ? (divisionOfDistrict(city)?.label ?? "") : "";
+    /* Inside Dhaka the zone is the thana, so it takes the upazila's place in
+       the line; outside, the typed upazila does. English names on purpose —
+       this line is read by the rider, and the manifest is romanised anyway. */
+    const locality = districtLevel ? merged.upazila : (chosen?.name ?? "");
 
-    const zoneDivision = next.division ?? division;
+    setValue("zone", chosen?.id ?? "", { shouldValidate: true, shouldDirty: true });
+    /* Ignored by the API, which derives the tier from `zone` — sent so this
+       form still places orders against an API deployed before zones were,
+       which requires it. Deploy order: web first, then the API. */
+    setValue("region", chosen ? TIER_REGION_SLUG[chosen.tier] : "", { shouldDirty: true });
+    setValue("city", city, { shouldValidate: true, shouldDirty: true });
 
-    setValue("city", merged.district, { shouldValidate: true, shouldDirty: true });
-
-    /* The parts, kept beside the line they are joined into below.
-       `address` stays what a customer and a courier read; these are the same
-       facts unjoined, for the Pathao manifest, which needs district, upazila
-       and area as three columns. Sent rather than recovered by splitting
-       `address` back up — that cannot be made to work, because the join below
-       drops empty parts and the line above the district is the area on one
-       order and a house number on the next. */
+    /* The parts, kept beside the line they are joined into below — sent rather
+       than recovered by splitting `address` back up, which cannot be made to
+       work. */
     setValue("upazila", merged.upazila, { shouldDirty: true });
     setValue("area", merged.area, { shouldDirty: true });
     setValue("postCode", merged.postCode, { shouldDirty: true });
-    setValue("region", deliveryZoneFor(zoneDivision, originDivision), {
-      shouldValidate: true,
-      shouldDirty: true,
-    });
     setValue(
       "address",
       [
         merged.detail,
-        [merged.area, merged.upazila].filter(Boolean).join(", "),
-        [merged.district, divisionLabel].filter(Boolean).join(", "),
+        [merged.area, locality].filter(Boolean).join(", "),
+        [city, divisionLabel].filter((part, i, all) => part && all.indexOf(part) === i).join(", "),
         merged.postCode,
       ]
         .filter(Boolean)
@@ -163,45 +140,30 @@ export function ShippingFields({
           {...register("secondaryPhone")}
         />
 
-        <Select
-          label={t("checkout.shipping.division")}
-          options={[
-            { value: "", label: t("checkout.shipping.divisionPlaceholder"), disabled: true },
-            ...bdDivisions.map((d) => ({ value: d.value, label: d.label })),
-          ]}
-          value={division}
-          onChange={(e) => {
-            const value = e.target.value;
-            setDivision(value);
-            setDistrict("");
-            sync({ division: value, district: "" });
-            onDivisionChange?.(value);
-          }}
-        />
-        <Select
-          label={t("checkout.shipping.district")}
-          disabled={!division}
-          error={errors.city?.message}
-          options={[
-            { value: "", label: t("checkout.shipping.districtPlaceholder"), disabled: true },
-            ...districts.map((name) => ({ value: name, label: name })),
-          ]}
-          value={district}
-          onChange={(e) => {
-            const value = e.target.value;
-            setDistrict(value);
-            sync({ district: value });
+        <ZonePicker
+          label={t("checkout.shipping.zone")}
+          placeholder={t("checkout.shipping.zonePlaceholder")}
+          value={zoneId}
+          error={errors.zone?.message}
+          hint={
+            zone ? t(`checkout.shipping.tier.${zone.tier}`) : t("checkout.shipping.zonePending")
+          }
+          onChange={(next) => {
+            setZoneId(next.id);
+            sync({ zoneId: next.id });
           }}
         />
 
-        <Input
-          label={t("checkout.shipping.upazila")}
-          value={upazila}
-          onChange={(e) => {
-            setUpazila(e.target.value);
-            sync({ upazila: e.target.value });
-          }}
-        />
+        {needsUpazila ? (
+          <Input
+            label={t("checkout.shipping.upazila")}
+            value={upazila}
+            onChange={(e) => {
+              setUpazila(e.target.value);
+              sync({ upazila: e.target.value });
+            }}
+          />
+        ) : null}
         <Input
           label={t("checkout.shipping.area")}
           value={area}
@@ -235,18 +197,6 @@ export function ShippingFields({
             sync({ postCode: e.target.value });
           }}
         />
-        <Field label={t("checkout.shipping.region")} error={errors.region?.message}>
-          <p className="text-body">
-            {division
-              ? t(
-                  deliveryZoneFor(division, originDivision) === "inside-dhaka"
-                    ? "checkout.shipping.zoneInsideDhaka"
-                    : "checkout.shipping.zoneOutsideDhaka",
-                )
-              : t("checkout.shipping.zonePending")}
-          </p>
-        </Field>
-
         <Textarea
           label={t("checkout.shipping.notes")}
           hint={t("checkout.shipping.notesHint")}

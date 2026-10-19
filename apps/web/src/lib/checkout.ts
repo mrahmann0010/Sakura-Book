@@ -34,15 +34,17 @@ import { acceptedPaymentMethods, type PaymentMethod } from "@sakura/contracts";
 export const availablePaymentMethods: readonly PaymentMethod[] = acceptedPaymentMethods;
 
 /**
- * Delivery zones. Slugs match the `delivery_regions` rows seeded in
- * apps/api/src/db/seed/reference.ts and are validated server-side against
- * that table — this is the label lookup, not the source of truth.
+ * Delivery tiers by their `delivery_regions` slug — the value an order stores
+ * as `region`. Slugs match TIER_REGION_SLUG in @sakura/contracts and the rows
+ * seeded in apps/api/src/db/seed/reference.ts; this is the label lookup, not
+ * the source of truth.
  *
- * The customer no longer picks one: `deliveryZoneFor` in ./bd-geo derives it
- * from the division they select in the address form.
+ * The customer never picks one: the server derives it from the zone they
+ * choose in the address form.
  */
 export const regions = [
   { value: "inside-dhaka", label: "Inside Dhaka" },
+  { value: "dhaka-suburb", label: "Dhaka suburbs" },
   { value: "outside-dhaka", label: "Outside Dhaka" },
 ] as const;
 

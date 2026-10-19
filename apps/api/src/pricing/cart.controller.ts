@@ -44,6 +44,7 @@ export class CartController {
   async quote(@Body() body: CartQuoteDto): Promise<CartQuote> {
     const priced = await this.pricingService.priceCart(body.items, {
       couponCode: body.couponCode,
+      zone: body.zone,
       region: body.region,
       holding: await this.inviteHolding(body.inviteToken),
     });

@@ -1,5 +1,11 @@
 import { Injectable, Logger } from "@nestjs/common";
-import type { Order, PlaceOrderRequest } from "@sakura/contracts";
+import {
+  TIER_REGION_SLUG,
+  zoneById,
+  type Order,
+  type PlaceOrderRequest,
+  type ShippingZone,
+} from "@sakura/contracts";
 import { eq, type SQL } from "drizzle-orm";
 import { toPostgresError } from "../common/errors";
 import { CouponsService } from "../coupons";
@@ -266,14 +272,12 @@ export class CheckoutService {
    * specific basket for a specific total.
    */
   private async repriceForOrder(request: PlaceOrderRequest, tx: Transaction): Promise<PricedCart> {
-    /* Strict region check, and it has to happen before pricing rather than
-       alongside it. PricingService treats an unrecognised region as "not
-       chosen yet" and quotes the flat rate, which is right for a cart page
-       that renders before the address step — but here the region is a field
-       the customer filled in, and quoting flat-rate postage to somewhere we do
-       not deliver would write an undeliverable order at a price we invented.
-       The throw rolls the transaction back like any other refusal. */
-    await this.regionsService.require(request.customer.region, tx);
+    /* Strict tier check, and it has to happen before pricing rather than
+       alongside it. The zone id is already checked against the shared list by
+       the schema; what it cannot know is whether staff have switched that
+       tier off, and pricing would quote it regardless. The throw rolls the
+       transaction back like any other refusal. */
+    await this.regionsService.requireTier(zoneOf(request).tier, tx);
 
     /* No `holding` here, unlike the cart quote. `consumeInvite` has already
        spent this customer's token earlier in the transaction, so the copies it
@@ -282,7 +286,7 @@ export class CheckoutService {
        books' worth of stock. */
     const priced = await this.pricingService.priceCart(
       request.items,
-      { couponCode: request.couponCode, region: request.customer.region },
+      { couponCode: request.couponCode, zone: request.customer.zone },
       tx,
     );
 
@@ -522,6 +526,7 @@ export function orderValuesFrom(
   idempotencyKey: string,
 ) {
   const { customer } = request;
+  const zone = zoneOf(request);
 
   return {
     customerName: customer.fullName,
@@ -532,8 +537,14 @@ export function orderValuesFrom(
     customerSecondaryPhone: customer.secondaryPhone?.trim() || null,
     shippingAddress: {
       address: customer.address,
-      city: customer.city,
-      region: customer.region,
+      /* The zone's district rather than the `city` the form sent: the zone is
+         the field that was validated, and this keeps the two from naming
+         different places on one parcel. */
+      city: zone.city,
+      region: TIER_REGION_SLUG[zone.tier],
+      zone: zone.id,
+      tier: zone.tier,
+      parcelWeightGrams: priced.parcelWeightGrams,
       /* The form's own fields, kept unjoined for the courier manifest. Only
          written when the form sent them — see ShippingAddress. */
       ...(customer.upazila ? { upazila: customer.upazila } : {}),
@@ -596,4 +607,18 @@ function isUniqueViolationOn(error: unknown, constraint: string): boolean {
   const cause = toPostgresError(error);
 
   return cause?.code === UNIQUE_VIOLATION && cause.constraint_name === constraint;
+}
+
+/**
+ * The order's delivery zone.
+ *
+ * The schema has already refused an id that is not in the list, so a miss
+ * here means a caller skipped validation — a bug, not a customer error, and
+ * worth failing loudly rather than pricing for nowhere.
+ */
+function zoneOf(request: PlaceOrderRequest): ShippingZone {
+  const zone = zoneById(request.customer.zone);
+  if (!zone) throw new Error(`Unvalidated delivery zone '${request.customer.zone}'`);
+
+  return zone;
 }

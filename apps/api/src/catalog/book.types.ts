@@ -37,6 +37,8 @@ export type PriceableBook = {
   availability: BookAvailability;
   /** Source for `pre_order` lines' "ships around" note. */
   publishedDate: Date | null;
+  /** Packed weight, for postage. Null → DEFAULT_BOOK_WEIGHT_GRAMS. */
+  weightGrams: number | null;
 };
 
 /**

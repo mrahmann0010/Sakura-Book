@@ -46,13 +46,13 @@ export type UseCart = Cart & {
   /** True while a quote is in flight for the current cart contents. */
   quoting: boolean;
   /**
-   * Whether the totals above were priced for the cart and region being asked
+   * Whether the totals above were priced for the cart and zone being asked
    * about *now*, rather than being the last answer to a different question.
    *
    * `keepPreviousData` is what makes this necessary. It exists so the recap
    * does not blank out between quotes, and the cost of that is a window where
    * the numbers on screen belong to the previous key — the previous basket,
-   * or, at checkout, the previous region. A delivery figure quoted before the
+   * or, at checkout, the previous zone. A delivery figure quoted before the
    * customer named their division is the flat national fallback, which is not
    * a rate this shop charges anybody: showing it as though it were the answer
    * is how a customer reads one fee and is billed another.
@@ -79,7 +79,7 @@ export type UseCart = Cart & {
   clear: () => void;
 };
 
-export function useCart(region?: string): UseCart {
+export function useCart(zone?: string): UseCart {
   const dispatch = useAppDispatch();
   const items = useAppSelector(selectCartItems);
   const rehydrated = useAppSelector(selectCartHydrated);
@@ -92,17 +92,17 @@ export function useCart(region?: string): UseCart {
      structurally, so a quantity edit or a different set of ids naturally
      requotes, while an unrelated re-render does not. Every page reading the
      cart uses this same key, so they share one in-flight request instead of
-     each firing their own. `region` joins the key on checkout, once the
-     customer's division has resolved one, so the recap's delivery line prices
-     against the same zone the order will actually be charged. */
+     each firing their own. `zone` joins the key on checkout, once the customer
+     has picked one, so the recap's delivery line prices against the same zone
+     the order will actually be charged. */
   const {
     data: quote,
     isLoading,
     isPlaceholderData,
     isError,
   } = useQuery({
-    queryKey: ["cart-quote", items, region],
-    queryFn: () => quoteCart(items, { region }),
+    queryKey: ["cart-quote", items, zone],
+    queryFn: () => quoteCart(items, { zone }),
     enabled: hydrated && items.length > 0,
     placeholderData: keepPreviousData,
     staleTime: 0,

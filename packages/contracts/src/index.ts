@@ -24,6 +24,8 @@ export * from "./cart";
 export * from "./checkout";
 export * from "./order";
 export * from "./shipping";
+export * from "./shipping-zones";
+export * from "./shipping-rates";
 export * from "./bd-geo";
 export * from "./admin-auth";
 export * from "./admin-users";

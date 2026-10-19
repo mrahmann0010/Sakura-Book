@@ -38,6 +38,7 @@ function book(overrides: Partial<PriceableBook> = {}): PriceableBook {
     isActive: true,
     availability: "in_stock",
     publishedDate: null,
+    weightGrams: null,
     ...overrides,
   };
 }
@@ -49,7 +50,7 @@ function service(row: PriceableBook) {
     { evaluate: async () => ({ ok: false, reason: "UNKNOWN" }) } as never,
     { quote: () => ({ baseCents: 0, chargedCents: 0, creditCents: 0 }) } as never,
     { current: async () => ({ currency: "BDT" }) } as never,
-    { deliveryRateFor: async () => 0 } as never,
+    { startCentsFor: async () => null } as never,
   );
 }
 

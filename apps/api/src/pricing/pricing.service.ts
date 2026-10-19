@@ -1,5 +1,13 @@
 import { Injectable } from "@nestjs/common";
-import { MAX_LINE_QUANTITY, type CartItem, type CartQuoteRejection } from "@sakura/contracts";
+import {
+  MAX_LINE_QUANTITY,
+  parcelWeightGrams,
+  shippingCentsFor,
+  tierOfRegion,
+  tierOfZone,
+  type CartItem,
+  type CartQuoteRejection,
+} from "@sakura/contracts";
 import { BooksService, type PriceableBook } from "../catalog";
 import { CouponsService } from "../coupons";
 import { DbService } from "../db/db.service";
@@ -41,18 +49,21 @@ export class PricingService {
    * `rejected` with a reason. Checkout applies its own, stricter reading of
    * the same result — see CheckoutService.
    *
-   * `region` selects the postage rate. An unknown or absent slug falls back to
-   * the flat national rate rather than erroring: the cart page quotes a total
-   * before the customer has reached the address step and therefore before any
-   * region is chosen, so "no region yet" is the normal case on the first quote,
-   * not a bad request. Checkout validates the slug properly — there it is a
-   * field the customer filled in, and a typo must not silently change what
-   * they are charged.
+   * `zone` selects the postage tier, and the parcel's weight selects the step
+   * on that tier's ladder. An unknown or absent zone falls back to the flat
+   * national rate rather than erroring: the cart page quotes a total before
+   * the customer has reached the address step and therefore before any zone
+   * is chosen, so "no zone yet" is the normal case on the first quote, not a
+   * bad request. Checkout validates the zone properly — there it is a field
+   * the customer filled in, and a typo must not silently change what they are
+   * charged. `region` is the pre-zone way of naming a tier, still honoured for
+   * a client that sends only that.
    */
   async priceCart(
     items: CartItem[],
     options: {
       couponCode?: string;
+      zone?: string;
       region?: string;
       /** The shopper's own live invite reservation — see `rejectionFor`. */
       holding?: { bookId: string; quantity: number };
@@ -95,12 +106,22 @@ export class PricingService {
        "free shipping" is explicitly not expressible in this coupon model, see
        CouponsService.computeDiscountCents. If that is ever the wrong call it is
        one argument on the next line, not a rewrite. */
+    /* Weighed from the books' own rows — never from anything the client
+       sent. A line rejected above is not in the parcel and adds nothing. */
+    const weightGrams = parcelWeightGrams(
+      lines.map((line) => ({
+        weightGrams: books.get(line.bookId)?.weightGrams,
+        quantity: line.quantity,
+      })),
+    );
+    const tier = tierOfZone(options.zone) ?? tierOfRegion(options.region) ?? null;
+
     /* Both resolved through the same executor as everything else in this
        method, so that when checkout calls it inside its transaction the
        postage rules it prices against are the ones committed at that moment —
        not ones an admin changed while the order was being written. */
-    const [regionRateCents, terms] = await Promise.all([
-      this.regionsService.deliveryRateFor(options.region, executor),
+    const [startCents, terms] = await Promise.all([
+      tier ? this.regionsService.startCentsFor(tier, executor) : null,
       this.shippingTermsService.current(executor),
     ]);
 
@@ -108,7 +129,7 @@ export class PricingService {
       subtotalCents - discountCents,
       lines.length,
       terms,
-      regionRateCents,
+      tier ? shippingCentsFor(tier, weightGrams, startCents) : null,
     );
 
     return {
@@ -120,6 +141,8 @@ export class PricingService {
       deliveryBaseCents: delivery.baseCents,
       deliveryCents: delivery.chargedCents,
       deliveryCreditCents: delivery.creditCents,
+      shippingTier: tier,
+      parcelWeightGrams: weightGrams,
 
       coupon: coupon.applied,
       couponRejection: coupon.rejection,
