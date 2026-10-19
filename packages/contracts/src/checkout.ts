@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { cartItemSchema } from "./cart";
 import { paymentProviders } from "./payment-verification";
+import { ZONES_BY_ID } from "./shipping-zones";
 
 /* --------------------------------------------------------------------------
    Checkout. Moved here from apps/web/src/lib/checkout.ts, which now re-exports
@@ -48,11 +49,22 @@ export const shippingAddressSchema = z.object({
   address: required("Add the street, house and area so the courier can find you."),
   city: required("Add the town or city."),
   /**
-   * A slug from GET /shipping/regions, not a closed enum. The five values in
-   * the web app are a placeholder list; once the regions table exists (Phase 1)
-   * adding a sixth must not require releasing this package.
+   * The delivery zone, by id from ./shipping-zones — the field postage is
+   * priced off. Checked against that list here, at the boundary, so a
+   * tampered value is a validation error rather than an order priced for
+   * somewhere that does not exist.
    */
-  region: required("Choose the delivery region."),
+  zone: z
+    .string()
+    .trim()
+    .min(1, "Choose your area so we can price delivery.")
+    .refine((id) => ZONES_BY_ID.has(id), "Choose your area from the list."),
+  /**
+   * The tier's `delivery_regions` slug. Derived from `zone` by the server and
+   * written onto the order, so anything a client sends here is ignored — it
+   * stays in the schema only so an older client's payload still parses.
+   */
+  region: z.string().trim().optional(),
 
   /* ------------------------------------------------------------------------
      The address form's own fields, kept alongside the line it composes.
@@ -75,7 +87,10 @@ export const shippingAddressSchema = z.object({
      back to reading `address`, which is what it does for those orders anyway.
      ------------------------------------------------------------------------ */
 
-  /** Upazila / thana. Free text — see bd-geo.ts on why there is no list. */
+  /**
+   * Upazila / thana. Free text — see bd-geo.ts on why there is no list. Only
+   * asked for outside Dhaka: inside it, the zone above already is the thana.
+   */
   upazila: z.string().trim().max(120).optional(),
   /** Neighbourhood or village, below the upazila. */
   area: z.string().trim().max(120).optional(),
@@ -163,7 +178,7 @@ export const checkoutDefaults: CheckoutValues = {
   secondaryPhone: "",
   address: "",
   city: "",
-  region: "inside-dhaka",
+  zone: "",
   method: "manual-transfer",
   senderNumber: "",
   transactionId: "",

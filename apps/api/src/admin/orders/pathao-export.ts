@@ -1,4 +1,4 @@
-import { bdDivisions } from "@sakura/contracts";
+import { bdDivisions, DEFAULT_BOOK_WEIGHT_GRAMS, zoneById } from "@sakura/contracts";
 import type { ShippingAddress } from "../../db/schema";
 import { toLatin, withLatinDigits } from "../../common/bangla-latin";
 
@@ -75,16 +75,19 @@ const CSV_COLUMNS = [
 const ITEM_TYPE = "parcel";
 
 /**
- * Weight in kilograms, as Pathao's template expects it — 250g is a paperback
- * with packaging, and it is what this shop ships.
+ * Weight in kilograms, as Pathao's template expects it.
  *
- * A flat figure rather than a computed one because nothing in the catalogue
- * records a book's weight; inventing a per-title number from the page count
- * would be a guess dressed up as data. Pathao re-weighs at pickup and bills on
- * what they measure, so an understated figure here costs nothing but a
- * corrected invoice — which is the right way round for a value we do not know.
+ * The weight checkout priced the parcel at, when the order recorded one —
+ * every order since zones shipped. Older orders are estimated the way checkout
+ * would have weighed them, a default packed weight per copy. Pathao re-weighs
+ * at pickup and bills on what they measure, so an estimate here costs at most
+ * a corrected invoice.
  */
-const ITEM_WEIGHT_KG = "0.25";
+export function itemWeightKg(row: PathaoExportRow): string {
+  const grams = row.shippingAddress.parcelWeightGrams ?? row.itemCount * DEFAULT_BOOK_WEIGHT_GRAMS;
+
+  return String(Math.round(grams / 10) / 100);
+}
 
 /**
  * One cell, quoted only when it has to be.
@@ -321,6 +324,15 @@ export function recipientPlace(shipping: ShippingAddress): { zone: string; area:
   const city = tidy(toLatin(shipping.city));
   const address = toLatin(shipping.address);
 
+  /* Chosen from the shared zone list at checkout — the case every order since
+     zones shipped takes. Inside Dhaka and the suburbs the zone *is* Pathao's
+     zone. An outside-Dhaka pick is a whole district, which names the city but
+     not the zone, so those fall through to the upazila the customer typed. */
+  const chosen = zoneById(shipping.zone);
+  if (chosen && chosen.name !== chosen.city) {
+    return { zone: tidy(chosen.name), area: tidy(toLatin(shipping.area ?? "")) };
+  }
+
   /* Recorded, not guessed. The upazila alone is enough to take this path: an
      order can name its upazila and leave the area blank, and a blank area is
      a true answer where a guessed one is not. */
@@ -444,7 +456,7 @@ export function toPathaoCsv(rows: PathaoExportRow[], storeName: string): string 
         cell(place.area),
         cell(amountToCollect(row)),
         cell(row.itemCount),
-        cell(ITEM_WEIGHT_KG),
+        cell(itemWeightKg(row)),
         /* ItemDesc is optional, and what would go in it is book titles. A
            courier manifest is handled by people outside the shop and passes
            through a third party's system; what is in the parcel is not their

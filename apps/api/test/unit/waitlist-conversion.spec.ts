@@ -80,7 +80,7 @@ function request(items = [{ bookId: "book-1", quantity: 2 }]): PlaceOrderRequest
       phone: "01700000000",
       address: "12 Road 4",
       city: "Dhaka",
-      region: "dhaka",
+      zone: "dhanmondi",
       method: "cash-on-delivery",
     },
     inviteToken: "tok_abc",
@@ -109,7 +109,7 @@ function checkoutService(inviteService: WaitlistInviteService) {
     { priceCart: vi.fn().mockResolvedValue(priced) } as never,
     { decrement: vi.fn().mockResolvedValue(undefined) } as never,
     { redeem: vi.fn() } as never,
-    { require: vi.fn().mockResolvedValue(undefined) } as never,
+    { requireTier: vi.fn().mockResolvedValue(undefined) } as never,
     inviteService,
     new WaitlistFulfillmentService({} as never),
   );

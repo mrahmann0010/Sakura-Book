@@ -41,7 +41,7 @@ const DESTINATIONS: Record<string, keyof typeof orders.$inferInsert | null> = {
      not three the queue has to reassemble. */
   address: "shippingAddress",
   city: "shippingAddress",
-  region: "shippingAddress",
+  zone: "shippingAddress",
 };
 
 describe("checkout fields reach the orders table", () => {
@@ -93,7 +93,7 @@ describe("orderValuesFrom", () => {
         phone: "01700000000",
         address: "12 Green Road",
         city: "Dhaka",
-        region: "inside-dhaka",
+        zone: "dhanmondi",
         method: "manual-transfer",
         ...customer,
       },
@@ -107,6 +107,25 @@ describe("orderValuesFrom", () => {
     coupon: undefined,
     rejected: [],
   } as never;
+
+  it("snapshots the zone, its tier and the parcel weight onto the address", () => {
+    const values = orderValuesFrom(
+      request({ zone: "savar", city: "Faridpur", region: "inside-dhaka" }),
+      { ...(priced as object), parcelWeightGrams: 498 } as never,
+      "idem-z",
+    );
+
+    /* The region and city come from the zone, not from what the client sent:
+       a payload claiming inside-Dhaka for a Savar address must not be what the
+       order records. */
+    expect(values.shippingAddress).toMatchObject({
+      zone: "savar",
+      tier: "SUBURB",
+      region: "dhaka-suburb",
+      city: "Dhaka",
+      parcelWeightGrams: 498,
+    });
+  });
 
   it("carries the courier's second number onto the order row", () => {
     const values = orderValuesFrom(request({ secondaryPhone: "01822222222" }), priced, "idem-0");

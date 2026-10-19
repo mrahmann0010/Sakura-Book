@@ -1,28 +1,35 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import type { AdminRegion, AdminShippingTerms } from "@sakura/contracts";
+import {
+  RATE_LADDER,
+  SHIPPING_ZONES,
+  shippingCentsFor,
+  shippingTiers,
+  TIER_REGION_SLUG,
+  type AdminRegion,
+  type AdminShippingTerms,
+  type ShippingTier,
+} from "@sakura/contracts";
 
 import { AdminFormSkeleton } from "@/components/admin/skeletons";
-import { Button, Input, Select } from "@/components/ui";
+import { Button, Input } from "@/components/ui";
 import {
   AdminApiError,
+  createAdminRegion,
   getAdminShippingTerms,
   listAdminRegions,
   updateAdminRegion,
   updateAdminShippingTerms,
 } from "@/lib/api/admin";
-import { bdDivisions } from "@/lib/bd-geo";
 
 type TermsForm = {
-  originDivision: string;
   flatRateTaka: string;
   freeDeliveryThresholdTaka: string;
 };
 
 function fromTerms(terms: AdminShippingTerms): TermsForm {
   return {
-    originDivision: terms.originDivision,
     flatRateTaka: String(terms.flatRateCents / 100),
     freeDeliveryThresholdTaka: String(terms.freeDeliveryThresholdCents / 100),
   };
@@ -32,15 +39,47 @@ function taka(cents: number | null): string {
   return cents === null ? "" : String(cents / 100);
 }
 
+const TIER_NAMES: Record<ShippingTier, string> = {
+  ISD: "Inside Dhaka",
+  SUBURB: "Dhaka Suburbs",
+  OSD: "Outside Dhaka",
+};
+
+const TIER_SORT: Record<ShippingTier, number> = { ISD: 1, SUBURB: 2, OSD: 3 };
+
+const ZONE_COUNTS = Object.fromEntries(
+  shippingTiers.map((tier) => [tier, SHIPPING_ZONES.filter((zone) => zone.tier === tier).length]),
+) as Record<ShippingTier, number>;
+
+function money(cents: number): string {
+  return `৳${(cents / 100).toLocaleString("en-US")}`;
+}
+
+/** The ladder a start price produces — what the row will actually charge. */
+function ladderLine(tier: ShippingTier, startCents: number | null): string {
+  const extra = RATE_LADDER[tier].extraPerKgCents;
+
+  return [
+    `≤0.5 kg ${money(shippingCentsFor(tier, 500, startCents))}`,
+    `≤1 kg ${money(shippingCentsFor(tier, 1000, startCents))}`,
+    `≤2 kg ${money(shippingCentsFor(tier, 2000, startCents))}`,
+    `then +${money(extra)}/kg`,
+  ].join(" · ");
+}
+
 /**
- * Where the shop ships from, and what postage costs.
+ * What postage costs, and when it is waived.
  *
- * `originDivision` is what checkout's `deliveryZoneFor` (apps/web/src/lib/bd-geo.ts)
- * compares a customer's division against to pick `inside-dhaka` (same division
- * as the origin) or `outside-dhaka` (any other division) — the names are
- * historical, not literal, because the shop's shipment point moves. Changing
- * it here is what moves the zone boundary; the two region rows below are what
- * set the price on each side of it.
+ * Postage is priced per Pathao tier — Inside Dhaka, Dhaka Suburbs, Outside
+ * Dhaka — from the zone the customer picks at checkout and the parcel's
+ * weight. Each tier's ≤0.5kg start price is its `delivery_regions` row and is
+ * edited here; the weight steps above it are fixed in the shared rate ladder
+ * (@sakura/contracts' shipping-rates) and move with the start price.
+ *
+ * A tier with no row yet still prices, at the ladder's published default —
+ * "Set up" here creates the row so the price can be edited. Pickup is always
+ * Dhaka city, which is what the tiers assume, so there is no "shipping from"
+ * setting any more.
  *
  * The Shipping tab of Shop Settings — the sidebar entry, the gate, and the
  * page heading all live in `AdminSettingsShell`.
@@ -54,7 +93,6 @@ export default function AdminShippingSettingsPage() {
     "source" | "updatedAt" | "updatedByEmail"
   > | null>(null);
   const [form, setForm] = useState<TermsForm>({
-    originDivision: "dhaka",
     flatRateTaka: "",
     freeDeliveryThresholdTaka: "",
   });
@@ -101,7 +139,6 @@ export default function AdminShippingSettingsPage() {
 
     try {
       const updated = await updateAdminShippingTerms({
-        originDivision: form.originDivision,
         flatRateCents: Math.round(Number(form.flatRateTaka) * 100),
         freeDeliveryThresholdCents: Math.round(Number(form.freeDeliveryThresholdTaka) * 100),
       });
@@ -116,20 +153,37 @@ export default function AdminShippingSettingsPage() {
     }
   }
 
-  async function saveRegion(slug: string) {
+  async function saveTier(tier: ShippingTier) {
+    const slug = TIER_REGION_SLUG[tier];
     setSavingSlug(slug);
     setRegionsError(null);
 
     try {
       const raw = regionRates[slug]?.trim() ?? "";
-      const updated = await updateAdminRegion(slug, {
-        deliveryCentsOverride: raw === "" ? null : Math.round(Number(raw) * 100),
-      });
-      setRegions((prev) => prev.map((region) => (region.slug === slug ? updated : region)));
+      const deliveryCentsOverride = raw === "" ? null : Math.round(Number(raw) * 100);
+      const exists = regions.some((region) => region.slug === slug);
+
+      /* A tier whose row was never seeded is created on its first save, so a
+         live shop can be brought onto three tiers from here rather than by a
+         deploy step. */
+      const updated = exists
+        ? await updateAdminRegion(slug, { deliveryCentsOverride })
+        : await createAdminRegion({
+            slug,
+            name: TIER_NAMES[tier],
+            deliveryCentsOverride: deliveryCentsOverride ?? RATE_LADDER[tier].startCents,
+            sortOrder: TIER_SORT[tier],
+          });
+
+      setRegions((prev) =>
+        exists
+          ? prev.map((region) => (region.slug === slug ? updated : region))
+          : [...prev, updated],
+      );
       setRegionRates((prev) => ({ ...prev, [slug]: taka(updated.deliveryCentsOverride) }));
     } catch (cause) {
       setRegionsError(
-        cause instanceof AdminApiError ? cause.message : "Could not save that region's rate.",
+        cause instanceof AdminApiError ? cause.message : "Could not save that tier's rate.",
       );
     } finally {
       setSavingSlug(null);
@@ -139,8 +193,7 @@ export default function AdminShippingSettingsPage() {
   return (
     <div className="flex max-w-lg flex-col gap-10">
       <p className="text-13.5 text-secondary">
-        The division the shop currently ships from, the postage rates on each side of it, and when
-        delivery is waived.
+        Postage for each delivery tier, the fallback rate, and when delivery is waived.
       </p>
 
       {loading ? (
@@ -148,21 +201,9 @@ export default function AdminShippingSettingsPage() {
       ) : (
         <>
           <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
-            <Select
-              label="Shipping from"
-              hint="Customers in this division are charged the “inside” rate below; every other division is charged the “outside” rate."
-              value={form.originDivision}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, originDivision: event.target.value }))
-              }
-              options={bdDivisions.map((division) => ({
-                value: division.value,
-                label: division.label,
-              }))}
-            />
             <Input
               label="Flat rate (৳)"
-              hint="Fallback postage when a customer's zone can't be resolved."
+              hint="Quoted only before a customer has picked their area — every order is priced by its tier."
               inputMode="decimal"
               value={form.flatRateTaka}
               onChange={(event) =>
@@ -171,7 +212,7 @@ export default function AdminShippingSettingsPage() {
             />
             <Input
               label="Free delivery threshold (৳)"
-              hint="Postage is waived once the subtotal reaches this."
+              hint="Postage is waived once the subtotal reaches this, in every tier."
               inputMode="decimal"
               value={form.freeDeliveryThresholdTaka}
               onChange={(event) =>
@@ -198,37 +239,52 @@ export default function AdminShippingSettingsPage() {
 
           <div className="flex flex-col gap-4">
             <div>
-              <h2 className="text-h4 text-ink font-serif">Region rates</h2>
+              <h2 className="text-h4 text-ink font-serif">Delivery tiers</h2>
               <p className="text-13.5 text-secondary mt-1">
-                What each zone is actually charged. Leave a field blank to fall back to the flat
-                rate above.
+                The price of a parcel up to 0.5 kg in each Pathao tier. Heavier parcels add the
+                fixed steps shown under each one. Leave a field blank to use Pathao&rsquo;s
+                published rate.
               </p>
             </div>
 
-            <div className="flex flex-col gap-3">
-              {regions.map((region) => (
-                <div key={region.slug} className="flex items-end gap-3">
-                  <Input
-                    label={region.name}
-                    inputMode="decimal"
-                    placeholder={form.flatRateTaka}
-                    value={regionRates[region.slug] ?? ""}
-                    onChange={(event) =>
-                      setRegionRates((prev) => ({ ...prev, [region.slug]: event.target.value }))
-                    }
-                    fieldClassName="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={savingSlug === region.slug}
-                    onClick={() => void saveRegion(region.slug)}
-                  >
-                    {savingSlug === region.slug ? "Saving…" : "Save"}
-                  </Button>
-                </div>
-              ))}
+            <div className="flex flex-col gap-5">
+              {shippingTiers.map((tier) => {
+                const slug = TIER_REGION_SLUG[tier];
+                const region = regions.find((row) => row.slug === slug);
+                const raw = regionRates[slug]?.trim() ?? "";
+                const preview = raw === "" ? null : Math.round(Number(raw) * 100);
+
+                return (
+                  <div key={tier} className="flex flex-col gap-1.5">
+                    <div className="flex items-end gap-3">
+                      <Input
+                        label={`${TIER_NAMES[tier]} · ${ZONE_COUNTS[tier]} areas`}
+                        inputMode="decimal"
+                        placeholder={String(RATE_LADDER[tier].startCents / 100)}
+                        value={regionRates[slug] ?? ""}
+                        onChange={(event) =>
+                          setRegionRates((prev) => ({ ...prev, [slug]: event.target.value }))
+                        }
+                        fieldClassName="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={savingSlug === slug}
+                        onClick={() => void saveTier(tier)}
+                      >
+                        {savingSlug === slug ? "Saving…" : region ? "Save" : "Set up"}
+                      </Button>
+                    </div>
+                    <p className="text-caption text-secondary">
+                      {Number.isNaN(preview) ? "Enter a number." : ladderLine(tier, preview)}
+                      {region && !region.isActive ? " · switched off, checkout refuses it" : ""}
+                      {region ? "" : " · not set up yet, charging the published rate"}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
 
             {regionsError ? <p className="text-13.5 text-clay">{regionsError}</p> : null}

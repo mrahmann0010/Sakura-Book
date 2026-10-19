@@ -1,4 +1,4 @@
-import type { CartQuote, CartQuoteRejection } from "@sakura/contracts";
+import type { CartQuote, CartQuoteRejection, ShippingTier } from "@sakura/contracts";
 import type { PriceableBook } from "../catalog";
 
 /**
@@ -47,6 +47,9 @@ export type PricedCart = {
   deliveryBaseCents: number;
   deliveryCents: number;
   deliveryCreditCents: number;
+  /** Null when no zone was given and the flat rate applied. */
+  shippingTier: ShippingTier | null;
+  parcelWeightGrams: number;
 
   coupon?: PricedCoupon;
   couponRejection?: string;
@@ -69,6 +72,8 @@ export function toCartQuote(priced: PricedCart): CartQuote {
     deliveryBaseCents: priced.deliveryBaseCents,
     deliveryCents: priced.deliveryCents,
     deliveryCreditCents: priced.deliveryCreditCents,
+    shippingTier: priced.shippingTier,
+    parcelWeightGrams: priced.parcelWeightGrams,
 
     coupon: priced.coupon
       ? { code: priced.coupon.code, discountCents: priced.coupon.discountCents }

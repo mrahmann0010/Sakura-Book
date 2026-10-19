@@ -135,15 +135,14 @@ export function InviteCheckoutView({
     mode: "onBlur",
   });
 
-  const deliveryFields = ["fullName", "email", "phone", "address", "city", "region"] as const;
+  const deliveryFields = ["fullName", "email", "phone", "zone", "address"] as const;
 
   const fieldLabels: Partial<Record<keyof CheckoutValues, string>> = {
     fullName: t("checkout.shipping.fullName"),
     email: t("checkout.shipping.email"),
     phone: t("checkout.shipping.phone"),
     address: t("checkout.shipping.address"),
-    city: t("checkout.shipping.district"),
-    region: t("checkout.shipping.division"),
+    zone: t("checkout.shipping.zone"),
     provider: t("checkout.payment.mobileMoneyLegend"),
     senderNumber: t("checkout.payment.senderNumber"),
     transactionId: t("checkout.payment.transactionId"),
@@ -179,8 +178,8 @@ export function InviteCheckoutView({
   }
 
   const method = useWatch({ control, name: "method" }) as AcceptedPaymentMethod;
-  const region = useWatch({ control, name: "region" });
-  const [divisionChosen, setDivisionChosen] = useState(false);
+  const zone = useWatch({ control, name: "zone" });
+  const zoneChosen = Boolean(zone);
 
   /* The reserved book first, then whatever was added to it. One list, built
      once: the quote and the order must be the same basket, and two places
@@ -194,20 +193,20 @@ export function InviteCheckoutView({
 
   /* Priced the same way the ordinary cart is — through the real quote
      endpoint, so this page never shows a price it made up itself. Keyed on the
-     basket and region exactly like useCart's own quote query; `items` is
+     basket and zone exactly like useCart's own quote query; `items` is
      serialised into the key because its identity changes on every render. */
   const {
     data: quote,
     isLoading,
     /* Serving the previous key's answer — a different basket, or the quote
-       taken before a division was chosen. See `deliveryKnown` below. */
+       taken before a zone was chosen. See `deliveryKnown` below. */
     isPlaceholderData,
     isError: quoteFailed,
   } = useQuery({
-    queryKey: ["invite-quote", JSON.stringify(items), divisionChosen ? region : undefined],
+    queryKey: ["invite-quote", JSON.stringify(items), zone || undefined],
     queryFn: () =>
       quoteCart(items, {
-        region: divisionChosen ? region : undefined,
+        zone: zone || undefined,
         inviteToken: token,
       }),
     placeholderData: keepPreviousData,
@@ -250,12 +249,12 @@ export function InviteCheckoutView({
 
   const money = intlLocale(locale);
 
-  /* Both halves, for the reason CheckoutView spells out: a division must have
+  /* Both halves, for the reason CheckoutView spells out: a zone must have
      been chosen, *and* the quote on screen must be the one taken for it.
      Otherwise what is rendered is the flat national fallback — ৳100 against
      real zone rates that are nothing like it — presented as the delivery fee,
      and a failed requote leaves it there for good. */
-  const deliveryKnown = divisionChosen && !isPlaceholderData;
+  const deliveryKnown = zoneChosen && !isPlaceholderData;
 
   const rows = summaryLines(
     cart,
@@ -427,12 +426,7 @@ export function InviteCheckoutView({
             className="mt-9 flex flex-col gap-10"
           >
             <div className={step === "delivery" ? undefined : "hidden"}>
-              <ShippingFields
-                register={register}
-                errors={errors}
-                setValue={setValue}
-                onDivisionChange={(division) => setDivisionChosen(Boolean(division))}
-              />
+              <ShippingFields register={register} errors={errors} setValue={setValue} />
             </div>
 
             {step === "payment" ? (

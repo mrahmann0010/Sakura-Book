@@ -17,21 +17,24 @@ import { categories, deliveryRegions } from "../schema";
  */
 export async function seedReference(db: Database): Promise<void> {
   /**
-   * The two zones the checkout form derives from the customer's chosen
-   * division: "Dhaka" division maps to `inside-dhaka`, every other division
-   * maps to `outside-dhaka`. Slugs match apps/web/src/lib/checkout.ts and
-   * apps/web/src/lib/bd-geo.ts, which is what makes this table a replacement
-   * for that list rather than a second, disagreeing one.
+   * The three Pathao tiers, one row each — the slugs are TIER_REGION_SLUG in
+   * @sakura/contracts. A row's `deliveryCentsOverride` is that tier's ≤0.5kg
+   * start price, which staff edit; the weight steps above it live with the
+   * ladder in shipping-rates.ts. The figures here are Pathao's published ones
+   * and match that file's defaults, so a fresh database and a missing row
+   * price the same.
    *
-   * Both carry a real `deliveryCentsOverride` — the flat national rate is now
-   * only the fallback for an unrecognised or absent slug, not what either zone
-   * actually charges.
+   * `inside-dhaka` and `outside-dhaka` keep their original slugs because
+   * orders already name them. On a database seeded before the suburb tier
+   * existed this inserts only `dhaka-suburb` and leaves the other two — and
+   * whatever staff have saved on them — alone.
    */
   await db
     .insert(deliveryRegions)
     .values([
       { slug: "inside-dhaka", name: "Inside Dhaka", sortOrder: 1, deliveryCentsOverride: 6000 },
-      { slug: "outside-dhaka", name: "Outside Dhaka", sortOrder: 2, deliveryCentsOverride: 12000 },
+      { slug: "dhaka-suburb", name: "Dhaka Suburbs", sortOrder: 2, deliveryCentsOverride: 8000 },
+      { slug: "outside-dhaka", name: "Outside Dhaka", sortOrder: 3, deliveryCentsOverride: 11000 },
     ])
     .onConflictDoNothing({ target: deliveryRegions.slug });
 

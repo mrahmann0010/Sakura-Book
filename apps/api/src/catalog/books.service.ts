@@ -62,6 +62,7 @@ export class BooksService {
         isActive: true,
         availability: true,
         publishedDate: true,
+        weightGrams: true,
       },
       extras: (book) => ({
         // Correlated per row rather than joined and grouped: a join to
@@ -98,6 +99,7 @@ export class BooksService {
           isActive: row.isActive,
           availability: row.availability,
           publishedDate: row.publishedDate,
+          weightGrams: row.weightGrams,
         },
       ]),
     );

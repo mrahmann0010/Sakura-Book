@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { bookAvailabilityValues } from "./catalog";
+import { shippingTiers } from "./shipping-zones";
 
 /* --------------------------------------------------------------------------
    Cart pricing. POST /cart/quote — the server-side priceCart().
@@ -25,7 +26,13 @@ export const cartQuoteRequestSchema = z.object({
    */
   items: z.array(cartItemSchema).max(100),
   couponCode: z.string().trim().min(1).max(64).optional(),
-  /** Region slug, from GET /shipping/regions. Postage may vary by region. */
+  /**
+   * The delivery zone id (./shipping-zones). Absent before the customer has
+   * reached the address step, which quotes the flat rate. An unknown id is
+   * treated the same way rather than refused — see PricingService.
+   */
+  zone: z.string().trim().min(1).optional(),
+  /** Region slug — the pre-zone way of choosing a tier, still honoured. */
   region: z.string().trim().min(1).optional(),
   /**
    * Sent only by the waitlist invite checkout page, never the ordinary cart.
@@ -100,6 +107,13 @@ export const cartQuoteSchema = z.object({
   deliveryCents: z.number().int().nonnegative(),
   /** The waived amount, drawn as a credit row. Zero when nothing is waived. */
   deliveryCreditCents: z.number().int().nonnegative(),
+  /**
+   * The tier postage was priced for, and the parcel weight it was priced at.
+   * Null tier when no zone was given and the flat rate applied. Defaulted so
+   * a web build newer than the API still parses an older quote.
+   */
+  shippingTier: z.enum(shippingTiers).nullable().default(null),
+  parcelWeightGrams: z.number().int().nonnegative().default(0),
 
   /** Absent when no code was sent, or when the code was refused. */
   coupon: z

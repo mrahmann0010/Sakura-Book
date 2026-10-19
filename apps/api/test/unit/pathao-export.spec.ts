@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ShippingAddress } from "../../src/db/schema";
 import {
   amountToCollect,
+  itemWeightKg,
   recipientAddress,
   recipientPhone,
   recipientPlace,
@@ -424,5 +425,37 @@ describe("amountToCollect", () => {
 
   it("rounds to whole taka, because a rider collects cash", () => {
     expect(amountToCollect(row({ totalCents: 145_050 }))).toBe(1451);
+  });
+});
+
+describe("orders placed with a delivery zone", () => {
+  it("takes the zone from the list rather than reading it out of the address", () => {
+    // An address line that would mislead the guesser: its last part is a
+    // landmark, not a zone.
+    const place = recipientPlace(
+      shipping({ address: "House 4, near Star Kabab", zone: "dhanmondi", area: "Road 27" }),
+    );
+
+    expect(place).toEqual({ zone: "Dhanmondi", area: "Road 27" });
+  });
+
+  it("falls back to the typed upazila for a whole-district pick outside Dhaka", () => {
+    // "Sylhet" names the city, not Pathao's zone, so it is not a zone answer.
+    const place = recipientPlace(
+      shipping({ city: "Sylhet", zone: "sylhet", upazila: "Beanibazar", area: "" }),
+    );
+
+    expect(place).toEqual({ zone: "Beanibazar", area: "" });
+  });
+
+  it("writes the weight checkout priced the parcel at", () => {
+    expect(itemWeightKg(row({ shippingAddress: shipping({ parcelWeightGrams: 996 }) }))).toBe("1");
+    expect(itemWeightKg(row({ shippingAddress: shipping({ parcelWeightGrams: 498 }) }))).toBe(
+      "0.5",
+    );
+  });
+
+  it("estimates an older order's weight per copy", () => {
+    expect(itemWeightKg(row({ itemCount: 3 }))).toBe("0.75");
   });
 });
