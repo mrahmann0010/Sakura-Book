@@ -1,15 +1,13 @@
 "use client";
 
-import { TIER_REGION_SLUG, zoneById } from "@sakura/contracts";
+import { TIER_REGION_SLUG, zoneById, zonesInDistrict, type ShippingZone } from "@sakura/contracts";
 import { useState } from "react";
 import type { FieldErrors, UseFormRegister, UseFormSetValue } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
-import { Eyebrow, Input, Textarea } from "@/components/ui";
-import { divisionOfDistrict } from "@/lib/bd-geo";
+import { Eyebrow, Input, Radio, RadioGroup, Select, Textarea } from "@/components/ui";
+import { bdDivisions, districtsFor, divisionOfDistrict } from "@/lib/bd-geo";
 import type { CheckoutValues } from "@/lib/checkout";
-
-import { ZonePicker } from "./zone-picker";
 
 /* --------------------------------------------------------------------------
    The shipping half of the checkout form.
@@ -19,15 +17,46 @@ import { ZonePicker } from "./zone-picker";
    `register` and `errors` rather than owning a form: there is one form on the
    page, one submit, and one source of truth for validity.
 
-   The address block is built around the delivery zone — one searchable pick
-   from the shared zone list (@sakura/contracts' shipping-zones), which is
-   what postage is priced off and what the Pathao manifest is filled from.
-   Inside Dhaka and the suburbs the zone is the thana, so there is nothing
-   more to ask; outside Dhaka the zone is a whole district, so the upazila is
-   asked for as free text below it. Everything is then composed into the
-   single `address` line a customer and a rider read, with the parts kept
-   alongside it unjoined for the manifest.
+   The address block asks only what the delivery price depends on, in as few
+   steps as that allows: Division → District, and that is the price for all
+   but two districts. Dhaka district adds one choice of three — the city, the
+   Savar/Keraniganj ring, or Dohar/Nawabganj — shown as radio buttons with
+   examples so nobody has to hunt through a list; Munshiganj adds "Gazaria or
+   elsewhere". A customer in Rajshahi never sees a Dhaka option.
+
+   The thana or upazila is then typed, by everyone, as free text. It is what
+   the courier reads, but no price pivots on it, so it is not a pick.
+
+   Whichever step lands on it, the result is one zone from the shared list
+   (@sakura/contracts' shipping-zones) — what postage is priced off. Everything
+   is then composed into the single `address` line a customer and a rider
+   read, with the parts kept alongside it unjoined for the Pathao manifest.
    -------------------------------------------------------------------------- */
+
+/* Bangla names for the division and district dropdowns. Districts reuse the
+   zone list's own Bangla where it has a whole-district entry; Dhaka, which is
+   only ever split, is named here. */
+const DIVISION_BN: Record<string, string> = {
+  dhaka: "ঢাকা",
+  chattogram: "চট্টগ্রাম",
+  rajshahi: "রাজশাহী",
+  khulna: "খুলনা",
+  barishal: "বরিশাল",
+  sylhet: "সিলেট",
+  rangpur: "রংপুর",
+  mymensingh: "ময়মনসিংহ",
+};
+
+/** A zone that is the whole district rather than a part of one. */
+function wholeDistrict(zone: ShippingZone): boolean {
+  return zone.name === zone.city;
+}
+
+function districtBn(district: string): string {
+  if (district === "Dhaka") return "ঢাকা";
+
+  return zonesInDistrict(district).find(wholeDistrict)?.nameBn ?? district;
+}
 
 export function ShippingFields({
   register,
@@ -38,8 +67,11 @@ export function ShippingFields({
   errors: FieldErrors<CheckoutValues>;
   setValue: UseFormSetValue<CheckoutValues>;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const bangla = i18n.language === "bn";
 
+  const [division, setDivision] = useState("");
+  const [district, setDistrict] = useState("");
   const [zoneId, setZoneId] = useState("");
   const [upazila, setUpazila] = useState("");
   const [area, setArea] = useState("");
@@ -47,9 +79,22 @@ export function ShippingFields({
   const [postCode, setPostCode] = useState("");
 
   const zone = zoneById(zoneId);
-  /* A district-level pick names the city but not the thana — the case where
-     the upazila still has to be typed. */
-  const needsUpazila = zone ? zone.name === zone.city : false;
+  const districtZones = district ? zonesInDistrict(district) : [];
+  /* The extra choice exists only where the district holds more than one
+     price: Dhaka (three) and Munshiganj (two). */
+  const needsArea = districtZones.length > 1;
+  const tierHint = zone ? t(`checkout.shipping.tier.${zone.tier}`) : undefined;
+  const zoneName = (option: ShippingZone) => (bangla ? option.nameBn : option.name);
+
+  function chooseDistrict(next: string) {
+    const zones = next ? zonesInDistrict(next) : [];
+    /* One zone means the district is the zone — chosen for the customer. */
+    const nextZone = zones.length === 1 ? zones[0].id : "";
+
+    setDistrict(next);
+    setZoneId(nextZone);
+    sync({ zoneId: nextZone });
+  }
 
   function sync(next: {
     zoneId?: string;
@@ -59,19 +104,14 @@ export function ShippingFields({
     postCode?: string;
   }) {
     const chosen = zoneById(next.zoneId ?? zoneId);
-    const districtLevel = chosen ? chosen.name === chosen.city : false;
     const merged = {
-      upazila: districtLevel ? (next.upazila ?? upazila) : "",
+      upazila: next.upazila ?? upazila,
       area: next.area ?? area,
       detail: next.detail ?? detail,
       postCode: next.postCode ?? postCode,
     };
     const city = chosen?.city ?? "";
     const divisionLabel = chosen ? (divisionOfDistrict(city)?.label ?? "") : "";
-    /* Inside Dhaka the zone is the thana, so it takes the upazila's place in
-       the line; outside, the typed upazila does. English names on purpose —
-       this line is read by the rider, and the manifest is romanised anyway. */
-    const locality = districtLevel ? merged.upazila : (chosen?.name ?? "");
 
     setValue("zone", chosen?.id ?? "", { shouldValidate: true, shouldDirty: true });
     /* Ignored by the API, which derives the tier from `zone` — sent so this
@@ -90,7 +130,7 @@ export function ShippingFields({
       "address",
       [
         merged.detail,
-        [merged.area, locality].filter(Boolean).join(", "),
+        [merged.area, merged.upazila].filter(Boolean).join(", "),
         [city, divisionLabel].filter((part, i, all) => part && all.indexOf(part) === i).join(", "),
         merged.postCode,
       ]
@@ -140,21 +180,90 @@ export function ShippingFields({
           {...register("secondaryPhone")}
         />
 
-        <ZonePicker
-          label={t("checkout.shipping.zone")}
-          placeholder={t("checkout.shipping.zonePlaceholder")}
-          value={zoneId}
-          error={errors.zone?.message}
-          hint={
-            zone ? t(`checkout.shipping.tier.${zone.tier}`) : t("checkout.shipping.zonePending")
-          }
-          onChange={(next) => {
-            setZoneId(next.id);
-            sync({ zoneId: next.id });
+        <Select
+          label={t("checkout.shipping.division")}
+          options={[
+            { value: "", label: t("checkout.shipping.divisionPlaceholder"), disabled: true },
+            ...bdDivisions.map((d) => ({
+              value: d.value,
+              label: bangla ? (DIVISION_BN[d.value] ?? d.label) : d.label,
+            })),
+          ]}
+          value={division}
+          onChange={(e) => {
+            setDivision(e.target.value);
+            chooseDistrict("");
           }}
         />
+        <Select
+          label={t("checkout.shipping.district")}
+          disabled={!division}
+          /* The zone error lands on whichever control finishes the choice. */
+          error={needsArea ? undefined : errors.zone?.message}
+          hint={needsArea ? undefined : tierHint}
+          options={[
+            { value: "", label: t("checkout.shipping.districtPlaceholder"), disabled: true },
+            ...districtsFor(division).map((name) => ({
+              value: name,
+              label: bangla ? districtBn(name) : name,
+            })),
+          ]}
+          value={district}
+          onChange={(e) => chooseDistrict(e.target.value)}
+        />
 
-        {needsUpazila ? (
+        {district === "Dhaka" ? (
+          <div className="sm:col-span-2">
+            <RadioGroup name="dhaka-zone" label={t("checkout.shipping.dhakaZone")}>
+              {districtZones.map((option) => (
+                <Radio
+                  key={option.id}
+                  name="dhaka-zone"
+                  value={option.id}
+                  checked={zoneId === option.id}
+                  description={t(`checkout.shipping.dhakaZoneExamples.${option.id}`)}
+                  onChange={() => {
+                    setZoneId(option.id);
+                    sync({ zoneId: option.id });
+                  }}
+                >
+                  {zoneName(option)}
+                </Radio>
+              ))}
+            </RadioGroup>
+            <p
+              className={
+                errors.zone?.message
+                  ? "text-13.5 text-clay mt-2"
+                  : "text-caption text-secondary mt-2"
+              }
+            >
+              {errors.zone?.message ?? tierHint ?? t("checkout.shipping.zonePending")}
+            </p>
+          </div>
+        ) : needsArea ? (
+          <Select
+            label={t("checkout.shipping.zone")}
+            error={errors.zone?.message}
+            hint={tierHint}
+            options={[
+              { value: "", label: t("checkout.shipping.zoneSelect"), disabled: true },
+              ...districtZones.map((option) => ({
+                value: option.id,
+                label: wholeDistrict(option)
+                  ? t("checkout.shipping.zoneRestOfDistrict", { district: zoneName(option) })
+                  : zoneName(option),
+              })),
+            ]}
+            value={zoneId}
+            onChange={(e) => {
+              setZoneId(e.target.value);
+              sync({ zoneId: e.target.value });
+            }}
+          />
+        ) : null}
+
+        {zone ? (
           <Input
             label={t("checkout.shipping.upazila")}
             value={upazila}

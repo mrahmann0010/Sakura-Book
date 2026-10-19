@@ -8,20 +8,32 @@
    tiers stop mapping to the right rate column — see PICKUP_TIER in
    ./shipping-rates.
 
-   Data rather than code, and shared rather than per-app: the checkout picker,
+   Data rather than code, and shared rather than per-app: the checkout form,
    the cart quote and the order that is finally written all read this one list,
    so the zone a customer chooses and the zone they are charged for cannot be
    two lists that almost agree.
 
-   Granularity follows what decides the price. Inside Dhaka and the suburban
-   ring the tier changes from one thana to the next, so those are listed zone
-   by zone; everywhere else is one rate, so a district is enough and the
-   upazila stays a free-text field on the address form.
+   ## Only as fine as the price
+
+   A zone exists only where the price changes, because the price is all this
+   list decides. The thana or upazila is typed by every customer as free text
+   — the courier needs it, but no amount pivots on it. So:
+
+   - Dhaka district is three zones: the city corporation (ISD), the Savar /
+     Ashulia / Keraniganj / Dhamrai ring (SUBURB), and Dohar / Nawabganj (OSD).
+   - Gazipur and Narayanganj are one SUBURB zone each — every part of both is
+     priced the same.
+   - Munshiganj is two: Gazaria (SUBURB) and the rest of the district (OSD).
+   - Every other district is one OSD zone.
+
+   A thana-by-thana list would pin down Pathao's exact zone name for the
+   manifest, at the cost of a long pick for every Dhaka customer; the shop
+   chose the short form. The customer declares which part of Dhaka they are
+   in, so staff checking the typed thana against the choice is the safeguard.
 
    Source: Pathao's published rate card and hub directory, Oct 2026. Review
-   quarterly — Pathao reassigns zones as it opens hubs, and nothing here will
-   say when it has. The first month's invoices reconciled against the orders'
-   tiers is what catches a zone filed in the wrong place.
+   quarterly — Pathao reassigns areas as it opens hubs, and nothing here will
+   say when it has.
    -------------------------------------------------------------------------- */
 
 export const shippingTiers = ["ISD", "SUBURB", "OSD"] as const;
@@ -33,8 +45,6 @@ export type ShippingZone = {
   name: string;
   nameBn: string;
   tier: ShippingTier;
-  /** The dropdown's optgroup. */
-  group: ShippingZoneGroup;
   /**
    * The district, spelt as in ./bd-geo. It is what an order stores as `city`,
    * which is how the admin queue's division filter and the Pathao manifest's
@@ -43,165 +53,56 @@ export type ShippingZone = {
   city: string;
 };
 
-export const shippingZoneGroups = [
-  "dhaka-north",
-  "dhaka-south",
-  "savar-keraniganj",
-  "gazipur",
-  "narayanganj",
-  "munshiganj",
-  "outside-dhaka",
-] as const;
-export type ShippingZoneGroup = (typeof shippingZoneGroups)[number];
-
 type Row = [id: string, name: string, nameBn: string];
 
-function zones(
-  tier: ShippingTier,
-  group: ShippingZoneGroup,
-  city: string,
-  rows: Row[],
-): ShippingZone[] {
-  return rows.map(([id, name, nameBn]) => ({ id, name, nameBn, tier, group, city }));
-}
-
 /* ------------------------------------------------------------------ */
-/* ISD — inside Dhaka City Corporation                                  */
+/* Dhaka district — the one district with all three tiers in it         */
 /* ------------------------------------------------------------------ */
 
-const ISD: ShippingZone[] = [
-  ...zones("ISD", "dhaka-north", "Dhaka", [
-    ["uttara", "Uttara", "উত্তরা"],
-    ["dakshinkhan", "Dakshinkhan", "দক্ষিণখান"],
-    ["uttarkhan", "Uttarkhan", "উত্তরখান"],
-    ["turag", "Turag", "তুরাগ"],
-    ["khilkhet", "Khilkhet", "খিলক্ষেত"],
-    ["biman-bandar", "Biman Bandar", "বিমান বন্দর"],
-    ["badda", "Badda", "বাড্ডা"],
-    ["vatara", "Vatara", "ভাটারা"],
-    ["bashundhara-ra", "Bashundhara R/A", "বসুন্ধরা আ/এ"],
-    ["satarkul", "Satarkul", "সাতারকুল"],
-    ["beraid", "Beraid", "বেরাইদ"],
-    ["gulshan", "Gulshan", "গুলশান"],
-    ["banani", "Banani", "বনানী"],
-    ["mohakhali", "Mohakhali", "মহাখালী"],
-    ["niketan", "Niketan", "নিকেতন"],
-    ["cantonment", "Dhaka Cantonment", "ঢাকা সেনানিবাস"],
-    ["kafrul", "Kafrul", "কাফরুল"],
-    ["ibrahimpur", "Ibrahimpur", "ইব্রাহিমপুর"],
-    ["mirpur", "Mirpur", "মিরপুর"],
-    ["pallabi", "Pallabi", "পল্লবী"],
-    ["rupnagar", "Rupnagar", "রূপনগর"],
-    ["shah-ali", "Shah Ali", "শাহ আলী"],
-    ["darus-salam", "Darus Salam", "দারুস সালাম"],
-    ["mirpur-1", "Mirpur-1 / Gabtoli", "মিরপুর-১ / গাবতলী"],
-    ["shewrapara", "Shewrapara / Kazipara", "শেওড়াপাড়া / কাজীপাড়া"],
-    ["adabor", "Adabor", "আদাবর"],
-    ["mohammadpur", "Mohammadpur", "মোহাম্মদপুর"],
-    ["sher-e-bangla", "Sher-e-Bangla Nagar", "শেরেবাংলা নগর"],
-    ["agargaon", "Agargaon", "আগারগাঁও"],
-    ["tejgaon", "Tejgaon", "তেজগাঁও"],
-    ["farmgate", "Farmgate", "ফার্মগেট"],
-    ["hatirjheel", "Hatirjheel", "হাতিরঝিল"],
-    ["ramna", "Ramna", "রমনা"],
-    ["shahbagh", "Shahbagh", "শাহবাগ"],
-    ["dhanmondi", "Dhanmondi", "ধানমন্ডি"],
-    ["kalabagan", "Kalabagan", "কলাবাগান"],
-    ["new-market", "New Market", "নিউ মার্কেট"],
-    ["elephant-road", "Elephant Road", "এলিফ্যান্ট রোড"],
-  ]),
-
-  ...zones("ISD", "dhaka-south", "Dhaka", [
-    ["lalbagh", "Lalbagh", "লালবাগ"],
-    ["chawkbazar", "Chawkbazar", "চকবাজার"],
-    ["bangshal", "Bangshal", "বংশাল"],
-    ["kotwali", "Kotwali", "কোতোয়ালী"],
-    ["banglabazar", "Banglabazar", "বাংলাবাজার"],
-    ["sutrapur", "Sutrapur", "সূত্রাপুর"],
-    ["gendaria", "Gendaria", "গেন্ডারিয়া"],
-    ["wari", "Wari", "ওয়ারী"],
-    ["hazaribagh", "Hazaribagh", "হাজারীবাগ"],
-    ["kamrangirchar", "Kamrangirchar", "কামরাঙ্গীরচর"],
-    ["motijheel", "Motijheel", "মতিঝিল"],
-    ["paltan", "Paltan", "পল্টন"],
-    ["shahjahanpur", "Shahjahanpur", "শাহজাহানপুর"],
-    ["khilgaon", "Khilgaon", "খিলগাঁও"],
-    ["sabujbagh", "Sabujbagh / Bashabo", "সবুজবাগ / বাসাবো"],
-    ["mugda", "Mugda", "মুগদা"],
-    ["malibagh", "Malibagh", "মালিবাগ"],
-    ["rampura", "Rampura", "রামপুরা"],
-    ["jatrabari", "Jatrabari", "যাত্রাবাড়ী"],
-    ["kadamtali", "Kadamtali", "কদমতলী"],
-    ["shyampur", "Shyampur", "শ্যামপুর"],
-    ["dania", "Dania", "দনিয়া"],
-    ["rayerbag", "Rayerbag", "রায়েরবাগ"],
-
-    /* Absorbed into DSCC in the 2016–17 expansion. These feel like the city's
-       edge but are ISD — Pathao runs its Demra hub under Inside Dhaka. */
-    ["demra", "Demra", "ডেমরা"],
-    ["sarulia", "Sarulia", "সারুলিয়া"],
-    ["matuail", "Matuail", "মাতুয়াইল"],
-    ["konapara", "Konapara", "কোনাপাড়া"],
-    ["dakshingaon", "Dakshingaon", "দক্ষিণগাঁও"],
-    ["nasirabad-dhaka", "Nasirabad (Dhaka)", "নাসিরাবাদ"],
-    ["manda", "Manda", "মান্ডা"],
-  ]),
+const DHAKA: ShippingZone[] = [
+  { id: "dhaka-city", name: "Dhaka city", nameBn: "ঢাকা শহর", tier: "ISD", city: "Dhaka" },
+  {
+    id: "savar-keraniganj",
+    name: "Savar / Ashulia / Keraniganj / Dhamrai",
+    nameBn: "সাভার / আশুলিয়া / কেরানীগঞ্জ / ধামরাই",
+    tier: "SUBURB",
+    city: "Dhaka",
+  },
+  {
+    /* Dhaka district, but far enough out that Pathao files them outside the
+       suburban hub group. Verify against a live quote before trusting it. */
+    id: "dohar-nawabganj",
+    name: "Dohar / Nawabganj",
+    nameBn: "দোহার / নবাবগঞ্জ",
+    tier: "OSD",
+    city: "Dhaka",
+  },
 ];
 
 /* ------------------------------------------------------------------ */
-/* SUBURB — the ring around Dhaka city                                  */
+/* The rest of the suburban ring                                        */
 /* ------------------------------------------------------------------ */
 
 const SUBURB: ShippingZone[] = [
-  // Dhaka district, outside the city corporation.
-  ...zones("SUBURB", "savar-keraniganj", "Dhaka", [
-    ["savar", "Savar", "সাভার"],
-    ["ashulia", "Ashulia", "আশুলিয়া"],
-    ["baipail", "Baipail", "বাইপাইল"],
-    ["hemayetpur", "Hemayetpur", "হেমায়েতপুর"],
-    ["amin-bazar", "Amin Bazar", "আমিন বাজার"],
-    ["dhamrai", "Dhamrai", "ধামরাই"],
-    ["keraniganj", "Keraniganj", "কেরানীগঞ্জ"],
-    ["zinzira", "Zinzira", "জিনজিরা"],
-    ["atibazar", "Atibazar", "আটিবাজার"],
-    ["chunkutia", "Chunkutia", "চুনকুটিয়া"],
-    ["hasnabad", "Hasnabad", "হাসনাবাদ"],
-    ["kalatia", "Kalatia", "কালাতিয়া"],
-  ]),
-
-  ...zones("SUBURB", "gazipur", "Gazipur", [
-    ["tongi", "Tongi", "টঙ্গী"],
-    ["board-bazar", "Board Bazar", "বোর্ড বাজার"],
-    ["joydebpur", "Joydebpur", "জয়দেবপুর"],
-    ["gazipur-chowrasta", "Gazipur Chowrasta", "গাজীপুর চৌরাস্তা"],
-    ["kashimpur", "Kashimpur", "কাশিমপুর"],
-    ["kaliakair", "Kaliakair", "কালিয়াকৈর"],
-    ["kaliganj-gazipur", "Kaliganj (Gazipur)", "কালীগঞ্জ"],
-    ["mawna", "Mawna / Sreepur", "মাওনা / শ্রীপুর"],
-    ["kapasia", "Kapasia", "কাপাসিয়া"],
-  ]),
-
-  ...zones("SUBURB", "narayanganj", "Narayanganj", [
-    ["narayanganj-sadar", "Narayanganj Sadar", "নারায়ণগঞ্জ সদর"],
-    ["fatullah", "Fatullah", "ফতুল্লা"],
-    ["siddhirganj", "Siddhirganj", "সিদ্ধিরগঞ্জ"],
-    ["bandar", "Bandar", "বন্দর"],
-    ["rupganj", "Rupganj", "রূপগঞ্জ"],
-    ["bhulta-gawsia", "Bhulta-Gawsia", "ভুলতা-গাউছিয়া"],
-    ["araihazar", "Araihazar", "আড়াইহাজার"],
-    ["sonargaon", "Sonargaon", "সোনারগাঁও"],
-  ]),
-
-  // Only Gazaria is suburban; the rest of Munshiganj is OSD.
-  ...zones("SUBURB", "munshiganj", "Munshiganj", [["gazaria", "Gazaria", "গজারিয়া"]]),
+  { id: "gazipur", name: "Gazipur", nameBn: "গাজীপুর", tier: "SUBURB", city: "Gazipur" },
+  {
+    id: "narayanganj",
+    name: "Narayanganj",
+    nameBn: "নারায়ণগঞ্জ",
+    tier: "SUBURB",
+    city: "Narayanganj",
+  },
+  // Only Gazaria is suburban; the rest of Munshiganj is OSD, below.
+  { id: "gazaria", name: "Gazaria", nameBn: "গজারিয়া", tier: "SUBURB", city: "Munshiganj" },
 ];
 
 /* ------------------------------------------------------------------ */
-/* OSD — rest of the country; district granularity is enough            */
+/* OSD — every other district, one zone each                            */
 /* ------------------------------------------------------------------ */
 
 /* [id, English (bd-geo spelling), Bangla]. Dhaka, Gazipur and Narayanganj are
-   absent on purpose — they are covered zone by zone above. */
+   absent on purpose — they are covered above. Munshiganj is here as "the rest
+   of the district", beside Gazaria. */
 const OSD_DISTRICTS: Row[] = [
   ["bagerhat", "Bagerhat", "বাগেরহাট"],
   ["bandarban", "Bandarban", "বান্দরবান"],
@@ -266,27 +167,17 @@ const OSD_DISTRICTS: Row[] = [
   ["thakurgaon", "Thakurgaon", "ঠাকুরগাঁও"],
 ];
 
-const OSD: ShippingZone[] = [
-  ...OSD_DISTRICTS.map(([id, name, nameBn]) => ({
-    id,
-    name,
-    nameBn,
-    tier: "OSD" as const,
-    group: "outside-dhaka" as const,
-    city: name,
-  })),
-
-  /* Dhaka district, but far enough out that Pathao files them outside the
-     suburban hub group. Verify against a live quote before trusting SUBURB. */
-  ...zones("OSD", "outside-dhaka", "Dhaka", [
-    ["dohar", "Dohar", "দোহার"],
-    ["nawabganj", "Nawabganj (Dhaka)", "নবাবগঞ্জ"],
-  ]),
-];
+const OSD: ShippingZone[] = OSD_DISTRICTS.map(([id, name, nameBn]) => ({
+  id,
+  name,
+  nameBn,
+  tier: "OSD" as const,
+  city: name,
+}));
 
 /* ------------------------------------------------------------------ */
 
-export const SHIPPING_ZONES: readonly ShippingZone[] = [...ISD, ...SUBURB, ...OSD];
+export const SHIPPING_ZONES: readonly ShippingZone[] = [...DHAKA, ...SUBURB, ...OSD];
 
 export const ZONES_BY_ID: ReadonlyMap<string, ShippingZone> = new Map(
   SHIPPING_ZONES.map((zone) => [zone.id, zone]),
@@ -300,14 +191,16 @@ export function tierOfZone(id: string | undefined | null): ShippingTier | undefi
   return zoneById(id)?.tier;
 }
 
-/** Grouped for a picker with optgroups, in the order the groups are declared. */
-export function groupedZones(): { group: ShippingZoneGroup; zones: ShippingZone[] }[] {
-  return shippingZoneGroups.map((group) => ({
-    group,
-    zones: SHIPPING_ZONES.filter((zone) => zone.group === group),
-  }));
+/**
+ * The zones inside one district, by its bd-geo spelling.
+ *
+ * One for almost every district; three for Dhaka and two for Munshiganj,
+ * the only districts whose price changes inside them. That count is what the
+ * address form branches on.
+ */
+export function zonesInDistrict(district: string): ShippingZone[] {
+  return SHIPPING_ZONES.filter((zone) => zone.city === district);
 }
-
 /**
  * The `delivery_regions` row each tier is priced from.
  *

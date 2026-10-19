@@ -1,4 +1,4 @@
-import { bdDivisions, DEFAULT_BOOK_WEIGHT_GRAMS, zoneById } from "@sakura/contracts";
+import { bdDivisions, DEFAULT_BOOK_WEIGHT_GRAMS } from "@sakura/contracts";
 import type { ShippingAddress } from "../../db/schema";
 import { toLatin, withLatinDigits } from "../../common/bangla-latin";
 
@@ -323,15 +323,6 @@ export function recipientPlace(shipping: ShippingAddress): { zone: string; area:
      and the zone then comes out as the division. */
   const city = tidy(toLatin(shipping.city));
   const address = toLatin(shipping.address);
-
-  /* Chosen from the shared zone list at checkout — the case every order since
-     zones shipped takes. Inside Dhaka and the suburbs the zone *is* Pathao's
-     zone. An outside-Dhaka pick is a whole district, which names the city but
-     not the zone, so those fall through to the upazila the customer typed. */
-  const chosen = zoneById(shipping.zone);
-  if (chosen && chosen.name !== chosen.city) {
-    return { zone: tidy(chosen.name), area: tidy(toLatin(shipping.area ?? "")) };
-  }
 
   /* Recorded, not guessed. The upazila alone is enough to take this path: an
      order can name its upazila and leave the area blank, and a blank area is
