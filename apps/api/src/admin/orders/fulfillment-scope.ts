@@ -161,6 +161,7 @@ export function redactDetailForFulfillment(detail: AdminOrderDetail): AdminOrder
     receipt: NEUTRAL_RECEIPT,
     verification: NEUTRAL_VERIFICATION,
     verifications: [],
+    gatewayClaim: null,
   };
 }
 

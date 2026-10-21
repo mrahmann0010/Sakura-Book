@@ -21,13 +21,15 @@ import {
   findOrder,
   findTransactionIdClaim,
   forwardPathTo,
+  OrderPaymentClaimService,
+  RELEASED_STATUSES,
   reopenBlocker,
   type OrderRow,
 } from "../../orders";
 import { OrdersService, PaymentVerificationLogService } from "../../orders";
 import { PaymentsService } from "../../payments";
 import { AuditService } from "../../audit";
-import { PaymentVerificationService, type PaymentVerification } from "../../payment-verification";
+import type { ClaimOutcome } from "../../payment-gateway";
 import type { AccessClaims } from "../auth/tokens";
 import { adminOrderFilters, adminOrderOrder } from "./admin-order.query";
 import {
@@ -38,7 +40,13 @@ import {
   redactDetailForFulfillment,
   redactSummaryForFulfillment,
 } from "./fulfillment-scope";
-import { receiptUniquenessOf, toAdminOrderDetail, toAdminOrderSummary } from "./admin-order.mapper";
+import {
+  heldClaimOf,
+  receiptUniquenessOf,
+  toAdminOrderDetail,
+  toAdminOrderSummary,
+} from "./admin-order.mapper";
+import { PaymentClaimRefusedError, PaymentNotClaimedError } from "./admin-order.errors";
 import { toPathaoCsv } from "./pathao-export";
 
 /** Who did it and from where, threaded through to every audit entry. */
@@ -88,7 +96,7 @@ export class AdminOrdersService {
     private readonly ordersService: OrdersService,
     private readonly paymentsService: PaymentsService,
     private readonly auditService: AuditService,
-    private readonly paymentVerificationService: PaymentVerificationService,
+    private readonly orderClaims: OrderPaymentClaimService,
     private readonly verificationLog: PaymentVerificationLogService,
     private readonly config: ConfigService<Env, true>,
   ) {}
@@ -275,24 +283,27 @@ export class AdminOrdersService {
       PaymentVerificationLogService.stateOf(latest, row.id),
       verifications,
       reopen,
+      heldClaimOf(verifications),
     );
 
     return isFulfillment(viewer.role) ? redactDetailForFulfillment(detail) : detail;
   }
 
   /**
-   * Cross-check the transaction ID the customer gave at checkout against the
-   * SMS gateway, without touching the order.
+   * "Check & confirm": claim the order's payment at the gateway, and confirm
+   * the order if the claim succeeds.
    *
-   * Purely informational — unlike the pre-order desk's equivalent, this never
-   * auto-accepts on a match. Acceptance here stays the admin's explicit
-   * `transition`/`confirmPayment` call, per this service's own rule that it
-   * never writes `orders.status` outside those two paths.
+   * A claim is a write — it spends the payment for this order — so this is
+   * an action, never a way to look. The latest outcome is already on the
+   * detail page for that, and there is no read endpoint to call instead.
    *
-   * `NO_RECEIPT` short-circuits before calling the verifier: a cash-on-delivery
-   * order, or a manual-transfer order placed before the transaction-id field
-   * was required, has nothing to look up, and reporting that as NOT_FOUND
-   * would misdescribe an absent receipt as an unmatched one.
+   * Refused for a cancelled or refunded order (claiming would spend a
+   * payment for an order that will not ship) and for a receipt another live
+   * order holds (confirm it there, or use Accept with a reason).
+   *
+   * `NO_RECEIPT` short-circuits before the gateway: a cash-on-delivery order,
+   * or a manual-transfer order placed before the transaction-id field was
+   * required, has nothing to claim.
    */
   async verifyPayment(
     orderNumber: string,
@@ -300,105 +311,144 @@ export class AdminOrdersService {
   ): Promise<AdminOrderVerifyPaymentResult> {
     const order = await this.requireOrder(orderNumber, context.actor);
 
-    if (!order.transactionId) {
+    if (!OrderPaymentClaimService.isClaimable(order)) {
       return {
         record: { outcome: "NO_RECEIPT" },
         summary: "No transaction ID is on file for this order.",
+        confirmed: false,
       };
     }
 
-    const verification = await this.paymentVerificationService.verify({
-      transactionId: order.transactionId,
-      expectedCents: order.totalCents,
-      // Narrows the gateway lookup to the one collection the customer said
-      // they paid through, instead of walking all three. Undefined for an
-      // order placed before this field existed, which still works — it just
-      // falls back to the scan.
-      provider: order.provider ?? undefined,
-    });
+    if (RELEASED_STATUSES.includes(order.status)) {
+      throw new InvalidInputError(
+        "This order is cancelled or refunded. Reopen it before claiming its payment.",
+        { orderNumber, status: order.status },
+      );
+    }
 
-    /* Said first, and said even when the gateway matched — especially then. A
-       reused receipt matches the gateway by construction: it is a real payment,
-       for the right amount, that another order has already been granted
-       against. "Verified" is exactly what this looks like from the gateway's
-       side, so the summary has to lead with the part the gateway cannot know.
-
-       The record keeps the true gateway verdict rather than being overwritten,
-       because the two facts are independent and staff need both: whether the
-       money arrived, and whether it has already been spent. */
-    const claim = await findTransactionIdClaim(this.dbService.db, order.transactionId, {
+    const holder = await findTransactionIdClaim(this.dbService.db, order.transactionId, {
       excludeOrderId: order.id,
     });
 
-    const summary = summarizeVerification(verification, order.totalCents);
+    if (holder) {
+      throw new InvalidInputError(
+        `This transaction ID is already recorded against order ${holder.orderNumber} ` +
+          `(${holder.status}). Confirm the payment there, or accept this order with a reason ` +
+          `to override.`,
+        { orderNumber, claimedBy: holder.orderNumber, claimedByStatus: holder.status },
+      );
+    }
 
-    /* Written before the answer is returned, so the panel's badge and the
-       sentence the admin is about to read come from the same check. Named to
-       the actor: the history's whole value is distinguishing the automatic
-       check at checkout from a person deciding to look. */
-    const record = await this.verificationLog.record(
-      order.id,
-      verification,
-      order.totalCents,
-      context.actor.email,
-    );
+    // Staff asking means the order should still be granted, so a released
+    // claim is retried under a new key.
+    const { outcome, record } = await this.orderClaims.claim(order, context.actor.email, {
+      retryReleased: true,
+    });
 
-    return {
-      record,
-      summary: claim
-        ? `This transaction ID is already recorded against order ${claim.orderNumber} (${claim.status}). ` +
-          `Confirming payment here is blocked. Gateway says: ${summary}`
-        : summary,
-    };
+    let confirmed = false;
+
+    if (outcome.outcome === "CLAIMED" && order.status === "PENDING") {
+      ({ confirmed } = await this.paymentsService.confirmManually(order.paymentMethod, {
+        referenceId: order.orderNumber,
+        status: "SUCCEEDED",
+        // The order total: confirmManually checks for exact equality, and the
+        // gateway has already established paid >= expected.
+        amountCents: order.totalCents,
+        raw: {
+          source: "admin-check",
+          confirmedBy: context.actor.email,
+          transactionId: outcome.trxId,
+          claimKey: record.claimKey ?? null,
+          paidCents: outcome.paidCents,
+          overpaidCents: outcome.overpaidCents,
+          claimedAt: outcome.claimedAt.toISOString(),
+        },
+      }));
+
+      await this.auditService.recordDetached({
+        ...auditContext(context),
+        action: "UPDATE",
+        entityType: "orders",
+        entityId: orderNumber,
+        before: { status: order.status },
+        after: {
+          status: confirmed ? "PAYMENT_CONFIRMED" : order.status,
+          paymentAmountCents: order.totalCents,
+          gatewayClaim: record.claimKey ?? null,
+        },
+        note: "Confirmed by claiming the payment at the gateway",
+      });
+    }
+
+    return { record, summary: summarizeClaim(outcome, order.totalCents), confirmed };
   }
 
   /**
-   * Refuse to grant an order whose receipt is already on another live one.
+   * What every grant passes through — `confirmPayment` and a `transition`
+   * into PAYMENT_CONFIRMED — so neither door can skip it.
    *
-   * The single place both grant paths pass through — `confirmPayment` and a
-   * `transition` to PAYMENT_CONFIRMED — so neither can be hardened or relaxed
-   * without the other following. That is the entire point of it being a
-   * method rather than two copies of a check.
+   * ## 1. Our own receipts
    *
-   * A duplicate is genuine at the gateway by construction: it is a real
-   * payment, of the right amount, that another order has already been granted
-   * against. No amount of verification catches it, which is why this runs
-   * independently of whether the gateway said MATCHED.
+   * Refuse a receipt already on another live order. A duplicate is genuine
+   * at the gateway by construction — a real payment that another of *our*
+   * orders already holds — so only this check can catch it, and only it can
+   * name the other order.
    *
-   * The override is a typed reason, not a flag, and it is recorded to the
-   * audit log before the grant proceeds. It exists because the previous escape
-   * hatch was to *cancel the other order* to release its claim — destructive,
-   * lossy, and a genuinely bad thing to ask of someone who simply knows the
-   * customer paid for two orders from one wallet.
+   * The override is a typed reason, recorded to the audit log before the
+   * grant. With it, the gateway is not asked: the other order already holds
+   * the payment there, so a claim for this one could only come back
+   * `already_claimed`. One payment, covering two orders, is exactly what the
+   * reason says.
+   *
+   * ## 2. The gateway
+   *
+   * Claim the payment, so it is spent once across every business sharing the
+   * receiving number. CLAIMED lets the grant through. Already spent elsewhere
+   * or short is refused outright. Anything else — not arrived, unreachable,
+   * refused for a reason a person can judge — needs a written
+   * `gatewayClaimOverride`; the background worker then keeps trying to claim
+   * the payment after the grant.
    */
-  private async guardDuplicateReceipt(
+  private async guardPaymentGrant(
     order: OrderRow,
-    override: string | undefined,
+    overrides: { duplicateReceiptOverride?: string; gatewayClaimOverride?: string },
     context: AdminContext,
   ): Promise<void> {
     const claim = await findTransactionIdClaim(this.dbService.db, order.transactionId, {
       excludeOrderId: order.id,
     });
 
-    if (!claim) return;
+    if (claim) {
+      const override = overrides.duplicateReceiptOverride;
 
-    if (override) {
+      if (!override) {
+        this.logger.warn(
+          `${context.actor.email} tried to confirm ${order.orderNumber}, whose transaction ID is ` +
+            `already recorded against ${claim.orderNumber}`,
+        );
+
+        throw new InvalidInputError(
+          `This order's transaction ID is already recorded against order ${claim.orderNumber} ` +
+            `(${claim.status}). Confirm the payment there, or — if this order is the real claim — ` +
+            `re-send with a reason to override.`,
+          {
+            orderNumber: order.orderNumber,
+            claimedBy: claim.orderNumber,
+            claimedByStatus: claim.status,
+          },
+        );
+      }
+
       this.logger.warn(
         `${context.actor.email} overrode the duplicate-receipt block on ${order.orderNumber} ` +
           `(also on ${claim.orderNumber}): ${override}`,
       );
 
       /* `record` rather than `recordDetached`, in a transaction of its own and
-         before the caller grants anything.
-
-         It is not atomic with the grant — the grant belongs to
-         `confirmPayment` or `transitionAndCommit` and this method has no
-         handle on it. What it does guarantee is the direction that matters: if
-         the justification cannot be written, `record` throws, this method
-         throws, and the grant never runs. An override that happened with no
-         record of why is the one outcome worth failing a request over, since
-         nothing else on the order records it — unlike a transition, which
-         order_status_history captures regardless. */
+         before the caller grants anything. If the justification cannot be
+         written, `record` throws, this method throws, and the grant never
+         runs. An override with no record of why is the one outcome worth
+         failing a request over. */
       await this.dbService.db.transaction((tx) =>
         this.auditService.record(
           {
@@ -417,20 +467,56 @@ export class AdminOrdersService {
       return;
     }
 
+    if (!OrderPaymentClaimService.isClaimable(order)) return;
+
+    const { outcome } = await this.orderClaims.claim(order, context.actor.email, {
+      retryReleased: true,
+    });
+
+    if (outcome.outcome === "CLAIMED") return;
+
+    const summary = summarizeClaim(outcome, order.totalCents);
+
+    if (outcome.outcome === "ALREADY_CLAIMED" || outcome.outcome === "UNDERPAID") {
+      this.logger.warn(
+        `${context.actor.email} tried to confirm ${order.orderNumber}; the gateway refused: ${outcome.outcome}`,
+      );
+
+      throw new PaymentClaimRefusedError(summary, {
+        orderNumber: order.orderNumber,
+        outcome: outcome.outcome,
+      });
+    }
+
+    const override = overrides.gatewayClaimOverride;
+
+    if (!override) {
+      throw new PaymentNotClaimedError(
+        `The payment gateway could not confirm this payment. ${summary} ` +
+          `To confirm it anyway, give a reason.`,
+        { orderNumber: order.orderNumber, outcome: outcome.outcome },
+      );
+    }
+
     this.logger.warn(
-      `${context.actor.email} tried to confirm ${order.orderNumber}, whose transaction ID is ` +
-        `already recorded against ${claim.orderNumber}`,
+      `${context.actor.email} confirmed ${order.orderNumber} without a gateway claim ` +
+        `(${outcome.outcome}): ${override}`,
     );
 
-    throw new InvalidInputError(
-      `This order's transaction ID is already recorded against order ${claim.orderNumber} ` +
-        `(${claim.status}). Confirm the payment there, or — if this order is the real claim — ` +
-        `re-send with a reason to override.`,
-      {
-        orderNumber: order.orderNumber,
-        claimedBy: claim.orderNumber,
-        claimedByStatus: claim.status,
-      },
+    // Same shape and the same reasoning as the duplicate override above.
+    await this.dbService.db.transaction((tx) =>
+      this.auditService.record(
+        {
+          ...auditContext(context),
+          action: "GATEWAY_CLAIM_OVERRIDE",
+          entityType: "orders",
+          entityId: order.orderNumber,
+          before: { gatewayOutcome: outcome.outcome },
+          after: { overridden: true },
+          note: override,
+        },
+        tx,
+      ),
     );
   }
 
@@ -508,7 +594,7 @@ export class AdminOrdersService {
     }
 
     if (entering.includes("PAYMENT_CONFIRMED")) {
-      await this.guardDuplicateReceipt(order, request.duplicateReceiptOverride, context);
+      await this.guardPaymentGrant(order, request, context);
     }
 
     /* The machine allows PAYMENT_CONFIRMED → PENDING; this endpoint does not.
@@ -586,7 +672,7 @@ export class AdminOrdersService {
       );
     }
 
-    await this.guardDuplicateReceipt(order, request.duplicateReceiptOverride, context);
+    await this.guardPaymentGrant(order, request, context);
 
     const { confirmed } = await this.paymentsService.confirmManually(order.paymentMethod, {
       referenceId: order.orderNumber,
@@ -1004,20 +1090,39 @@ export class AdminOrdersService {
   }
 }
 
-/** A one-line, human-readable summary of a verification outcome. */
-function summarizeVerification(verification: PaymentVerification, expectedCents: number): string {
+/** One or two sentences for staff, describing what the gateway said. */
+function summarizeClaim(outcome: ClaimOutcome, expectedCents: number): string {
   const amount = (cents: number) =>
     (cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
-  switch (verification.outcome) {
-    case "MATCHED":
-      return `Matched — ৳${amount(verification.paidCents)} received via ${verification.provider}.`;
+  switch (outcome.outcome) {
+    case "CLAIMED":
+      return (
+        `Claimed — ৳${amount(outcome.paidCents)} received via ${outcome.provider}.` +
+        (outcome.overpaidCents > 0
+          ? ` Overpaid by ৳${amount(outcome.overpaidCents)}: refund or credit the customer.`
+          : "")
+      );
+    case "PENDING_ARRIVAL":
+      return "The payment SMS has not reached the gateway yet. It usually arrives within a few minutes.";
     case "UNDERPAID":
-      return `Underpaid — ৳${amount(verification.paidCents)} received via ${verification.provider}, ৳${amount(expectedCents)} expected.`;
-    case "NOT_FOUND":
-      return "No matching transaction found yet — it may still be arriving.";
+      return (
+        `Underpaid — ${outcome.paidCents === null ? "less than the total" : `৳${amount(outcome.paidCents)}`} ` +
+        `received, ৳${amount(expectedCents)} expected. The payment stays unclaimed so the customer can top up.`
+      );
+    case "ALREADY_CLAIMED":
+      return (
+        "This payment has already been spent by another order or business" +
+        (outcome.claimedAt ? ` (claimed ${outcome.claimedAt.toISOString()}).` : ".")
+      );
+    case "RELEASED":
+      return "A gateway admin released this order's earlier claim.";
+    case "REJECTED":
+      return `The gateway refused it: ${outcome.reason}`;
+    case "MISCONFIGURED":
+      return `Gateway setup problem — ${outcome.reason}`;
     case "UNAVAILABLE":
-      return `Could not check — ${verification.reason}`;
+      return `Could not reach the gateway — ${outcome.reason}`;
   }
 }
 

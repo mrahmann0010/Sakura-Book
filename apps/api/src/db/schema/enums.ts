@@ -203,4 +203,8 @@ export const auditActionEnum = pgEnum("audit_action", [
      to PENDING with a written reason. Its own value so "how often do we reject
      orders we should not have" is a filter, like the revert above. */
   "ORDER_REOPEN",
+  /* Staff confirmed a payment the gateway could not claim — not arrived yet,
+     unreachable, or refused — with a written reason. Its own value so "how
+     often do we confirm without the gateway" is a filter. */
+  "GATEWAY_CLAIM_OVERRIDE",
 ]);

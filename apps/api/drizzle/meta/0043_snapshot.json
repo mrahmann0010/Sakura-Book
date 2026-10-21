@@ -1,5 +1,5 @@
 {
-  "id": "d4d068d7-6136-4382-817e-6e00555aa480",
+  "id": "888ae40c-df88-46ed-8b98-2df79a956d39",
   "prevId": "1b1a8dfa-932b-488b-8400-5d3bc4c91e3b",
   "version": "7",
   "dialect": "postgresql",
@@ -3288,7 +3288,8 @@
         "ADJUST",
         "DUPLICATE_RECEIPT_OVERRIDE",
         "PAYMENT_REVERT",
-        "ORDER_REOPEN"
+        "ORDER_REOPEN",
+        "GATEWAY_CLAIM_OVERRIDE"
       ]
     },
     "public.book_author_role": {

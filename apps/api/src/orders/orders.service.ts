@@ -1,6 +1,11 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { EventEmitter2 } from "@nestjs/event-emitter";
-import type { Order, OrderCancelRequest, OrderLookupRequest } from "@sakura/contracts";
+import type {
+  Order,
+  OrderCancelRequest,
+  OrderLookupRequest,
+  OrderPaymentStatusRequest,
+} from "@sakura/contracts";
 import { and, eq, or, sql } from "drizzle-orm";
 import { ResourceNotFoundError } from "../common/errors";
 import { DbService } from "../db/db.service";
@@ -491,6 +496,22 @@ export class OrdersService {
    */
   private emitStatusChange(event: OrderStatusChangedEvent): void {
     this.events.emit(ORDER_STATUS_CHANGED, event);
+  }
+
+  /**
+   * A just-placed order, for the checkout modal waiting on its payment.
+   *
+   * Two factors — order number and email — like cancel. 404 on a miss, with
+   * nothing to say which factor was wrong.
+   */
+  async paymentStatus(request: OrderPaymentStatusRequest): Promise<Order> {
+    const orderNumber = request.orderNumber.trim().toUpperCase();
+    const existing = await this.findByCredentials(orderNumber, request.email);
+    const order = existing ? await this.byNumber(orderNumber) : undefined;
+
+    if (!order) throw new ResourceNotFoundError("Order", orderNumber);
+
+    return order;
   }
 
   /** The order behind a number *and* a matching email, or nothing. */

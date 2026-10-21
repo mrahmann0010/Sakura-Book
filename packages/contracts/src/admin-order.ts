@@ -311,6 +311,21 @@ export const adminOrderDetailSchema = orderSchema.extend({
    * UNAVAILABLE says something about the gateway rather than the customer.
    */
   verifications: z.array(paymentVerificationRecordSchema),
+
+  /**
+   * The payment this order holds at the gateway, or null when it holds none.
+   *
+   * Drives two reminders on the detail page: an overpayment to refund or
+   * credit, and — once the order is cancelled or refunded — that only a
+   * gateway admin can release the claim so the receipt can be used again.
+   */
+  gatewayClaim: z
+    .object({
+      transactionId: z.string(),
+      claimedAt: z.string().datetime().nullable(),
+      overpaidCents: z.number().int().nonnegative(),
+    })
+    .nullable(),
 });
 
 export type AdminOrderDetail = z.infer<typeof adminOrderDetailSchema>;
@@ -337,6 +352,26 @@ export const duplicateReceiptOverrideSchema = z
   .optional();
 
 /**
+ * The typed reason that lets staff confirm a payment the gateway could not
+ * claim — the SMS has not arrived, the gateway is down, or it refused for a
+ * reason a person can judge (too old, over the limit).
+ *
+ * Never accepted for the two answers that settle the question: a payment
+ * already spent elsewhere, and an underpayment. Those are refused outright.
+ *
+ * With a reason, the grant goes ahead and the background worker keeps trying
+ * to claim the payment afterwards, so it is still marked spent at the gateway
+ * once it arrives — and if another business got there first, the order is
+ * flagged "Spent elsewhere" for the owner.
+ */
+export const gatewayClaimOverrideSchema = z
+  .string()
+  .trim()
+  .min(15, "Explain how you know this payment arrived.")
+  .max(500)
+  .optional();
+
+/**
  * Moving an order along.
  *
  * The target status is named explicitly rather than inferred from a "next"
@@ -353,6 +388,8 @@ export const adminOrderTransitionRequestSchema = z.object({
   note: z.string().trim().max(280).optional(),
 
   duplicateReceiptOverride: duplicateReceiptOverrideSchema,
+
+  gatewayClaimOverride: gatewayClaimOverrideSchema,
 
   /**
    * Walk every status in between rather than requiring `status` to be one
@@ -404,6 +441,8 @@ export const adminConfirmPaymentRequestSchema = z.object({
   note: z.string().trim().max(280).optional(),
 
   duplicateReceiptOverride: duplicateReceiptOverrideSchema,
+
+  gatewayClaimOverride: gatewayClaimOverrideSchema,
 });
 
 export type AdminConfirmPaymentRequest = z.infer<typeof adminConfirmPaymentRequestSchema>;
@@ -488,17 +527,15 @@ export const adminInternalNoteRequestSchema = z.object({
 export type AdminInternalNoteRequest = z.infer<typeof adminInternalNoteRequestSchema>;
 
 /**
- * The result of cross-checking a manual-transfer order's transaction ID
- * against the SMS-gateway record.
+ * The result of "Check & confirm": claiming a manual-transfer order's payment
+ * at the gateway, and confirming the order when the claim succeeds.
  *
- * `NO_RECEIPT` is a fifth outcome layered on top of `paymentVerificationRecordSchema`'s
- * four (see payment-verification.ts) — distinct from `NOT_FOUND`, because there
- * is nothing to look up: a cash-on-delivery order, or a manual-transfer order
- * placed before the transaction-id field existed, was never going to match
- * anything and saying so would misreport an absent receipt as an unmatched one.
+ * A claim is a write — it spends the payment — so this is never run just to
+ * look. The order's latest outcome is already on the detail page for that.
  *
- * Informational only — this never changes `orders.status` on its own. Acceptance
- * stays the admin's explicit `transition`/`confirmPayment` call.
+ * `NO_RECEIPT` is layered on top of `paymentVerificationRecordSchema`'s
+ * outcomes: a cash-on-delivery order, or a manual-transfer order placed
+ * before the transaction-id field existed, has nothing to claim.
  */
 export const adminOrderVerifyPaymentResultSchema = z.object({
   record: z.union([
@@ -506,6 +543,8 @@ export const adminOrderVerifyPaymentResultSchema = z.object({
     z.object({ outcome: z.literal("NO_RECEIPT") }),
   ]),
   summary: z.string(),
+  /** Whether this check also confirmed the order — a claim on a PENDING order grants it. */
+  confirmed: z.boolean(),
 });
 
 export type AdminOrderVerifyPaymentResult = z.infer<typeof adminOrderVerifyPaymentResultSchema>;

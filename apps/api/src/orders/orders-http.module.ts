@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { PaymentsModule } from "../payments";
+import { ClaimRetryWorker } from "./claim-retry.worker";
 import { OrderAutoVerifyService } from "./order-auto-verify.service";
 import { OrdersController } from "./orders.controller";
 import { OrdersModule } from "./orders.module";
@@ -18,6 +19,8 @@ import { OrdersModule } from "./orders.module";
 @Module({
   imports: [OrdersModule, PaymentsModule],
   controllers: [OrdersController],
-  providers: [OrderAutoVerifyService],
+  // The retry worker sits here with auto-verify because it ends the same way:
+  // a claimed payment grants the order through PaymentsService.
+  providers: [OrderAutoVerifyService, ClaimRetryWorker],
 })
 export class OrdersHttpModule {}

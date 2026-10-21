@@ -1,3 +1,4 @@
+ALTER TYPE "public"."audit_action" ADD VALUE 'GATEWAY_CLAIM_OVERRIDE';--> statement-breakpoint
 ALTER TYPE "public"."payment_verification_outcome" ADD VALUE 'CLAIMED';--> statement-breakpoint
 ALTER TYPE "public"."payment_verification_outcome" ADD VALUE 'PENDING_ARRIVAL';--> statement-breakpoint
 ALTER TYPE "public"."payment_verification_outcome" ADD VALUE 'ALREADY_CLAIMED';--> statement-breakpoint

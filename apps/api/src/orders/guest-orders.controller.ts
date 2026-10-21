@@ -3,14 +3,16 @@ import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   orderCancelRequestSchema,
   orderLookupRequestSchema,
+  orderPaymentStatusRequestSchema,
   type Order,
 } from "@sakura/contracts";
-import { StrictThrottle } from "../common/throttling/strict-throttle.decorator";
+import { PollThrottle, StrictThrottle } from "../common/throttling/strict-throttle.decorator";
 import { createZodDto } from "nestjs-zod";
 import { OrdersService } from "./orders.service";
 
 class OrderLookupDto extends createZodDto(orderLookupRequestSchema) {}
 class OrderCancelDto extends createZodDto(orderCancelRequestSchema) {}
+class OrderPaymentStatusDto extends createZodDto(orderPaymentStatusRequestSchema) {}
 
 /**
  * What a customer can do with an order they already placed.
@@ -48,6 +50,23 @@ export class GuestOrdersController {
   })
   async lookup(@Body() body: OrderLookupDto): Promise<Order[]> {
     return this.ordersService.lookup(body);
+  }
+
+  /**
+   * Has this order's payment been confirmed yet?
+   *
+   * Polled by the checkout's "payment is being checked" modal while the
+   * background worker retries the gateway claim. Read-only: it never asks
+   * the gateway itself, so polling cannot spend anything or hit the
+   * gateway's rate limit. Two factors, so it can take a looser limit than
+   * lookup.
+   */
+  @Post("payment-status")
+  @HttpCode(HttpStatus.OK)
+  @PollThrottle()
+  @ApiOperation({ summary: "Re-read a just-placed order to see whether its payment is confirmed." })
+  async paymentStatus(@Body() body: OrderPaymentStatusDto): Promise<Order> {
+    return this.ordersService.paymentStatus(body);
   }
 
   /**

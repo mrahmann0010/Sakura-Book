@@ -40,6 +40,7 @@ import {
   PaymentVerificationModal,
   type PaymentVerificationStatus,
 } from "./payment-verification-modal";
+import { waitForPayment } from "./wait-for-payment";
 import { ShippingFields } from "./shipping-fields";
 
 /* --------------------------------------------------------------------------
@@ -198,22 +199,26 @@ export function CheckoutView({
         crypto.randomUUID(),
       );
 
-      /* The auto-verify check already ran server-side, inside the same
-         request — a manual-transfer order comes back PAYMENT_CONFIRMED when
-         the transaction was matched against the gateway, PENDING otherwise.
-         This is just reading that result, not triggering a second check. */
-      setPendingOrder({ order, email: values.email });
-      setVerification(order.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");
-
       /* Revenue is reported here, from the order the API returned, and not
          from `cart` — the server re-prices every order regardless of what the
          browser sent, so its totals are the money and the cart's are a guess.
-         Sent on the order existing rather than on the shopper clicking through
-         to the confirmation page below: the sale is made either way, and
-         anyone who closes the tab on the modal would otherwise never be
-         counted. `trackPurchase` is idempotent per order number, so a retry or
-         a re-render cannot sell the same order twice. */
+         Sent the moment the order exists rather than once the payment check
+         below settles: the sale is made either way, and anyone who closes the
+         tab on the modal would otherwise never be counted. `trackPurchase` is
+         idempotent per order number, so a retry or a re-render cannot sell
+         the same order twice. */
       trackPurchase(order);
+
+      /* The server claims the payment once inside the request — a
+         manual-transfer order comes back PAYMENT_CONFIRMED when the claim
+         succeeded. When the payment SMS was still on its way it comes back
+         PENDING, and the server keeps retrying in the background; the modal
+         stays on "verifying" and re-reads the order until it is confirmed or
+         a minute has passed. */
+      const settled = await waitForPayment(order, values.email);
+
+      setPendingOrder({ order: settled, email: values.email });
+      setVerification(settled.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");
     } catch (err) {
       setVerification(null);
 

@@ -57,6 +57,9 @@ function serviceWithDuplicate(overrides: { auditThrows?: boolean } = {}) {
 
   const transitionAndCommit = vi.fn(async () => undefined);
   const confirmManually = vi.fn(async () => ({ confirmed: true }));
+  // The gateway claim. A duplicate is settled before the gateway is asked,
+  // so on these paths it must never be called.
+  const gatewayClaim = vi.fn();
 
   const service = new AdminOrdersService(
     {
@@ -69,7 +72,7 @@ function serviceWithDuplicate(overrides: { auditThrows?: boolean } = {}) {
     { transitionAndCommit } as never,
     { confirmManually, forOrder: vi.fn(async () => []) } as never,
     { record: auditRecord, recordDetached: vi.fn(async () => undefined) } as never,
-    { verify: vi.fn() } as never,
+    { claim: gatewayClaim } as never,
     {
       record: vi.fn(),
       latestFor: vi.fn(async () => new Map()),
@@ -87,7 +90,7 @@ function serviceWithDuplicate(overrides: { auditThrows?: boolean } = {}) {
     "requireOrder",
   ).mockResolvedValue(ORDER);
 
-  return { service, auditRecord, transitionAndCommit, confirmManually };
+  return { service, auditRecord, transitionAndCommit, confirmManually, gatewayClaim };
 }
 
 /* `findTransactionIdClaim` is a module-level function, so it is mocked at the
@@ -101,7 +104,7 @@ vi.mock("../../src/orders", async (importOriginal) => ({
 
 describe("the duplicate-receipt guard", () => {
   it("refuses a transition to PAYMENT_CONFIRMED, not just confirmPayment", async () => {
-    const { service, transitionAndCommit } = serviceWithDuplicate();
+    const { service, transitionAndCommit, gatewayClaim } = serviceWithDuplicate();
 
     await expect(
       service.transition(ORDER.orderNumber, { status: "PAYMENT_CONFIRMED" }, CONTEXT),
@@ -109,6 +112,7 @@ describe("the duplicate-receipt guard", () => {
 
     // The refusal has to happen *before* the move, not be reported after it.
     expect(transitionAndCommit).not.toHaveBeenCalled();
+    expect(gatewayClaim).not.toHaveBeenCalled();
   });
 
   it("refuses confirmPayment for the same receipt", async () => {
@@ -140,7 +144,7 @@ describe("the duplicate-receipt guard", () => {
   });
 
   it("allows the grant when a written reason is given, and records it", async () => {
-    const { service, auditRecord, transitionAndCommit } = serviceWithDuplicate();
+    const { service, auditRecord, transitionAndCommit, gatewayClaim } = serviceWithDuplicate();
 
     vi.spyOn(
       service as unknown as { detail: (n: string) => Promise<unknown> },
@@ -161,6 +165,10 @@ describe("the duplicate-receipt guard", () => {
     const entry = auditRecord.mock.calls[0]?.[0];
     expect(entry?.action).toBe("DUPLICATE_RECEIPT_OVERRIDE");
     expect(entry?.note).toContain("one bKash transfer");
+
+    // The other order already holds this payment at the gateway; claiming it
+    // again for this one could only come back already_claimed.
+    expect(gatewayClaim).not.toHaveBeenCalled();
   });
 
   /**

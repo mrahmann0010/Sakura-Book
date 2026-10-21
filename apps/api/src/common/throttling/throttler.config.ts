@@ -41,6 +41,14 @@ export const THROTTLE_DEFAULT = "default";
 export const STRICT_LIMIT = { limit: 10, ttl: seconds(60) };
 
 /**
+ * For the one two-factor route a page polls: the checkout modal asking every
+ * few seconds whether a payment has been confirmed. Thirty a minute covers a
+ * minute of polling with room to spare, and needs a matching order number
+ * *and* email per hit, so it is no help to enumeration.
+ */
+export const POLL_LIMIT = { limit: 30, ttl: seconds(60) };
+
+/**
  * Redis-backed counters when a URL is configured, in-memory otherwise.
  *
  * The fallback is a real degradation, not an equivalent: with per-instance

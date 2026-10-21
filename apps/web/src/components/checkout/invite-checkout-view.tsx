@@ -30,6 +30,7 @@ import {
   PaymentVerificationModal,
   type PaymentVerificationStatus,
 } from "./payment-verification-modal";
+import { waitForPayment } from "./wait-for-payment";
 import { ShippingFields } from "./shipping-fields";
 
 /* --------------------------------------------------------------------------
@@ -225,9 +226,14 @@ export function InviteCheckoutView({
         crypto.randomUUID(),
       );
 
-      setPendingOrder({ order, email: values.email });
-      setVerification(order.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");
+      // Counted as soon as the order exists — see the same call in CheckoutView.
       trackPurchase(order);
+
+      // The modal stays on "verifying" while the payment lands. See waitForPayment.
+      const settled = await waitForPayment(order, values.email);
+
+      setPendingOrder({ order: settled, email: values.email });
+      setVerification(settled.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");
     } catch (err) {
       setVerification(null);
       setSubmitError(err instanceof ApiError ? err.message : t("checkout.submitError"));
