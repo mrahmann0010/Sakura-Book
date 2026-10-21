@@ -1,6 +1,15 @@
 import type { ShippingTier } from "@sakura/contracts";
 import { relations, sql } from "drizzle-orm";
-import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { orderStatusEnum, paymentMethodEnum, paymentProviderEnum } from "../enums";
 import { coupons } from "../marketing/coupon";
 import { timestamps } from "../timestamps";
@@ -197,6 +206,28 @@ export const orders = pgTable(
       sql`nullif(upper(regexp_replace(coalesce("transaction_id", ''), '[^A-Za-z0-9]', '', 'g')), '')`,
     ),
 
+    /**
+     * The idempotency key this order's payment is claimed with at the
+     * gateway: `<orderNumber>:<attempt>`, starting at `:1`.
+     *
+     * Set when the order is placed and reused on every retry, so a retry gets
+     * our own earlier claim back rather than colliding with it. Changed only
+     * when a gateway admin releases the claim (RELEASED). Not on reopen: a
+     * reopened order still holds the same claim.
+     *
+     * Null for orders with no receipt to claim (cash on delivery).
+     */
+    paymentClaimKey: text("payment_claim_key"),
+
+    /**
+     * When the background worker should next try to claim this order's
+     * payment. Null means nothing is scheduled. See OrderClaimRetryWorker.
+     */
+    paymentClaimRetryAt: timestamp("payment_claim_retry_at", { withTimezone: true }),
+
+    /** Claims tried under the current key. Drives the retry backoff. */
+    paymentClaimAttempts: integer("payment_claim_attempts").notNull().default(0),
+
     // Denormalized "current status" for fast reads. The append-only log in
     // orderStatusHistory is the source of truth for how the order got here.
     status: orderStatusEnum("status").notNull().default("PENDING"),
@@ -270,6 +301,12 @@ export const orders = pgTable(
       "gin",
       sql`${table.customerName} extensions.gin_trgm_ops`,
     ),
+
+    /* The claim retry worker's queue: "whose payment is due another try?"
+       Partial, because almost every order has nothing scheduled. */
+    index("orders_payment_claim_retry_idx")
+      .on(table.paymentClaimRetryAt)
+      .where(sql`"payment_claim_retry_at" IS NOT NULL`),
   ],
 );
 

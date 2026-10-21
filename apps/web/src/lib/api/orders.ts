@@ -3,11 +3,13 @@ import {
   orderCancelRequestSchema,
   orderLookupRequestSchema,
   orderLookupResponseSchema,
+  orderPaymentStatusRequestSchema,
   orderSchema,
   placeOrderRequestSchema,
   type Order,
   type OrderCancelRequest,
   type OrderLookupRequest,
+  type OrderPaymentStatusRequest,
   type PlaceOrderRequest,
 } from "@sakura/contracts";
 
@@ -51,6 +53,20 @@ export function lookupOrder(request: OrderLookupRequest): Promise<Order[]> {
 export function cancelOrder(request: OrderCancelRequest): Promise<Order> {
   const validated = orderCancelRequestSchema.parse(request);
   return apiFetch("/orders/cancel", orderSchema, {
+    method: "POST",
+    body: validated,
+    revalidate: false,
+  });
+}
+
+/**
+ * Re-read a just-placed order to see whether its payment has been confirmed.
+ * Polled by the checkout modal while the server retries the gateway claim;
+ * it never asks the gateway itself. Never cached, for the same reason as lookup.
+ */
+export function getOrderPaymentStatus(request: OrderPaymentStatusRequest): Promise<Order> {
+  const validated = orderPaymentStatusRequestSchema.parse(request);
+  return apiFetch("/orders/payment-status", orderSchema, {
     method: "POST",
     body: validated,
     revalidate: false,

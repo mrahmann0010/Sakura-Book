@@ -4,34 +4,51 @@ import { z } from "zod";
    The shared vocabulary of a payment cross-check.
 
    Its own contract file rather than a section of admin-pre-order.ts, because
-   nothing here is about pre-orders. A payment SMS forwarded into the gateway's
-   MongoDB is checked the same way whoever is asking, and the next thing that
-   needs verifying — a plain order, a reprint, a digital download — should
-   inherit these shapes rather than restate them.
+   nothing here is about pre-orders. A payment is claimed at the gateway the
+   same way whoever is asking, and the next thing that needs paying for — a
+   plain order, a reprint, a digital download — should inherit these shapes
+   rather than restate them.
    -------------------------------------------------------------------------- */
 
-/** The wallets the gateway files payments under, one collection each. */
+/** The wallets the gateway reads payment SMS from — its `platform` values. */
 export const paymentProviders = ["bkash", "nagad", "rocket"] as const;
 export type PaymentProvider = (typeof paymentProviders)[number];
 
 /**
- * What a cross-check concluded.
+ * What a payment check concluded.
  *
- * Four outcomes rather than a boolean, because the three non-matches are not
- * interchangeable and the person reading them needs different things:
+ * Every check is now a claim through the gateway (`POST /v1/claims`), and
+ * these eight are its answers:
  *
- * - NOT_FOUND — the gateway has no such receipt *yet*. SMS arrive late; this
- *   is the outcome that most often becomes MATCHED on a re-check.
- * - UNDERPAID — the receipt exists and is short. Only the customer can fix it.
- * - UNAVAILABLE — we could not look. Says nothing about the payment at all,
+ * - CLAIMED — the payment is ours, spent once, for this order.
+ * - PENDING_ARRIVAL — the SMS has not reached the gateway *yet*. SMS arrive
+ *   late; this is the outcome that most often becomes CLAIMED on a retry.
+ * - UNDERPAID — the payment exists and is short. Only the customer can fix it.
+ * - ALREADY_CLAIMED — another order or business has already spent it.
+ * - RELEASED — a gateway admin released our earlier claim.
+ * - REJECTED — the payment exists but the gateway won't let this shop spend
+ *   it (too old, over the limit, wrong sender, ambiguous wallet).
+ * - MISCONFIGURED — our request or credential is wrong. A bug, not a payment fact.
+ * - UNAVAILABLE — we could not ask. Says nothing about the payment at all,
  *   and collapsing it into "not verified" is how a gateway outage turns into
  *   a morning of orders that look checked and refused.
+ *
+ * MATCHED and NOT_FOUND are from before claims, when the shop read the
+ * gateway's database directly. Kept so older history still reads.
  */
 export const paymentVerificationOutcomes = [
+  // The original four, first and in their original order: this list is also
+  // a Postgres enum, and new values are appended rather than inserted.
   "MATCHED",
   "UNDERPAID",
   "NOT_FOUND",
   "UNAVAILABLE",
+  "CLAIMED",
+  "PENDING_ARRIVAL",
+  "ALREADY_CLAIMED",
+  "RELEASED",
+  "REJECTED",
+  "MISCONFIGURED",
 ] as const;
 export type PaymentVerificationOutcome = (typeof paymentVerificationOutcomes)[number];
 
@@ -52,7 +69,13 @@ export const paymentVerificationRecordSchema = z.object({
   paidCents: z.number().int().nonnegative().optional(),
   expectedCents: z.number().int().nonnegative().optional(),
   receivedAt: z.string().datetime().optional(),
-  /** Only on UNAVAILABLE — why the lookup could not happen. */
+  /** On CLAIMED: how much more than the order total arrived. Owed back or credited. */
+  overpaidCents: z.number().int().nonnegative().optional(),
+  /** When the payment was claimed — ours on CLAIMED, someone else's on ALREADY_CLAIMED. */
+  claimedAt: z.string().datetime().optional(),
+  /** The idempotency key the claim was sent with, `<orderNumber>:<attempt>`. */
+  claimKey: z.string().optional(),
+  /** Why the check could not succeed — on UNAVAILABLE, REJECTED and MISCONFIGURED. */
   reason: z.string().optional(),
 });
 

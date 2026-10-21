@@ -3,23 +3,20 @@ import type { AdminOrderVerificationState, PaymentVerificationRecord } from "@sa
 import { and, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { DbService } from "../db/db.service";
 import { orders, paymentVerifications } from "../db/schema";
-import {
-  normaliseTransactionId,
-  toVerificationRecord,
-  type PaymentVerification,
-} from "../payment-verification";
+import { toClaimRecord, type ClaimOutcome } from "../payment-gateway";
+import { normaliseTransactionId } from "./receipt";
 import { RELEASED_STATUSES } from "./transaction-id-claim";
 
 /* --------------------------------------------------------------------------
-   The written record of every gateway cross-check.
+   The written record of every payment check — today, every gateway claim.
 
-   This lives in `orders` rather than in `payment-verification` on purpose.
-   That module answers one question — "did ৳X arrive under this transaction
-   ID?" — about a MongoDB it does not own, and it deliberately knows nothing
-   about orders. Storing an answer *against an order* is the caller's concern,
-   so it belongs on this side of the boundary.
+   This lives in `orders` rather than in `payment-gateway` on purpose. That
+   module answers one question — "may this order spend this payment?" — and
+   deliberately knows nothing about orders. Storing an answer *against an
+   order* is the caller's concern, so it belongs on this side of the boundary.
 
-   Writing is best-effort by design; see `record`.
+   Append-only, and best-effort by design; see `recordClaim`. Rows from before
+   claims (MATCHED, NOT_FOUND) are still read back for the history.
    -------------------------------------------------------------------------- */
 
 /** An order that has never been checked. The panel's most important state. */
@@ -36,24 +33,24 @@ export class PaymentVerificationLogService {
   constructor(private readonly dbService: DbService) {}
 
   /**
-   * Append one check to an order's history.
+   * Append one gateway claim to an order's history.
    *
-   * Failures are logged and swallowed. This is a record *about* an action, not
-   * the action — an admin who pressed Verify must still be told what the
-   * gateway said, and a customer's checkout must still complete, even if this
-   * insert fails. The alternative is a logging table whose outage takes down
-   * the thing it is logging.
+   * Failures are logged and swallowed. This is a record *about* an action,
+   * not the action: the claim has already happened at the gateway, and the
+   * caller must still act on it — a customer's checkout must complete, and
+   * staff must still be told what the gateway said. The alternative is a
+   * logging table whose outage takes down the thing it is logging.
    *
    * @param checkedByEmail the staff member who asked, or null for the
-   *   automatic check at checkout — the distinction the history is read for.
+   *   automatic claim at checkout and the background retries.
    */
-  async record(
+  async recordClaim(
     orderId: string,
-    verification: PaymentVerification,
-    expectedCents: number,
+    outcome: ClaimOutcome,
+    context: { transactionId: string; expectedCents: number; claimKey: string },
     checkedByEmail: string | null,
   ): Promise<PaymentVerificationRecord> {
-    const record = toVerificationRecord(verification, expectedCents);
+    const record = toClaimRecord(outcome, context);
 
     try {
       await this.dbService.db.insert(paymentVerifications).values({
@@ -63,14 +60,15 @@ export class PaymentVerificationLogService {
         provider: record.provider,
         paidCents: record.paidCents,
         expectedCents: record.expectedCents,
-        receivedAt: record.receivedAt ? new Date(record.receivedAt) : null,
         reason: record.reason,
+        claimKey: record.claimKey,
+        claimedAt: record.claimedAt ? new Date(record.claimedAt) : null,
         checkedByEmail,
-        raw: verification,
+        raw: outcome,
       });
     } catch (error) {
       this.logger.error(
-        `Could not record the ${record.outcome} verification for order ${orderId}: ${String(error)}`,
+        `Could not record the ${record.outcome} claim for order ${orderId}: ${String(error)}`,
       );
     }
 
@@ -136,6 +134,9 @@ export class PaymentVerificationLogService {
       paidCents: row.paidCents ?? undefined,
       expectedCents: row.expectedCents ?? undefined,
       receivedAt: row.receivedAt?.toISOString(),
+      overpaidCents: overpaidCentsOf(row),
+      claimedAt: row.claimedAt?.toISOString(),
+      claimKey: row.claimKey ?? undefined,
       reason: row.reason ?? undefined,
     }));
   }
@@ -179,4 +180,17 @@ export class PaymentVerificationLogService {
   ): AdminOrderVerificationState {
     return latest.get(orderId) ?? UNCHECKED;
   }
+}
+
+/** How much more than the total arrived on a claim, if anything. */
+function overpaidCentsOf(row: {
+  outcome: string;
+  paidCents: number | null;
+  expectedCents: number | null;
+}): number | undefined {
+  if (row.outcome !== "CLAIMED" || row.paidCents === null || row.expectedCents === null) {
+    return undefined;
+  }
+
+  return Math.max(0, row.paidCents - row.expectedCents);
 }

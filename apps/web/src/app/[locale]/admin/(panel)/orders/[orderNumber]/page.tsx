@@ -58,6 +58,15 @@ export default function AdminOrderDetailPage() {
    */
   const [overrideReason, setOverrideReason] = useState("");
 
+  /**
+   * The gateway could not claim the payment (SMS not in, gateway down, or a
+   * refusal staff can judge) and the API asked for a reason before granting.
+   * Holds the API's sentence; the reason box only appears once this is set,
+   * for the same reason the duplicate box only appears on a duplicate.
+   */
+  const [gatewayBlock, setGatewayBlock] = useState<string | null>(null);
+  const [gatewayReason, setGatewayReason] = useState("");
+
   const [verifying, setVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<AdminOrderVerifyPaymentResult | null>(null);
 
@@ -93,6 +102,8 @@ export default function AdminOrderDetailPage() {
         setOrder(detail);
         setInternalNote(detail.internalNote ?? "");
         setVerifyResult(null);
+        setGatewayBlock(null);
+        setGatewayReason("");
         setError(null);
       })
       .catch((err: unknown) => {
@@ -112,8 +123,15 @@ export default function AdminOrderDetailPage() {
       const updated = await action();
       setOrder(updated);
       setNote("");
+      setGatewayBlock(null);
+      setGatewayReason("");
       return true;
     } catch (err) {
+      if (err instanceof AdminApiError && err.code === "PAYMENT_NOT_CLAIMED") {
+        // Not a failure to show in red: the next step is the reason box.
+        setGatewayBlock(err.message);
+        return false;
+      }
       setError(messageOf(err, "That action failed."));
       return false;
     } finally {
@@ -128,6 +146,7 @@ export default function AdminOrderDetailPage() {
     // would put a justification on the audit log for a block that never fired.
     const duplicateReceiptOverride =
       order.receipt.state === "DUPLICATE" ? overrideReason.trim() || undefined : undefined;
+    const gatewayClaimOverride = gatewayBlock ? gatewayReason.trim() || undefined : undefined;
 
     if (order.paymentMethod === "manual-transfer") {
       await run(() =>
@@ -136,6 +155,7 @@ export default function AdminOrderDetailPage() {
           reference: order.transactionId ?? undefined,
           note: note || undefined,
           duplicateReceiptOverride,
+          gatewayClaimOverride,
         }),
       );
     } else {
@@ -144,6 +164,7 @@ export default function AdminOrderDetailPage() {
           status: "PAYMENT_CONFIRMED",
           note: note || "Accepted by admin",
           duplicateReceiptOverride,
+          gatewayClaimOverride,
         }),
       );
     }
@@ -167,6 +188,10 @@ export default function AdminOrderDetailPage() {
           status === "PAYMENT_CONFIRMED" && order?.receipt.state === "DUPLICATE"
             ? overrideReason.trim() || undefined
             : undefined,
+        gatewayClaimOverride:
+          status === "PAYMENT_CONFIRMED" && gatewayBlock
+            ? gatewayReason.trim() || undefined
+            : undefined,
       }),
     );
   }
@@ -178,9 +203,15 @@ export default function AdminOrderDetailPage() {
     // different outcome must not leave the first one on screen while it runs.
     setVerifyResult(null);
     try {
-      setVerifyResult(await verifyAdminOrderPayment(orderNumber));
+      const result = await verifyAdminOrderPayment(orderNumber);
+      setVerifyResult(result);
+      // A successful claim on a pending order confirms it; show the new status.
+      if (result.confirmed) {
+        setOrder(await getAdminOrder(orderNumber));
+        setGatewayBlock(null);
+      }
     } catch (err) {
-      setError(messageOf(err, "Could not verify this transaction."));
+      setError(messageOf(err, "Could not check this payment."));
     } finally {
       setVerifying(false);
     }
@@ -355,7 +386,36 @@ export default function AdminOrderDetailPage() {
             </div>
           ) : null}
 
-          {order.paymentMethod === "manual-transfer" && !isPacker ? (
+          {order.gatewayClaim && order.gatewayClaim.overpaidCents > 0 && !isPacker ? (
+            <Notice tone="info" className="mt-4">
+              <p>
+                <strong className="text-ink font-semibold">Overpaid.</strong> The customer sent{" "}
+                {formatMoney(order.gatewayClaim.overpaidCents, "en-GB", order.currency)} more than
+                the total. Refund or credit the difference.
+              </p>
+            </Notice>
+          ) : null}
+
+          {/* Only a gateway admin can release a claim; this app cannot. Until
+                someone does, the customer cannot use this receipt again. */}
+          {order.gatewayClaim &&
+          (order.status === "CANCELLED" || order.status === "REFUNDED") &&
+          !isPacker ? (
+            <Notice tone="error" className="mt-4">
+              <p>
+                <strong className="text-clay font-semibold">Release the payment.</strong> This
+                order still holds payment{" "}
+                <span className="font-mono">{order.gatewayClaim.transactionId}</span> at the
+                payment gateway. Release it there (Claims → Release) so the customer can use the
+                receipt again.
+              </p>
+            </Notice>
+          ) : null}
+
+          {order.paymentMethod === "manual-transfer" &&
+          order.status !== "CANCELLED" &&
+          order.status !== "REFUNDED" &&
+          !isPacker ? (
             <div className="mt-4">
               <Button
                 type="button"
@@ -364,11 +424,15 @@ export default function AdminOrderDetailPage() {
                 loading={verifying}
                 onClick={() => void verify()}
               >
-                Verify transaction
+                {order.status === "PENDING" ? "Check & confirm" : "Check payment"}
               </Button>
+              <p className="text-caption text-muted mt-1">
+                Claims the payment at the gateway
+                {order.status === "PENDING" ? " and confirms the order if it is there" : ""}.
+              </p>
               <div aria-live="polite" aria-busy={verifying}>
                 {verifying ? (
-                  <p className="text-13.5 text-secondary mt-2">Checking the gateway…</p>
+                  <p className="text-13.5 text-secondary mt-2">Asking the gateway…</p>
                 ) : verifyResult ? (
                   <VerifyResult result={verifyResult} currency={order.currency} />
                 ) : null}
@@ -392,6 +456,9 @@ export default function AdminOrderDetailPage() {
                     {record.paidCents !== undefined
                       ? ` · ${formatMoney(record.paidCents, "en-GB", order.currency)}`
                       : ""}
+                    {record.claimKey ? (
+                      <span className="text-muted font-mono"> · {record.claimKey}</span>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -455,6 +522,26 @@ export default function AdminOrderDetailPage() {
           {/* Only rendered when there is actually a duplicate to override.
                 An always-present "override" box is an invitation to fill it
                 in, and this is a control that should be awkward to reach for. */}
+          {gatewayBlock ? (
+            <>
+              <Notice tone="info" className="mt-3">
+                <p>{gatewayBlock}</p>
+              </Notice>
+              <Textarea
+                label="How do you know this payment arrived? (staff-only, goes to the audit log)"
+                value={gatewayReason}
+                onChange={(event) => setGatewayReason(event.target.value)}
+                rows={2}
+                className="mt-3"
+                error={
+                  gatewayReason.trim().length > 0 && gatewayReason.trim().length < 15
+                    ? "Explain how you know this payment arrived."
+                    : undefined
+                }
+              />
+            </>
+          ) : null}
+
           {order.receipt.state === "DUPLICATE" ? (
             <Textarea
               label={`Reason for overriding the duplicate receipt (also on ${order.receipt.claimedByOrderNumber})`}
@@ -474,7 +561,7 @@ export default function AdminOrderDetailPage() {
             {order.status === "PENDING" ? (
               <>
                 <Button type="button" loading={busy} onClick={() => void accept()}>
-                  Accept
+                  {gatewayBlock ? "Accept anyway" : "Accept"}
                 </Button>
                 <Button
                   type="button"
@@ -694,10 +781,16 @@ export default function AdminOrderDetailPage() {
  * problem with the money gets the clay rule.
  */
 const VERIFY_OUTCOMES = {
-  MATCHED: { label: "Matched", tone: "info", heading: "text-ink" },
+  CLAIMED: { label: "Claimed", tone: "info", heading: "text-ink" },
+  PENDING_ARRIVAL: { label: "Payment SMS not in yet", tone: "info", heading: "text-clay-deep" },
   UNDERPAID: { label: "Underpaid", tone: "error", heading: "text-clay" },
-  NOT_FOUND: { label: "Not found yet", tone: "info", heading: "text-clay-deep" },
+  ALREADY_CLAIMED: { label: "Already spent elsewhere", tone: "error", heading: "text-clay" },
+  RELEASED: { label: "Claim released", tone: "info", heading: "text-clay-deep" },
+  REJECTED: { label: "Rejected by the gateway", tone: "error", heading: "text-clay" },
+  MISCONFIGURED: { label: "Gateway setup error", tone: "error", heading: "text-clay" },
   UNAVAILABLE: { label: "Could not check", tone: "info", heading: "text-clay-deep" },
+  MATCHED: { label: "Matched", tone: "info", heading: "text-ink" },
+  NOT_FOUND: { label: "Not found yet", tone: "info", heading: "text-clay-deep" },
   NO_RECEIPT: { label: "No receipt on file", tone: "info", heading: "text-clay-deep" },
 } as const satisfies Record<string, { label: string; tone: "info" | "error"; heading: string }>;
 
@@ -727,8 +820,14 @@ function VerifyResult({
           {record.expectedCents !== undefined ? (
             <Row label="Expected" value={formatMoney(record.expectedCents, "en-GB", currency)} />
           ) : null}
+          {record.overpaidCents ? (
+            <Row label="Overpaid" value={formatMoney(record.overpaidCents, "en-GB", currency)} />
+          ) : null}
           {record.receivedAt ? (
             <Row label="Paid at" value={new Date(record.receivedAt).toLocaleString()} />
+          ) : null}
+          {record.claimedAt ? (
+            <Row label="Claimed at" value={new Date(record.claimedAt).toLocaleString()} />
           ) : null}
           <Row label="Checked at" value={new Date(record.checkedAt).toLocaleString()} />
         </dl>

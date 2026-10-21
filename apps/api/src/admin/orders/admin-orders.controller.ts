@@ -129,24 +129,23 @@ export class AdminOrdersController {
   }
 
   /**
-   * Cross-check the transaction ID on file against the SMS gateway.
+   * "Check & confirm": claim the order's payment at the gateway, and confirm
+   * a pending order when the claim succeeds.
    *
    * No request body, deliberately — the ID is read off the stored order
    * rather than accepted from the caller, so this can't be used to probe
-   * arbitrary transaction IDs. Purely informational: it never changes the
-   * order's status. See `AdminOrdersService.verifyPayment`.
+   * arbitrary transaction IDs. A claim spends the payment, so this is an
+   * action, not a way to look. See `AdminOrdersService.verifyPayment`.
    */
   @Post(":orderNumber/verify-payment")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Re-check the order's transaction ID against the SMS gateway." })
+  @ApiOperation({ summary: "Claim the order's payment at the gateway; confirms a pending order." })
   async verifyPayment(
     @Param("orderNumber") orderNumber: string,
     @CurrentAdmin() admin: AccessClaims,
     @Req() request: Request,
   ): Promise<AdminOrderVerifyPaymentResult> {
-    // The actor is threaded through even though this writes no order, because
-    // the check itself is now recorded and "who looked" is the point of
-    // recording it.
+    // The actor is recorded on the claim's log row and on any confirmation.
     return this.adminOrdersService.verifyPayment(orderNumber, contextOf(admin, request));
   }
 

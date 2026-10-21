@@ -256,17 +256,17 @@
     "transactionIdReusedTrack": "Track that order",
     "verify": {
       "verifying": {
-        "title": "Verifying your payment",
-        "description": "We're checking your transaction ID against the payment we received.",
-        "hint": "This takes a few seconds…"
+        "title": "Checking your payment",
+        "description": "We're confirming the payment you sent against your transaction ID.",
+        "hint": "This can take up to a minute — please keep this page open."
       },
       "verified": {
         "title": "Payment verified",
-        "description": "Your transaction was matched. Your order is confirmed."
+        "description": "We received your payment. Your order is confirmed."
       },
       "unverified": {
-        "title": "We couldn't verify it yet",
-        "description": "Your order is placed. Our team will check the payment by hand and confirm it shortly — no action is needed from you."
+        "title": "Your payment hasn't reached us yet",
+        "description": "Your order is placed. We'll confirm it as soon as your payment arrives, and our team checks any that don't — no action is needed from you."
       },
       "seeOrder": "See order info"
     },

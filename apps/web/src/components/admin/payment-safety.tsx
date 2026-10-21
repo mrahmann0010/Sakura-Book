@@ -71,10 +71,18 @@ const VERIFICATION_TONES: Record<
   AdminOrderVerificationState["outcome"],
   { label: string; className: string }
 > = {
-  MATCHED: { label: "Matched", className: "bg-tint text-ink" },
+  CLAIMED: { label: "Claimed", className: "bg-tint text-ink" },
+  PENDING_ARRIVAL: { label: "Awaiting SMS", className: "bg-tint text-clay-deep" },
   UNDERPAID: { label: "Underpaid", className: "bg-surface border border-clay text-clay" },
-  NOT_FOUND: { label: "Not found", className: "bg-tint text-clay-deep" },
+  /** Spent by another order or business — the case where money is at risk. */
+  ALREADY_CLAIMED: { label: "Spent elsewhere", className: "bg-surface border border-clay text-clay" },
+  RELEASED: { label: "Claim released", className: "bg-tint text-clay-deep" },
+  REJECTED: { label: "Rejected", className: "bg-surface border border-clay text-clay" },
+  MISCONFIGURED: { label: "Setup error", className: "bg-tint text-clay-deep" },
   UNAVAILABLE: { label: "Gateway down", className: "bg-tint text-clay-deep" },
+  /* From before claims, when the gateway's database was read directly. */
+  MATCHED: { label: "Matched", className: "bg-tint text-ink" },
+  NOT_FOUND: { label: "Not found", className: "bg-tint text-clay-deep" },
   /**
    * The most important state on this list, and the reason verifications are
    * stored at all: it is how an order that was confirmed on trust stays

@@ -187,24 +187,31 @@ export const envSchema = z.object({
   REVIEW_IP_SALT: z.string().min(16).optional(),
 
   /**
-   * Connection string for the MongoDB the SMS payment gateway writes into —
-   * the `bkash` / `nagad` / `rocket` collections a forwarded payment SMS is
-   * parsed into. Read-only from this API's point of view; that service owns
-   * the data and the `trxId` unique index that makes it idempotent.
+   * The payment gateway that confirms bKash / Nagad / Rocket payments.
    *
-   * The database name comes from the URI's path rather than a second variable,
-   * matching how the gateway's own backend resolves it (`get_default_database`
-   * / `client.db()` with no argument). One string to copy between deployments,
-   * and no way for the two halves to disagree about which database they mean.
+   * The shop asks it one thing — "let me spend payment `trxId` for this
+   * order" — and it says yes once per payment across every business that
+   * shares the receiving number. See `src/payment-gateway/`.
    *
-   * Optional, and its absence is a *degraded* door rather than an open or a
-   * closed one: with no URI configured every cross-check returns UNAVAILABLE,
-   * which leaves pre-orders PENDING for a human to verify by hand — exactly
-   * the process that existed before this feature. It must never be read as
-   * "no gateway configured, so assume the payment is good", which is why
-   * PaymentVerificationService returns a verdict rather than a boolean.
+   * Not `SMS_GATEWAY_*`: those belong to the outbound SMS sender.
+   *
+   * Server-only. All three or none (checked below), and required in
+   * production. Unset in development means every claim is UNAVAILABLE and
+   * orders wait for a person, never that payments are assumed good.
    */
-  MONGO_URI: z.string().url().optional(),
+  SAKURA_PAYMENT_GATEWAY_URL: z.string().url().optional(),
+
+  /** The client ID registered on the gateway's Businesses page, e.g. `sakura-book`. */
+  SAKURA_PAYMENT_GATEWAY_CLIENT_ID: z.string().trim().min(1).optional(),
+
+  /** The secret generated alongside the client ID. Rotated, never recovered. */
+  SAKURA_PAYMENT_GATEWAY_SECRET: z.string().trim().min(1).optional(),
+
+  /**
+   * How long one claim may take. Short, because checkout waits on it; a slow
+   * answer becomes UNAVAILABLE and the background retry asks again.
+   */
+  SAKURA_PAYMENT_GATEWAY_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30_000).default(5_000),
 
   /**
    * Maximum Postgres connections held by one API instance.
@@ -511,6 +518,32 @@ export const envSchemaChecked = envSchema.superRefine((env, ctx) => {
         "Without it the API would sign admin sessions with a key that changes " +
         "every restart, logging staff out on each deploy.",
     });
+  }
+
+  /* The payment gateway's three values travel together. Half a config is
+     always a mistake, and in production none at all is too: every manual
+     transfer would sit unconfirmed until someone noticed. */
+  const gatewayKeys = [
+    "SAKURA_PAYMENT_GATEWAY_URL",
+    "SAKURA_PAYMENT_GATEWAY_CLIENT_ID",
+    "SAKURA_PAYMENT_GATEWAY_SECRET",
+  ] as const;
+  const missingGatewayKeys = gatewayKeys.filter((key) => !env[key]);
+
+  if (
+    missingGatewayKeys.length > 0 &&
+    (missingGatewayKeys.length < gatewayKeys.length || env.NODE_ENV === "production")
+  ) {
+    for (const key of missingGatewayKeys) {
+      ctx.addIssue({
+        code: "custom",
+        path: [key],
+        message:
+          env.NODE_ENV === "production"
+            ? "Required in production — register the shop on the payment gateway's Businesses page."
+            : "Set all three SAKURA_PAYMENT_GATEWAY_* values, or none of them.",
+      });
+    }
   }
 });
 

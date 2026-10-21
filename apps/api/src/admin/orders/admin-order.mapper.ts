@@ -122,6 +122,7 @@ export function toAdminOrderDetail(
   verification: AdminOrderVerificationState,
   verifications: PaymentVerificationRecord[],
   reopen: AdminOrderDetail["reopen"],
+  gatewayClaim: AdminOrderDetail["gatewayClaim"] = null,
 ): AdminOrderDetail {
   const customerView = toOrderResponse(row);
 
@@ -157,6 +158,32 @@ export function toAdminOrderDetail(
     receipt,
     verification,
     verifications,
+    gatewayClaim,
+  };
+}
+
+/**
+ * The claim this order still holds at the gateway, read off its history
+ * (newest first).
+ *
+ * Held means the newest CLAIMED is newer than any RELEASED — a release
+ * hands the payment back, and only a later claim takes it again. Other
+ * outcomes in between (a replayed claim's retries, say) do not change who
+ * holds the money.
+ */
+export function heldClaimOf(
+  verifications: readonly PaymentVerificationRecord[],
+): AdminOrderDetail["gatewayClaim"] {
+  const latest = verifications.find(
+    (record) => record.outcome === "CLAIMED" || record.outcome === "RELEASED",
+  );
+
+  if (latest?.outcome !== "CLAIMED") return null;
+
+  return {
+    transactionId: latest.transactionId,
+    claimedAt: latest.claimedAt ?? null,
+    overpaidCents: latest.overpaidCents ?? 0,
   };
 }
 

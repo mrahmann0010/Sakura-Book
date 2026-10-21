@@ -65,6 +65,20 @@ export const orderCancelRequestSchema = z.object({
 export type OrderCancelRequest = z.infer<typeof orderCancelRequestSchema>;
 
 /**
+ * Asking whether a just-placed order's payment has been confirmed yet.
+ *
+ * The checkout's "payment is being checked" modal polls this while the
+ * background worker retries the claim. Two factors, like cancel, because it
+ * is polled and so gets a looser rate limit than single-factor lookup.
+ */
+export const orderPaymentStatusRequestSchema = orderCancelRequestSchema.pick({
+  orderNumber: true,
+  email: true,
+});
+
+export type OrderPaymentStatusRequest = z.infer<typeof orderPaymentStatusRequestSchema>;
+
+/**
  * A line as frozen onto the order.
  *
  * Title, authors and unit price are snapshots, not joins: a historical order

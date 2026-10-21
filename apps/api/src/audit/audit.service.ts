@@ -36,7 +36,12 @@ export type AuditAction =
    * A member of staff reopened an order rejected by mistake, putting it back
    * to PENDING with a written reason. See `AdminOrdersService.reopen`.
    */
-  | "ORDER_REOPEN";
+  | "ORDER_REOPEN"
+  /**
+   * A member of staff confirmed a payment the gateway could not claim, with a
+   * written reason. See `AdminOrdersService.guardPaymentGrant`.
+   */
+  | "GATEWAY_CLAIM_OVERRIDE";
 
 /**
  * Who acted.

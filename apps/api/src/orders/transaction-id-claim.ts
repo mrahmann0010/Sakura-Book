@@ -1,7 +1,7 @@
 import { and, eq, ne, notInArray } from "drizzle-orm";
 import type { Executor } from "../db/db.types";
 import { orders } from "../db/schema";
-import { normaliseTransactionId } from "../payment-verification";
+import { normaliseTransactionId } from "./receipt";
 import type { OrderStatus } from "./order-status.machine";
 
 /* --------------------------------------------------------------------------
