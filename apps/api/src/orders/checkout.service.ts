@@ -21,6 +21,7 @@ import {
   WaitlistInviteService,
 } from "../waitlist";
 import { generateOrderNumber, ORDER_NUMBER_ATTEMPTS } from "./order-number";
+import { firstClaimKey } from "./payment-claim-key";
 import {
   CartNotOrderableError,
   CouponNotApplicableError,
@@ -324,10 +325,21 @@ export class CheckoutService {
 
     for (let attempt = 1; attempt <= ORDER_NUMBER_ATTEMPTS; attempt++) {
       try {
+        const orderNumber = generateOrderNumber();
+
         const [inserted] = await tx.transaction((savepoint) =>
           savepoint
             .insert(orders)
-            .values({ ...values, orderNumber: generateOrderNumber() })
+            .values({
+              ...values,
+              orderNumber,
+              /* Set now, before any claim is made, so the first claim and
+                 every retry of it share one key. See payment-claim-key.ts. */
+              paymentClaimKey:
+                values.paymentMethod === "manual-transfer" && values.transactionId
+                  ? firstClaimKey(orderNumber)
+                  : null,
+            })
             .returning({ id: orders.id }),
         );
 

@@ -51,8 +51,17 @@ export const paymentVerifications = pgTable(
     expectedCents: integer("expected_cents"),
     receivedAt: timestamp("received_at", { withTimezone: true }),
 
-    /** Only on UNAVAILABLE — why the lookup could not happen. */
+    /** Why the check could not succeed — UNAVAILABLE, REJECTED, MISCONFIGURED. */
     reason: text("reason"),
+
+    /**
+     * The idempotency key the claim was sent with. Null for checks made
+     * before claims, when the gateway's database was read directly.
+     */
+    claimKey: text("claim_key"),
+
+    /** When the payment was claimed — by us on CLAIMED, by someone else on ALREADY_CLAIMED. */
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
 
     /**
      * Who asked. Null for the automatic check that runs at checkout, which is

@@ -694,10 +694,16 @@ export default function AdminOrderDetailPage() {
  * problem with the money gets the clay rule.
  */
 const VERIFY_OUTCOMES = {
-  MATCHED: { label: "Matched", tone: "info", heading: "text-ink" },
+  CLAIMED: { label: "Claimed", tone: "info", heading: "text-ink" },
+  PENDING_ARRIVAL: { label: "Payment SMS not in yet", tone: "info", heading: "text-clay-deep" },
   UNDERPAID: { label: "Underpaid", tone: "error", heading: "text-clay" },
-  NOT_FOUND: { label: "Not found yet", tone: "info", heading: "text-clay-deep" },
+  ALREADY_CLAIMED: { label: "Already spent elsewhere", tone: "error", heading: "text-clay" },
+  RELEASED: { label: "Claim released", tone: "info", heading: "text-clay-deep" },
+  REJECTED: { label: "Rejected by the gateway", tone: "error", heading: "text-clay" },
+  MISCONFIGURED: { label: "Gateway setup error", tone: "error", heading: "text-clay" },
   UNAVAILABLE: { label: "Could not check", tone: "info", heading: "text-clay-deep" },
+  MATCHED: { label: "Matched", tone: "info", heading: "text-ink" },
+  NOT_FOUND: { label: "Not found yet", tone: "info", heading: "text-clay-deep" },
   NO_RECEIPT: { label: "No receipt on file", tone: "info", heading: "text-clay-deep" },
 } as const satisfies Record<string, { label: string; tone: "info" | "error"; heading: string }>;
 

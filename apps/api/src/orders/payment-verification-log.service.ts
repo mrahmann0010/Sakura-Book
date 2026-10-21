@@ -8,6 +8,7 @@ import {
   toVerificationRecord,
   type PaymentVerification,
 } from "../payment-verification";
+import { toClaimRecord, type ClaimOutcome } from "../payment-gateway";
 import { RELEASED_STATUSES } from "./transaction-id-claim";
 
 /* --------------------------------------------------------------------------
@@ -78,6 +79,47 @@ export class PaymentVerificationLogService {
   }
 
   /**
+   * Append one gateway claim to an order's history.
+   *
+   * Same best-effort rule as `record`: a failed insert is logged and
+   * swallowed, because the claim has already happened at the gateway and the
+   * caller must still act on it.
+   *
+   * @param checkedByEmail the staff member who asked, or null for the
+   *   automatic claim at checkout and the background retries.
+   */
+  async recordClaim(
+    orderId: string,
+    outcome: ClaimOutcome,
+    context: { transactionId: string; expectedCents: number; claimKey: string },
+    checkedByEmail: string | null,
+  ): Promise<PaymentVerificationRecord> {
+    const record = toClaimRecord(outcome, context);
+
+    try {
+      await this.dbService.db.insert(paymentVerifications).values({
+        orderId,
+        outcome: record.outcome,
+        transactionIdNormalised: normaliseTransactionId(record.transactionId),
+        provider: record.provider,
+        paidCents: record.paidCents,
+        expectedCents: record.expectedCents,
+        reason: record.reason,
+        claimKey: record.claimKey,
+        claimedAt: record.claimedAt ? new Date(record.claimedAt) : null,
+        checkedByEmail,
+        raw: outcome,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Could not record the ${record.outcome} claim for order ${orderId}: ${String(error)}`,
+      );
+    }
+
+    return record;
+  }
+
+  /**
    * The latest check for each of many orders, in one query.
    *
    * `DISTINCT ON` rather than a lateral join or — worse — one query per row:
@@ -136,6 +178,9 @@ export class PaymentVerificationLogService {
       paidCents: row.paidCents ?? undefined,
       expectedCents: row.expectedCents ?? undefined,
       receivedAt: row.receivedAt?.toISOString(),
+      overpaidCents: overpaidCentsOf(row),
+      claimedAt: row.claimedAt?.toISOString(),
+      claimKey: row.claimKey ?? undefined,
       reason: row.reason ?? undefined,
     }));
   }
@@ -179,4 +224,17 @@ export class PaymentVerificationLogService {
   ): AdminOrderVerificationState {
     return latest.get(orderId) ?? UNCHECKED;
   }
+}
+
+/** How much more than the total arrived on a claim, if anything. */
+function overpaidCentsOf(row: {
+  outcome: string;
+  paidCents: number | null;
+  expectedCents: number | null;
+}): number | undefined {
+  if (row.outcome !== "CLAIMED" || row.paidCents === null || row.expectedCents === null) {
+    return undefined;
+  }
+
+  return Math.max(0, row.paidCents - row.expectedCents);
 }
