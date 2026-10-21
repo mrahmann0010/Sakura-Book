@@ -51,10 +51,9 @@ export const paymentMethodEnum = pgEnum("payment_method", [
 
 /**
  * Which wallet a manual-transfer payment moved through — bKash, Rocket or
- * Nagad. Same source of truth as the payment-verification module's
- * `paymentProviders`: it names the same three collections the SMS gateway
- * files receipts under, so an order's stored provider can be handed straight
- * back to that lookup instead of it scanning all three.
+ * Nagad. Same source of truth as the contract's `paymentProviders`, which
+ * are also the gateway's `platform` values, so an order's stored provider
+ * can be handed straight to a claim when the gateway needs the wallet named.
  *
  * Null for cash on delivery, and for card once that ships — neither moves
  * through a wallet.

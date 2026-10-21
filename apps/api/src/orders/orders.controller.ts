@@ -65,7 +65,7 @@ export class OrdersController {
 
     // Only for the request that actually created the order — a replay's
     // order already settled at whatever status its original request left it
-    // at, and re-checking on every retry buys nothing but Mongo load.
+    // at, and re-claiming on every retry buys nothing but gateway load.
     const settled = created ? await this.autoVerifyService.tryAutoConfirm(order) : order;
 
     // `passthrough` so Nest still serialises the return value; only the status

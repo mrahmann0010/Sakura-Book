@@ -3,24 +3,20 @@ import type { AdminOrderVerificationState, PaymentVerificationRecord } from "@sa
 import { and, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { DbService } from "../db/db.service";
 import { orders, paymentVerifications } from "../db/schema";
-import {
-  normaliseTransactionId,
-  toVerificationRecord,
-  type PaymentVerification,
-} from "../payment-verification";
 import { toClaimRecord, type ClaimOutcome } from "../payment-gateway";
+import { normaliseTransactionId } from "./receipt";
 import { RELEASED_STATUSES } from "./transaction-id-claim";
 
 /* --------------------------------------------------------------------------
-   The written record of every gateway cross-check.
+   The written record of every payment check — today, every gateway claim.
 
-   This lives in `orders` rather than in `payment-verification` on purpose.
-   That module answers one question — "did ৳X arrive under this transaction
-   ID?" — about a MongoDB it does not own, and it deliberately knows nothing
-   about orders. Storing an answer *against an order* is the caller's concern,
-   so it belongs on this side of the boundary.
+   This lives in `orders` rather than in `payment-gateway` on purpose. That
+   module answers one question — "may this order spend this payment?" — and
+   deliberately knows nothing about orders. Storing an answer *against an
+   order* is the caller's concern, so it belongs on this side of the boundary.
 
-   Writing is best-effort by design; see `record`.
+   Append-only, and best-effort by design; see `recordClaim`. Rows from before
+   claims (MATCHED, NOT_FOUND) are still read back for the history.
    -------------------------------------------------------------------------- */
 
 /** An order that has never been checked. The panel's most important state. */
@@ -37,53 +33,13 @@ export class PaymentVerificationLogService {
   constructor(private readonly dbService: DbService) {}
 
   /**
-   * Append one check to an order's history.
-   *
-   * Failures are logged and swallowed. This is a record *about* an action, not
-   * the action — an admin who pressed Verify must still be told what the
-   * gateway said, and a customer's checkout must still complete, even if this
-   * insert fails. The alternative is a logging table whose outage takes down
-   * the thing it is logging.
-   *
-   * @param checkedByEmail the staff member who asked, or null for the
-   *   automatic check at checkout — the distinction the history is read for.
-   */
-  async record(
-    orderId: string,
-    verification: PaymentVerification,
-    expectedCents: number,
-    checkedByEmail: string | null,
-  ): Promise<PaymentVerificationRecord> {
-    const record = toVerificationRecord(verification, expectedCents);
-
-    try {
-      await this.dbService.db.insert(paymentVerifications).values({
-        orderId,
-        outcome: record.outcome,
-        transactionIdNormalised: normaliseTransactionId(record.transactionId),
-        provider: record.provider,
-        paidCents: record.paidCents,
-        expectedCents: record.expectedCents,
-        receivedAt: record.receivedAt ? new Date(record.receivedAt) : null,
-        reason: record.reason,
-        checkedByEmail,
-        raw: verification,
-      });
-    } catch (error) {
-      this.logger.error(
-        `Could not record the ${record.outcome} verification for order ${orderId}: ${String(error)}`,
-      );
-    }
-
-    return record;
-  }
-
-  /**
    * Append one gateway claim to an order's history.
    *
-   * Same best-effort rule as `record`: a failed insert is logged and
-   * swallowed, because the claim has already happened at the gateway and the
-   * caller must still act on it.
+   * Failures are logged and swallowed. This is a record *about* an action,
+   * not the action: the claim has already happened at the gateway, and the
+   * caller must still act on it — a customer's checkout must complete, and
+   * staff must still be told what the gateway said. The alternative is a
+   * logging table whose outage takes down the thing it is logging.
    *
    * @param checkedByEmail the staff member who asked, or null for the
    *   automatic claim at checkout and the background retries.

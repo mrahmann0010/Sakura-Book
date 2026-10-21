@@ -4,13 +4,13 @@ import { z } from "zod";
    The shared vocabulary of a payment cross-check.
 
    Its own contract file rather than a section of admin-pre-order.ts, because
-   nothing here is about pre-orders. A payment SMS forwarded into the gateway's
-   MongoDB is checked the same way whoever is asking, and the next thing that
-   needs verifying — a plain order, a reprint, a digital download — should
-   inherit these shapes rather than restate them.
+   nothing here is about pre-orders. A payment is claimed at the gateway the
+   same way whoever is asking, and the next thing that needs paying for — a
+   plain order, a reprint, a digital download — should inherit these shapes
+   rather than restate them.
    -------------------------------------------------------------------------- */
 
-/** The wallets the gateway files payments under, one collection each. */
+/** The wallets the gateway reads payment SMS from — its `platform` values. */
 export const paymentProviders = ["bkash", "nagad", "rocket"] as const;
 export type PaymentProvider = (typeof paymentProviders)[number];
 

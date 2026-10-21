@@ -4,7 +4,7 @@ import { DbService } from "../db/db.service";
 import { orders } from "../db/schema";
 import type { PaymentVerificationRecord } from "@sakura/contracts";
 import { PaymentClaimService, type ClaimOutcome } from "../payment-gateway";
-import { normaliseTransactionId } from "../payment-verification";
+import { normaliseTransactionId } from "./receipt";
 import type { OrderRow } from "./order.mapper";
 import { claimKeyFor, nextClaimKey } from "./payment-claim-key";
 import { nextRetryDelaySeconds } from "./payment-claim-retry";

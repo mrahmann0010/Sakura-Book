@@ -187,26 +187,6 @@ export const envSchema = z.object({
   REVIEW_IP_SALT: z.string().min(16).optional(),
 
   /**
-   * Connection string for the MongoDB the SMS payment gateway writes into —
-   * the `bkash` / `nagad` / `rocket` collections a forwarded payment SMS is
-   * parsed into. Read-only from this API's point of view; that service owns
-   * the data and the `trxId` unique index that makes it idempotent.
-   *
-   * The database name comes from the URI's path rather than a second variable,
-   * matching how the gateway's own backend resolves it (`get_default_database`
-   * / `client.db()` with no argument). One string to copy between deployments,
-   * and no way for the two halves to disagree about which database they mean.
-   *
-   * Optional, and its absence is a *degraded* door rather than an open or a
-   * closed one: with no URI configured every cross-check returns UNAVAILABLE,
-   * which leaves pre-orders PENDING for a human to verify by hand — exactly
-   * the process that existed before this feature. It must never be read as
-   * "no gateway configured, so assume the payment is good", which is why
-   * PaymentVerificationService returns a verdict rather than a boolean.
-   */
-  MONGO_URI: z.string().url().optional(),
-
-  /**
    * The payment gateway that confirms bKash / Nagad / Rocket payments.
    *
    * The shop asks it one thing — "let me spend payment `trxId` for this

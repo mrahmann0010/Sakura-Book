@@ -20,8 +20,8 @@ import type { AppModule as AppModuleType } from "../../src/app.module";
  * `compile()` rather than `init()` is the deliberate line. Compiling resolves
  * every dependency and constructs every provider — which is exactly where
  * UnknownDependenciesException is raised — but does not run lifecycle hooks,
- * so `DbService.onModuleInit` never opens a pool and `MongoPaymentsClient`
- * never dials the gateway. The test therefore needs no services, keeps the
+ * so `DbService.onModuleInit` never opens a pool and the claim retry worker
+ * never starts. The test therefore needs no services, keeps the
  * suite runnable on save, and stays honest about what it checks: the shape of
  * the graph, not the health of anything at the end of a socket.
  */
@@ -31,7 +31,7 @@ describe("AppModule", () => {
    * without these, so the graph cannot be built without them. Deliberately the
    * minimum: every optional variable is left unset so that this also proves
    * the application wires up in its degraded configuration — no Redis, no
-   * webhook secret, and no MONGO_URI, which is the state a fresh deployment is
+   * webhook secret, and no payment gateway, which is the state a fresh deployment is
    * in before anyone fills the panel in.
    */
   const required = {

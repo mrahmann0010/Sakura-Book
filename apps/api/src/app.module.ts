@@ -9,7 +9,6 @@ import { CouponsModule } from "./coupons";
 import { AuditModule } from "./audit";
 import { DbModule } from "./db/db.module";
 import { EmailModule } from "./email";
-import { PaymentVerificationModule } from "./payment-verification";
 import { PaymentGatewayModule } from "./payment-gateway";
 import { HealthModule } from "./health/health.module";
 import { InventoryModule } from "./inventory";
@@ -41,7 +40,6 @@ import { WaitlistModule } from "./waitlist";
     CommonModule,
     DbModule,
     AuditModule,
-    PaymentVerificationModule,
     PaymentGatewayModule,
     EmailModule,
     SmsModule,
