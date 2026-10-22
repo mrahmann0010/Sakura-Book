@@ -50,9 +50,9 @@ flowchart LR
     subgraph admin["admin/orders/"]
       AdminSvc["AdminOrdersService<br/>guardPaymentGrant · verifyPayment"]
     end
-    subgraph gw["payment-gateway/"]
-      ClaimSvc["PaymentClaimService.claim()"]
-      Http["GatewayHttpClient<br/>reason → ClaimOutcome"]
+    subgraph gw["@project-sakura/pay"]
+      ClaimSvc["gateway.claims.claim()"]
+      Http["HTTP · retry · reason → ClaimOutcome"]
     end
     Payments["PaymentsService.confirmManually"]
   end
@@ -77,10 +77,13 @@ flowchart LR
 
 **Boundaries**
 
-- [`payment-gateway/`](../apps/api/src/payment-gateway/) is the only code that knows the gateway
-  exists. It exports `PaymentClaimService` and nothing else. It speaks cents to callers and taka
-  to the gateway, and gateway `reason` strings never leave it. It **never changes orders** and
-  **never throws**: every failure comes back as an outcome.
+- [`@project-sakura/pay`](https://www.npmjs.com/package/@project-sakura/pay) is the only code
+  that knows the gateway exists. sakura-book builds one client from its env in
+  [`payment-gateway.provider.ts`](../apps/api/src/orders/payment-gateway.provider.ts) (the only
+  caller of `createGatewayClient`). The package speaks poisha to callers and taka to the gateway,
+  and gateway `reason` strings never leave it. It **never changes orders** and **never throws**:
+  every failure comes back as an outcome. See [sakura-pay-migration.md](sakura-pay-migration.md)
+  for the exact boundary.
 - [`OrderPaymentClaimService`](../apps/api/src/orders/order-payment-claim.service.ts) is the
   orders-side wrapper every caller goes through. It picks the claim key, logs the attempt and
   schedules the next retry. It doesn't grant orders.
@@ -90,17 +93,15 @@ flowchart LR
 
 ## 3. The outcomes
 
-The gateway's reason codes are translated in
-[`gateway-http.client.ts`](../apps/api/src/payment-gateway/gateway-http.client.ts) into the
-app's own vocabulary ([`claim.types.ts`](../apps/api/src/payment-gateway/claim.types.ts)). The
-names live in `@sakura/contracts` (`paymentVerificationOutcomes`), so the admin panel uses the
+The gateway's reason codes are translated inside `@project-sakura/pay` into its `ClaimOutcome`
+type. The outcome names live in `@sakura/contracts` (`paymentVerificationOutcomes`), so the admin panel uses the
 same words.
 
 | Gateway answer                                                                                      | `ClaimOutcome`    | Checkout / worker           | Admin confirm                 |
 | --------------------------------------------------------------------------------------------------- | ----------------- | --------------------------- | ----------------------------- |
 | 201 / 200 `claimed: true`                                                                           | `CLAIMED`         | Grant the order             | Grant                         |
 | 404 `not_found`                                                                                     | `PENDING_ARRIVAL` | Stay PENDING, retry         | Needs a reason                |
-| 422 `amount_mismatch`                                                                               | `UNDERPAID`       | Stay PENDING                | **Refused**                   |
+| 422 `amount_mismatch`                                                                               | `UNDERPAID`       | Stay PENDING                | Needs a shortfall reason      |
 | 409 `already_claimed`                                                                               | `ALREADY_CLAIMED` | Stay PENDING                | **Refused**                   |
 | 409 `claim_released`                                                                                | `RELEASED`        | New key, no auto-retry      | New key, claims again at once |
 | `ambiguous_trx`, `outside_claim_window`, `exceeds_max_claim`, `sender_mismatch`                     | `REJECTED`        | Stay PENDING                | Needs a reason                |
@@ -122,8 +123,9 @@ Rules worth knowing:
   `^01[3-9]\d{8}$`, and stores the normalised form in `orders.sender_number`. Older orders with an
   unrecognised number send its bare digits, so the gateway answers `sender_mismatch` rather than
   "senderPhone is required".
-- **Money.** `expectedAmount = totalCents / 100`; `amount` and `overpaidBy` are multiplied back
-  by 100 and rounded (not truncated) on the way in.
+- **Money.** The package takes `expectedPoisha` and returns `paidPoisha` / `overpaidPoisha`.
+  Poisha and our cents are the same number, so `order.totalCents` passes straight in. Stored
+  rows (`paid_cents`, `expected_cents`, `PaymentVerificationRecord`) keep the `…Cents` names.
 - Older history rows still read `MATCHED` / `NOT_FOUND` from the Mongo days. They're kept in
   the enum so that history still parses.
 
@@ -131,8 +133,10 @@ Rules worth knowing:
 
 ## 4. The claim key
 
-Every claim carries an idempotency key, `<orderNumber>:<attempt>`. Code:
-[`payment-claim-key.ts`](../apps/api/src/orders/payment-claim-key.ts).
+Every claim carries an idempotency key, `<orderNumber>:<attempt>`. The format comes from
+`firstClaimKey` / `claimKeyFor` / `nextClaimKey` in `@project-sakura/pay`; which key is stored on
+the order is decided in
+[`order-payment-claim.service.ts`](../apps/api/src/orders/order-payment-claim.service.ts).
 
 - Set to `:1` when a manual-transfer order with a transaction ID is placed
   (`orders.payment_claim_key`).
@@ -187,7 +191,8 @@ sequenceDiagram
   end
 ```
 
-- The checkout request makes **one** claim (5 s timeout) and returns. It never blocks while
+- The checkout request makes **one** claim and returns. The package retries once inside that
+  call on a network error, timeout or 5xx (same key), capped at 8 s in all. It never blocks while
   polling, and a gateway outage never fails a checkout: the order stays PENDING.
 - The modal ([`wait-for-payment.ts`](../apps/web/src/components/checkout/wait-for-payment.ts))
   stays on "Checking your payment" and re-reads the order every 3 s for up to 60 s. It reads
@@ -205,8 +210,8 @@ sequenceDiagram
 
 ## 6. The retry worker
 
-[`claim-retry.worker.ts`](../apps/api/src/orders/claim-retry.worker.ts), with its schedule in
-[`payment-claim-retry.ts`](../apps/api/src/orders/payment-claim-retry.ts).
+[`claim-retry.worker.ts`](../apps/api/src/orders/claim-retry.worker.ts) runs the jobs; the
+schedule is `nextRetryDelaySeconds` from `@project-sakura/pay`.
 
 - Runs in-process every 5 s. It's off when `NODE_ENV=test` or when the gateway isn't configured
   at boot.
@@ -242,7 +247,17 @@ PAYMENT_CONFIRMED** (including `advance` walks from PENDING), go through
    this one could only come back `already_claimed`.
 2. **Then the gateway.**
    - `CLAIMED`: grant.
-   - `ALREADY_CLAIMED` or `UNDERPAID`: refused outright with `PAYMENT_CLAIM_REFUSED`. No override.
+   - `ALREADY_CLAIMED`: refused outright with `PAYMENT_CLAIM_REFUSED`. No override.
+   - `UNDERPAID`: `PAYMENT_UNDERPAID`. The page shows the shortfall and a reason box, and the
+     button becomes "Accept short payment". With a `shortfallOverride` reason (min 15
+     characters), the payment is claimed again with `acceptShortfall: true` under the **same**
+     key (an underpayment is never stored at the gateway, so the key is still unused there). On
+     `CLAIMED` the reason is audited as `SHORTFALL_ACCEPTED`, then the order is granted. The
+     payment row is recorded at the **order total**, as every payment is; what really arrived
+     and the shortfall are kept in the payment's `raw`, the claim log and the audit entry, and
+     the order page shows "Accepted short". A gateway too old to know the flag still answers
+     `UNDERPAID`, and the grant is refused with `PAYMENT_CLAIM_REFUSED`. Checkout, the worker
+     and Check & confirm never send the flag.
    - Anything else: `PAYMENT_NOT_CLAIMED`. The page shows the gateway's sentence and a reason
      box, and the button becomes "Accept anyway". With a reason (min 15 characters), the grant
      goes ahead and is audited as `GATEWAY_CLAIM_OVERRIDE`. The worker keeps trying to claim
@@ -321,14 +336,14 @@ SAKURA_PAYMENT_GATEWAY_SECRET=<secret>
 
 ## 10. Where this differs from the integration guide
 
-| Guide says                                            | We did                                     | Why                                                                                    |
-| ----------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------- |
-| Bump the key when an order is reopened                | Keep the key                               | A reopened order that had claimed would collide with its own claim (`already_claimed`) |
-| `claim-retry.worker.ts` inside `payment-gateway/`     | It's in `orders/`                          | Its job ends in granting an order, and the gateway module must never change orders     |
-| The confirm path claims                               | **Both** grant paths claim                 | A transition into PAYMENT_CONFIRMED grants just as fully                               |
-| Outcome fields `paidAmount`, `overpaidBy`, `platform` | `paidCents`, `overpaidCents`, `provider`   | The unit is in the name; `provider` is the codebase's existing word for the wallet     |
-| Send `platform` when known                            | Send it only on `ambiguous_trx`            | A wrong wallet pick on the form would otherwise hide the payment                       |
-| Env vars required                                     | Required in production, optional elsewhere | Local development without a gateway keeps working (degraded, never granting)           |
+| Guide says                                | We did                                     | Why                                                                                    |
+| ----------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Bump the key when an order is reopened    | Keep the key                               | A reopened order that had claimed would collide with its own claim (`already_claimed`) |
+| A retry worker in the gateway client      | It's in `orders/`                          | Its job ends in granting an order; the package computes the schedule but runs no jobs  |
+| The confirm path claims                   | **Both** grant paths claim                 | A transition into PAYMENT_CONFIRMED grants just as fully                               |
+| Outcome fields `paidAmount`, `overpaidBy` | `paidPoisha`, `overpaidPoisha`             | The unit is in the name (from `@project-sakura/pay`); stored rows keep `…Cents`        |
+| Send `platform` when known                | Send it only on `ambiguous_trx`            | A wrong wallet pick on the form would otherwise hide the payment                       |
+| Env vars required                         | Required in production, optional elsewhere | Local development without a gateway keeps working (degraded, never granting)           |
 
 ---
 
@@ -341,7 +356,9 @@ SAKURA_PAYMENT_GATEWAY_SECRET=<secret>
       the Businesses page to get the secret.
 - [ ] **Revoke sakura-book's MongoDB user** on the gateway cluster after deploy. The code no
       longer uses it, but the credential still works until it's revoked.
-- [ ] **Check that the gateway accepts fractional taka.** `expectedAmount` is `totalCents / 100`,
+- [x] **Check that the gateway accepts fractional taka.** Verified by `@project-sakura/pay`'s
+      end-to-end tests: `125_050` poisha goes out as `1250.5` and comes back exact.
+      Originally: `expectedAmount` is `totalCents / 100`,
       which could be e.g. `1250.5` if a total ever has poisha.
 
 ### Not verified yet
@@ -395,11 +412,11 @@ SAKURA_PAYMENT_GATEWAY_SECRET=<secret>
 
 ## 12. Where the code is
 
-| Area           | Files                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Gateway module | [`apps/api/src/payment-gateway/`](../apps/api/src/payment-gateway/)                                                                                                                                                                                                                                                                                                                                                                                            |
-| Orders side    | [`order-payment-claim.service.ts`](../apps/api/src/orders/order-payment-claim.service.ts), [`order-auto-verify.service.ts`](../apps/api/src/orders/order-auto-verify.service.ts), [`claim-retry.worker.ts`](../apps/api/src/orders/claim-retry.worker.ts), [`payment-claim-key.ts`](../apps/api/src/orders/payment-claim-key.ts), [`payment-claim-retry.ts`](../apps/api/src/orders/payment-claim-retry.ts), [`receipt.ts`](../apps/api/src/orders/receipt.ts) |
-| Admin          | [`admin-orders.service.ts`](../apps/api/src/admin/orders/admin-orders.service.ts) (`guardPaymentGrant`, `verifyPayment`), [`admin-order.errors.ts`](../apps/api/src/admin/orders/admin-order.errors.ts), [`admin-order.mapper.ts`](../apps/api/src/admin/orders/admin-order.mapper.ts) (`heldClaimOf`)                                                                                                                                                         |
-| Contracts      | [`payment-verification.ts`](../packages/contracts/src/payment-verification.ts), [`admin-order.ts`](../packages/contracts/src/admin-order.ts), [`order.ts`](../packages/contracts/src/order.ts), [`errors.ts`](../packages/contracts/src/errors.ts)                                                                                                                                                                                                             |
-| Web            | [`wait-for-payment.ts`](../apps/web/src/components/checkout/wait-for-payment.ts), [`checkout-view.tsx`](../apps/web/src/components/checkout/checkout-view.tsx), [`invite-checkout-view.tsx`](../apps/web/src/components/checkout/invite-checkout-view.tsx), admin order page, [`payment-safety.tsx`](../apps/web/src/components/admin/payment-safety.tsx)                                                                                                      |
-| Tests          | [`payment-gateway.spec.ts`](../apps/api/test/unit/payment-gateway.spec.ts) (every reason code, HTTP client, env rules), [`payment-claim-flow.spec.ts`](../apps/api/test/unit/payment-claim-flow.spec.ts) (each outcome through checkout, worker schedule and admin), [`duplicate-receipt-guard.spec.ts`](../apps/api/test/unit/duplicate-receipt-guard.spec.ts), [`receipt-normalise.spec.ts`](../apps/api/test/unit/receipt-normalise.spec.ts)                |
+| Area           | Files                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gateway client | [`@project-sakura/pay`](https://www.npmjs.com/package/@project-sakura/pay), built in [`payment-gateway.provider.ts`](../apps/api/src/orders/payment-gateway.provider.ts)                                                                                                                                                                                                                                                                        |
+| Orders side    | [`order-payment-claim.service.ts`](../apps/api/src/orders/order-payment-claim.service.ts), [`order-auto-verify.service.ts`](../apps/api/src/orders/order-auto-verify.service.ts), [`claim-retry.worker.ts`](../apps/api/src/orders/claim-retry.worker.ts), [`payment-verification-log.service.ts`](../apps/api/src/orders/payment-verification-log.service.ts)                                                                                  |
+| Admin          | [`admin-orders.service.ts`](../apps/api/src/admin/orders/admin-orders.service.ts) (`guardPaymentGrant`, `verifyPayment`), [`admin-order.errors.ts`](../apps/api/src/admin/orders/admin-order.errors.ts), [`admin-order.mapper.ts`](../apps/api/src/admin/orders/admin-order.mapper.ts) (`heldClaimOf`)                                                                                                                                          |
+| Contracts      | [`payment-verification.ts`](../packages/contracts/src/payment-verification.ts), [`admin-order.ts`](../packages/contracts/src/admin-order.ts), [`order.ts`](../packages/contracts/src/order.ts), [`errors.ts`](../packages/contracts/src/errors.ts)                                                                                                                                                                                              |
+| Web            | [`wait-for-payment.ts`](../apps/web/src/components/checkout/wait-for-payment.ts), [`checkout-view.tsx`](../apps/web/src/components/checkout/checkout-view.tsx), [`invite-checkout-view.tsx`](../apps/web/src/components/checkout/invite-checkout-view.tsx), admin order page, [`payment-safety.tsx`](../apps/web/src/components/admin/payment-safety.tsx)                                                                                       |
+| Tests          | [`payment-gateway.spec.ts`](../apps/api/test/unit/payment-gateway.spec.ts) (every reason code, HTTP client, env rules), [`payment-claim-flow.spec.ts`](../apps/api/test/unit/payment-claim-flow.spec.ts) (each outcome through checkout, worker schedule and admin), [`duplicate-receipt-guard.spec.ts`](../apps/api/test/unit/duplicate-receipt-guard.spec.ts), [`receipt-normalise.spec.ts`](../apps/api/test/unit/receipt-normalise.spec.ts) |

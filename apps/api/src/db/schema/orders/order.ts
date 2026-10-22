@@ -198,7 +198,8 @@ export const orders = pgTable(
      * than an empty string: NULLs do not collide under the unique index below,
      * and "no usable receipt" is what that value means.
      *
-     * Mirrored in `normaliseTransactionId` for the one thing SQL cannot do —
+     * Mirrored in `normaliseTrxId` from `@project-sakura/pay` for the one
+     * thing SQL cannot do —
      * normalise a value that is not in the table yet, at the API boundary.
      * The two must stay identical; the test suite asserts they agree.
      */

@@ -4,24 +4,29 @@ import { heldClaimOf } from "../../src/admin/orders/admin-order.mapper";
 import {
   PaymentClaimRefusedError,
   PaymentNotClaimedError,
+  PaymentUnderpaidError,
 } from "../../src/admin/orders/admin-order.errors";
 import { AdminOrdersService, type AdminContext } from "../../src/admin/orders/admin-orders.service";
 import { InvalidInputError } from "../../src/common/errors";
 import { OrderAutoVerifyService } from "../../src/orders/order-auto-verify.service";
-import { OrderPaymentClaimService, senderPhoneFor } from "../../src/orders/order-payment-claim.service";
+import {
+  OrderPaymentClaimService,
+  senderPhoneFor,
+} from "../../src/orders/order-payment-claim.service";
+import { toClaimRecord } from "../../src/orders/payment-verification-log.service";
 import {
   FAST_RETRY_DELAYS_SECONDS,
-  LATE_RETRY_ATTEMPTS,
   LATE_RETRY_INTERVAL_SECONDS,
-  nextRetryDelaySeconds,
-} from "../../src/orders/payment-claim-retry";
-import { toClaimRecord, type ClaimOutcome } from "../../src/payment-gateway/claim.types";
+  type ClaimOutcome,
+} from "@project-sakura/pay";
+import { claimedOutcome, createFakeGatewayClient } from "@project-sakura/pay/testing";
 
 /**
- * The claim flow on the orders side, against a fake PaymentClaimService.
+ * The claim flow on the orders side, against @project-sakura/pay's fake
+ * gateway client.
  *
- * The gateway module's own translation is tested in payment-gateway.spec.ts.
- * What is pinned here is what the shop *does* with each answer: who gets
+ * The gateway's own behaviour (wire format, reason codes, retry schedule) is
+ * tested in the package. What is pinned here is what the shop *does* with each answer: who gets
  * granted, who is left pending, which key is sent, when the worker comes
  * back, and which admin requests are refused.
  */
@@ -77,21 +82,18 @@ const order = (overrides: Partial<TestOrder> = {}): TestOrder => ({
   ...overrides,
 });
 
-const CLAIMED: ClaimOutcome = {
-  outcome: "CLAIMED",
-  trxId: "8F3K2M9X01",
-  provider: "bkash",
-  paidCents: 130_000,
-  overpaidCents: 5_000,
+const CLAIMED = claimedOutcome({
+  platform: "bkash",
+  paidPoisha: 130_000,
+  overpaidPoisha: 5_000,
   claimedAt: new Date("2026-10-21T08:14:02.000Z"),
-  replay: false,
-};
+});
 
 const OTHER_OUTCOMES: ClaimOutcome[] = [
   { outcome: "PENDING_ARRIVAL" },
-  { outcome: "UNDERPAID", expectedCents: 125_000, paidCents: 90_000 },
+  { outcome: "UNDERPAID", expectedPoisha: 125_000, paidPoisha: 90_000 },
   { outcome: "ALREADY_CLAIMED", claimedAt: null },
-  { outcome: "RELEASED" },
+  { outcome: "RELEASED", releasedAt: null },
   { outcome: "REJECTED", rejection: "TOO_OLD", reason: "too old" },
   { outcome: "MISCONFIGURED", reason: "bad secret" },
   { outcome: "UNAVAILABLE", reason: "timeout" },
@@ -99,10 +101,7 @@ const OTHER_OUTCOMES: ClaimOutcome[] = [
 
 /** A real OrderPaymentClaimService over a fake gateway, db and log. */
 function claimsWith(answers: ClaimOutcome[], options: { enabled?: boolean } = {}) {
-  const gateway = {
-    enabled: options.enabled ?? true,
-    claim: vi.fn(async () => answers.shift() ?? ({ outcome: "PENDING_ARRIVAL" } as const)),
-  };
+  const gateway = createFakeGatewayClient(answers, { enabled: options.enabled ?? true });
   const updates: Record<string, unknown>[] = [];
   const db = {
     db: {
@@ -125,7 +124,7 @@ function claimsWith(answers: ClaimOutcome[], options: { enabled?: boolean } = {}
     ),
   };
 
-  const service = new OrderPaymentClaimService(db as never, gateway as never, log as never);
+  const service = new OrderPaymentClaimService(db as never, gateway, log as never);
 
   return { service, gateway, updates, log };
 }
@@ -135,46 +134,22 @@ const lastUpdate = (updates: Record<string, unknown>[]) => updates.at(-1) ?? {};
 const secondsUntil = (value: unknown) =>
   Math.round(((value as Date).getTime() - Date.now()) / 1000);
 
-describe("nextRetryDelaySeconds", () => {
-  it("backs off 5s, 10s, 20s, then every 30s", () => {
-    expect([1, 2, 3, 4, 5].map((attempt) => nextRetryDelaySeconds(attempt, false))).toEqual([
-      5, 10, 20, 30, 30,
-    ]);
-  });
-
-  it("gives up on a pending order after the fast schedule (about four minutes)", () => {
-    const total = FAST_RETRY_DELAYS_SECONDS.reduce((sum, delay) => sum + delay, 0);
-    expect(total).toBeGreaterThanOrEqual(120);
-    expect(total).toBeLessThanOrEqual(300);
-    expect(nextRetryDelaySeconds(FAST_RETRY_DELAYS_SECONDS.length + 1, false)).toBeNull();
-  });
-
-  it("keeps trying, slowly, for an order staff already confirmed", () => {
-    const after = FAST_RETRY_DELAYS_SECONDS.length + 1;
-    expect(nextRetryDelaySeconds(after, true)).toBe(LATE_RETRY_INTERVAL_SECONDS);
-    expect(nextRetryDelaySeconds(after + LATE_RETRY_ATTEMPTS, true)).toBeNull();
-  });
-
-  it("waits at least as long as the gateway's retryAfter", () => {
-    expect(nextRetryDelaySeconds(1, false, 60)).toBe(60);
-    expect(nextRetryDelaySeconds(4, false, 2)).toBe(30);
-  });
-});
-
 describe("OrderPaymentClaimService", () => {
-  it("claims with the order's stored key, the total in cents and the order number", async () => {
+  it("claims with the order's stored key, the total in poisha and the order number", async () => {
     const { service, gateway } = claimsWith([CLAIMED]);
 
     await service.claim(order({ paymentClaimKey: "SB-10482:3" }) as never, null);
 
-    expect(gateway.claim).toHaveBeenCalledWith({
-      trxId: "8F3K2M9X01",
-      expectedCents: 125_000,
-      idempotencyKey: "SB-10482:3",
-      orderRef: "SB-10482",
-      provider: "bkash",
-      senderPhone: "01711111111",
-    });
+    expect(gateway.calls).toEqual([
+      {
+        trxId: "8F3K2M9X01",
+        expectedPoisha: 125_000,
+        idempotencyKey: "SB-10482:3",
+        orderRef: "SB-10482",
+        platform: "bkash",
+        senderPhone: "01711111111",
+      },
+    ]);
   });
 
   it("leaves the payer's phone out only when none was typed", async () => {
@@ -182,9 +157,7 @@ describe("OrderPaymentClaimService", () => {
 
     await service.claim(order({ senderNumber: null }) as never, null);
 
-    expect(gateway.claim.mock.calls[0]).toEqual([
-      expect.objectContaining({ senderPhone: undefined }),
-    ]);
+    expect(gateway.calls[0]).toEqual(expect.objectContaining({ senderPhone: undefined }));
   });
 
   it("gives an order placed before keys existed the first key, and stores it", async () => {
@@ -192,9 +165,7 @@ describe("OrderPaymentClaimService", () => {
 
     await service.claim(order({ paymentClaimKey: null }) as never, null);
 
-    expect(gateway.claim.mock.calls[0]).toEqual([
-      expect.objectContaining({ idempotencyKey: "SB-10482:1" }),
-    ]);
+    expect(gateway.calls[0]).toEqual(expect.objectContaining({ idempotencyKey: "SB-10482:1" }));
     expect(lastUpdate(updates)).toMatchObject({ paymentClaimKey: "SB-10482:1" });
   });
 
@@ -204,9 +175,7 @@ describe("OrderPaymentClaimService", () => {
     await service.claim(order() as never, null);
     await service.claim(order({ paymentClaimAttempts: 1 }) as never, null);
 
-    const keys = gateway.claim.mock.calls.map(
-      (call) => (call as unknown as [{ idempotencyKey: string }])[0].idempotencyKey,
-    );
+    const keys = gateway.calls.map((call) => call.idempotencyKey);
     expect(keys).toEqual(["SB-10482:1", "SB-10482:1"]);
   });
 
@@ -273,11 +242,11 @@ describe("OrderPaymentClaimService", () => {
   );
 
   it("moves to a new key on RELEASED, without re-taking the payment by itself", async () => {
-    const { service, gateway, updates } = claimsWith([{ outcome: "RELEASED" }]);
+    const { service, gateway, updates } = claimsWith([{ outcome: "RELEASED", releasedAt: null }]);
 
     await service.claim(order() as never, null);
 
-    expect(gateway.claim).toHaveBeenCalledTimes(1);
+    expect(gateway.calls).toHaveLength(1);
     expect(lastUpdate(updates)).toMatchObject({
       paymentClaimKey: "SB-10482:2",
       paymentClaimAttempts: 0,
@@ -286,16 +255,14 @@ describe("OrderPaymentClaimService", () => {
   });
 
   it("re-claims under the new key straight away when staff ask", async () => {
-    const { service, gateway } = claimsWith([{ outcome: "RELEASED" }, CLAIMED]);
+    const { service, gateway } = claimsWith([{ outcome: "RELEASED", releasedAt: null }, CLAIMED]);
 
     const { outcome } = await service.claim(order() as never, "staff@shop.com", {
       retryReleased: true,
     });
 
     expect(outcome.outcome).toBe("CLAIMED");
-    expect(gateway.claim.mock.calls[1]).toEqual([
-      expect.objectContaining({ idempotencyKey: "SB-10482:2" }),
-    ]);
+    expect(gateway.calls[1]).toEqual(expect.objectContaining({ idempotencyKey: "SB-10482:2" }));
   });
 
   it("never asks the gateway about an order with no receipt", async () => {
@@ -305,18 +272,19 @@ describe("OrderPaymentClaimService", () => {
     const { outcome } = await service.claim(cod as never, null);
 
     expect(outcome.outcome).toBe("MISCONFIGURED");
-    expect(gateway.claim).not.toHaveBeenCalled();
+    expect(gateway.calls).toHaveLength(0);
   });
 });
 
 /** OrderAutoVerifyService over a real claim service and a fake gateway. */
-function autoVerifyWith(answers: ClaimOutcome[], confirmManually = vi.fn(async () => ({ confirmed: true }))) {
+function autoVerifyWith(
+  answers: ClaimOutcome[],
+  confirmManually = vi.fn(async () => ({ confirmed: true })),
+) {
   const claims = claimsWith(answers);
-  const service = new OrderAutoVerifyService(
-    { db: {} } as never,
-    claims.service,
-    { confirmManually } as never,
-  );
+  const service = new OrderAutoVerifyService({ db: {} } as never, claims.service, {
+    confirmManually,
+  } as never);
   return { ...claims, service, confirmManually };
 }
 
@@ -370,7 +338,7 @@ describe("OrderAutoVerifyService.settle", () => {
 
     await expect(service.settle(order() as never)).resolves.toBeNull();
 
-    expect(gateway.claim).not.toHaveBeenCalled();
+    expect(gateway.calls).toHaveLength(0);
     expect(confirmManually).not.toHaveBeenCalled();
   });
 
@@ -379,7 +347,7 @@ describe("OrderAutoVerifyService.settle", () => {
 
     await expect(service.settle(order({ status: "CANCELLED" }) as never)).resolves.toBeNull();
 
-    expect(gateway.claim).not.toHaveBeenCalled();
+    expect(gateway.calls).toHaveLength(0);
     expect(lastUpdate(updates)).toEqual({ paymentClaimRetryAt: null });
   });
 
@@ -388,7 +356,7 @@ describe("OrderAutoVerifyService.settle", () => {
 
     await service.settle(order({ status: "PAYMENT_CONFIRMED" }) as never);
 
-    expect(gateway.claim).toHaveBeenCalled();
+    expect(gateway.calls).not.toHaveLength(0);
     expect(confirmManually).not.toHaveBeenCalled();
   });
 
@@ -402,9 +370,7 @@ describe("OrderAutoVerifyService.settle", () => {
       }) as never,
     );
 
-    expect(secondsUntil(lastUpdate(updates).paymentClaimRetryAt)).toBe(
-      LATE_RETRY_INTERVAL_SECONDS,
-    );
+    expect(secondsUntil(lastUpdate(updates).paymentClaimRetryAt)).toBe(LATE_RETRY_INTERVAL_SECONDS);
   });
 });
 
@@ -428,7 +394,7 @@ describe("OrderAutoVerifyService.tryAutoConfirm", () => {
     const cod = { orderNumber: "SB-1", paymentMethod: "cash-on-delivery" };
 
     await expect(service.tryAutoConfirm(cod as never)).resolves.toBe(cod);
-    expect(gateway.claim).not.toHaveBeenCalled();
+    expect(gateway.calls).toHaveLength(0);
   });
 
   it("never fails checkout when the gateway is down", async () => {
@@ -454,7 +420,9 @@ function adminWith(answers: ClaimOutcome[], row: TestOrder = order()) {
   const confirmManually = vi.fn(async () => ({ confirmed: true }));
 
   const service = new AdminOrdersService(
-    { db: { transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})) } } as never,
+    {
+      db: { transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})) },
+    } as never,
     { transitionAndCommit } as never,
     { confirmManually } as never,
     { record: auditRecord, recordDetached: vi.fn(async () => undefined) } as never,
@@ -482,7 +450,7 @@ describe("admin grants claim the payment first", () => {
 
     await service.confirmPayment("SB-10482", { amountCents: 125_000 }, CONTEXT);
 
-    expect(gateway.claim).toHaveBeenCalled();
+    expect(gateway.calls).not.toHaveLength(0);
     expect(confirmManually).toHaveBeenCalled();
   });
 
@@ -491,20 +459,19 @@ describe("admin grants claim the payment first", () => {
 
     await service.transition("SB-10482", { status: "PAYMENT_CONFIRMED" }, CONTEXT);
 
-    expect(gateway.claim).toHaveBeenCalled();
+    expect(gateway.calls).not.toHaveLength(0);
     expect(transitionAndCommit).toHaveBeenCalled();
   });
 
-  it.each<ClaimOutcome>([
-    { outcome: "ALREADY_CLAIMED", claimedAt: null },
-    { outcome: "UNDERPAID", expectedCents: 125_000, paidCents: 90_000 },
-  ])("refuses $outcome outright, even with a reason", async (outcome) => {
-    const { service, confirmManually } = adminWith([outcome]);
+  it("refuses a payment spent elsewhere outright, even with every reason", async () => {
+    const { service, confirmManually } = adminWith([
+      { outcome: "ALREADY_CLAIMED", claimedAt: null },
+    ]);
 
     await expect(
       service.confirmPayment(
         "SB-10482",
-        { amountCents: 125_000, gatewayClaimOverride: REASON },
+        { amountCents: 125_000, gatewayClaimOverride: REASON, shortfallOverride: REASON },
         CONTEXT,
       ),
     ).rejects.toBeInstanceOf(PaymentClaimRefusedError);
@@ -552,8 +519,134 @@ describe("admin grants claim the payment first", () => {
 
     await service.transition("SB-10482", { status: "PAYMENT_CONFIRMED" }, CONTEXT);
 
-    expect(gateway.claim).not.toHaveBeenCalled();
+    expect(gateway.calls).toHaveLength(0);
     expect(transitionAndCommit).toHaveBeenCalled();
+  });
+});
+
+const UNDERPAID: ClaimOutcome = {
+  outcome: "UNDERPAID",
+  expectedPoisha: 125_000,
+  paidPoisha: 90_000,
+};
+
+const ACCEPTED_SHORT = claimedOutcome({
+  platform: "bkash",
+  paidPoisha: 90_000,
+  overpaidPoisha: 0,
+  underpaidPoisha: 35_000,
+  claimedAt: new Date("2026-10-21T08:14:02.000Z"),
+});
+
+const SHORT_REASON = "Customer paid ৳900 and will pay the rest on delivery.";
+
+describe("accepting a short payment", () => {
+  it("refuses a short payment without a shortfall reason", async () => {
+    const { service, confirmManually, auditRecord } = adminWith([UNDERPAID]);
+
+    const refusal = service.confirmPayment("SB-10482", { amountCents: 125_000 }, CONTEXT);
+
+    await expect(refusal).rejects.toBeInstanceOf(PaymentUnderpaidError);
+    await expect(refusal).rejects.toThrow(/give a reason/);
+    expect(confirmManually).not.toHaveBeenCalled();
+    expect(auditRecord).not.toHaveBeenCalled();
+  });
+
+  it("is not satisfied by a gateway-claim reason", async () => {
+    const { service, confirmManually } = adminWith([UNDERPAID]);
+
+    await expect(
+      service.confirmPayment(
+        "SB-10482",
+        { amountCents: 125_000, gatewayClaimOverride: REASON },
+        CONTEXT,
+      ),
+    ).rejects.toBeInstanceOf(PaymentUnderpaidError);
+    expect(confirmManually).not.toHaveBeenCalled();
+  });
+
+  it("claims it as accepted-short with the same key, records why, then confirms at the total", async () => {
+    const { service, gateway, confirmManually, auditRecord } = adminWith([
+      UNDERPAID,
+      ACCEPTED_SHORT,
+    ]);
+
+    await service.confirmPayment(
+      "SB-10482",
+      { amountCents: 125_000, shortfallOverride: SHORT_REASON },
+      CONTEXT,
+    );
+
+    // The first claim is the ordinary one; only the second accepts the shortfall.
+    expect(gateway.calls).toHaveLength(2);
+    expect(gateway.calls[0]).not.toHaveProperty("acceptShortfall");
+    expect(gateway.calls[1]).toMatchObject({ acceptShortfall: true, idempotencyKey: "SB-10482:1" });
+
+    expect(auditRecord.mock.calls[0]?.[0]).toMatchObject({
+      action: "SHORTFALL_ACCEPTED",
+      note: SHORT_REASON,
+      after: { underpaidCents: 35_000 },
+    });
+    expect(confirmManually).toHaveBeenCalledWith(
+      "manual-transfer",
+      expect.objectContaining({
+        amountCents: 125_000,
+        raw: expect.objectContaining({
+          paidCents: 90_000,
+          underpaidCents: 35_000,
+          shortfallReason: SHORT_REASON,
+        }),
+      }),
+    );
+  });
+
+  it("accepts a short payment on the transition door too", async () => {
+    const { service, transitionAndCommit, auditRecord } = adminWith([UNDERPAID, ACCEPTED_SHORT]);
+
+    await service.transition(
+      "SB-10482",
+      { status: "PAYMENT_CONFIRMED", shortfallOverride: SHORT_REASON },
+      CONTEXT,
+    );
+
+    expect(auditRecord.mock.calls[0]?.[0]).toMatchObject({ action: "SHORTFALL_ACCEPTED" });
+    expect(transitionAndCommit).toHaveBeenCalled();
+  });
+
+  it("refuses, without granting or auditing, when the gateway still says UNDERPAID", async () => {
+    // A gateway too old to know `acceptShortfall`.
+    const { service, confirmManually, auditRecord } = adminWith([UNDERPAID]);
+
+    await expect(
+      service.confirmPayment(
+        "SB-10482",
+        { amountCents: 125_000, shortfallOverride: SHORT_REASON },
+        CONTEXT,
+      ),
+    ).rejects.toThrow(/would not accept the short payment/);
+
+    expect(confirmManually).not.toHaveBeenCalled();
+    expect(auditRecord).not.toHaveBeenCalled();
+  });
+
+  it("is never offered by Check & confirm, which reports the shortfall instead", async () => {
+    const { service, gateway, confirmManually } = adminWith([UNDERPAID]);
+
+    const result = await service.verifyPayment("SB-10482", CONTEXT);
+
+    expect(result.confirmed).toBe(false);
+    expect(result.summary).toMatch(/accept it short with a reason/);
+    expect(gateway.calls).toHaveLength(1);
+    expect(gateway.calls[0]).not.toHaveProperty("acceptShortfall");
+    expect(confirmManually).not.toHaveBeenCalled();
+  });
+
+  it("never accepts a shortfall from the machine's own claims", async () => {
+    const { service, gateway } = claimsWith([UNDERPAID]);
+
+    await service.claim(order() as never, null);
+
+    expect(gateway.calls[0]).not.toHaveProperty("acceptShortfall");
   });
 });
 
@@ -588,7 +681,7 @@ describe("Check & confirm", () => {
     await expect(service.verifyPayment("SB-10482", CONTEXT)).rejects.toBeInstanceOf(
       InvalidInputError,
     );
-    expect(gateway.claim).not.toHaveBeenCalled();
+    expect(gateway.calls).toHaveLength(0);
   });
 
   it("answers NO_RECEIPT for an order with nothing to claim", async () => {
@@ -598,7 +691,44 @@ describe("Check & confirm", () => {
       record: { outcome: "NO_RECEIPT" },
       confirmed: false,
     });
-    expect(gateway.claim).not.toHaveBeenCalled();
+    expect(gateway.calls).toHaveLength(0);
+  });
+});
+
+describe("toClaimRecord", () => {
+  const context = { transactionId: "8F3K2M9X01", expectedCents: 125_000, claimKey: "SB-10482:1" };
+
+  it("keeps the key, the amounts and the overpayment for a claim, in the log's names", () => {
+    expect(toClaimRecord(CLAIMED, context)).toMatchObject({
+      outcome: "CLAIMED",
+      claimKey: "SB-10482:1",
+      provider: "bkash",
+      paidCents: 130_000,
+      expectedCents: 125_000,
+      overpaidCents: 5_000,
+      claimedAt: "2026-10-21T08:14:02.000Z",
+    });
+  });
+
+  it("keeps an accepted shortfall", () => {
+    expect(toClaimRecord(ACCEPTED_SHORT, context)).toMatchObject({
+      outcome: "CLAIMED",
+      paidCents: 90_000,
+      expectedCents: 125_000,
+      underpaidCents: 35_000,
+    });
+  });
+
+  it("keeps what arrived on an underpayment", () => {
+    expect(
+      toClaimRecord({ outcome: "UNDERPAID", expectedPoisha: 125_000, paidPoisha: 90_000 }, context),
+    ).toMatchObject({ outcome: "UNDERPAID", paidCents: 90_000, expectedCents: 125_000 });
+  });
+
+  it("keeps the reason on a refusal", () => {
+    expect(
+      toClaimRecord({ outcome: "REJECTED", rejection: "TOO_OLD", reason: "too old" }, context),
+    ).toMatchObject({ outcome: "REJECTED", reason: "too old" });
   });
 });
 
@@ -617,7 +747,26 @@ describe("heldClaimOf", () => {
         },
         { outcome: "PENDING_ARRIVAL", checkedAt: at(1), transactionId: "8F3K2M9X01" },
       ]),
-    ).toEqual({ transactionId: "8F3K2M9X01", claimedAt: at(2), overpaidCents: 5_000 });
+    ).toEqual({
+      transactionId: "8F3K2M9X01",
+      claimedAt: at(2),
+      overpaidCents: 5_000,
+      underpaidCents: 0,
+    });
+  });
+
+  it("reports an accepted shortfall", () => {
+    expect(
+      heldClaimOf([
+        {
+          outcome: "CLAIMED",
+          checkedAt: at(2),
+          transactionId: "8F3K2M9X01",
+          claimedAt: at(2),
+          underpaidCents: 35_000,
+        },
+      ]),
+    ).toMatchObject({ overpaidCents: 0, underpaidCents: 35_000 });
   });
 
   it("is null once the claim was released, until it is claimed again", () => {
@@ -629,7 +778,9 @@ describe("heldClaimOf", () => {
   });
 
   it("is null for an order that never claimed", () => {
-    expect(heldClaimOf([{ outcome: "PENDING_ARRIVAL", checkedAt: at(1), transactionId: "X" }])).toBeNull();
+    expect(
+      heldClaimOf([{ outcome: "PENDING_ARRIVAL", checkedAt: at(1), transactionId: "X" }]),
+    ).toBeNull();
   });
 });
 

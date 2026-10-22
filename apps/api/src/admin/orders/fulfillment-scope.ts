@@ -94,7 +94,7 @@ export function isInFulfillmentScope(
 export function fulfillmentTransitionBlocker(
   from: OrderStatus,
   entering: readonly OrderStatus[],
-  duplicateReceiptOverride: string | undefined,
+  paymentOverride: string | undefined,
 ): string | null {
   if (from !== "PAYMENT_CONFIRMED" && from !== "PROCESSING") {
     return "Only orders waiting to be packed or being packed can be moved from the packing table.";
@@ -106,7 +106,7 @@ export function fulfillmentTransitionBlocker(
     return "From the packing table an order can only be marked packing or shipped. Leave a note for anything else.";
   }
 
-  if (duplicateReceiptOverride) {
+  if (paymentOverride) {
     return "Payment decisions are not made from the packing table.";
   }
 

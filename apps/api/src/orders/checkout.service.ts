@@ -22,7 +22,7 @@ import {
   WaitlistInviteService,
 } from "../waitlist";
 import { generateOrderNumber, ORDER_NUMBER_ATTEMPTS } from "./order-number";
-import { firstClaimKey } from "./payment-claim-key";
+import { firstClaimKey } from "@project-sakura/pay";
 import {
   CartNotOrderableError,
   CouponNotApplicableError,
@@ -335,7 +335,7 @@ export class CheckoutService {
               ...values,
               orderNumber,
               /* Set now, before any claim is made, so the first claim and
-                 every retry of it share one key. See payment-claim-key.ts. */
+                 every retry of it share one key. See firstClaimKey in @project-sakura/pay. */
               paymentClaimKey:
                 values.paymentMethod === "manual-transfer" && values.transactionId
                   ? firstClaimKey(orderNumber)

@@ -31,11 +31,14 @@ export const KNOWN_ERROR_CODES = [
   // one rule that spans the two pre-order lifecycles.
   "PAYMENT_NOT_ACCEPTED",
   // The gateway refused to let this payment be spent for this order: it is
-  // already spent elsewhere, or short. Not overridable.
+  // already spent elsewhere. Not overridable.
   "PAYMENT_CLAIM_REFUSED",
   // The gateway could not confirm the payment (not arrived, unreachable,
   // rejected). Staff may confirm anyway with a `gatewayClaimOverride` reason.
   "PAYMENT_NOT_CLAIMED",
+  // The payment is short of the order total. Staff may accept it anyway with a
+  // `shortfallOverride` reason; the shortfall is recorded.
+  "PAYMENT_UNDERPAID",
   "INVALID_CREDENTIALS",
   "ACCOUNT_LOCKED",
   "ACCOUNT_DISABLED",

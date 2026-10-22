@@ -184,6 +184,7 @@ export function heldClaimOf(
     transactionId: latest.transactionId,
     claimedAt: latest.claimedAt ?? null,
     overpaidCents: latest.overpaidCents ?? 0,
+    underpaidCents: latest.underpaidCents ?? 0,
   };
 }
 

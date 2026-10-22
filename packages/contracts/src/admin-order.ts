@@ -316,15 +316,18 @@ export const adminOrderDetailSchema = orderSchema.extend({
   /**
    * The payment this order holds at the gateway, or null when it holds none.
    *
-   * Drives two reminders on the detail page: an overpayment to refund or
-   * credit, and — once the order is cancelled or refunded — that only a
-   * gateway admin can release the claim so the receipt can be used again.
+   * Drives three reminders on the detail page: an overpayment to refund or
+   * credit, a shortfall staff accepted, and — once the order is cancelled or
+   * refunded — that only a gateway admin can release the claim so the receipt
+   * can be used again.
    */
   gatewayClaim: z
     .object({
       transactionId: z.string(),
       claimedAt: z.string().datetime().nullable(),
       overpaidCents: z.number().int().nonnegative(),
+      /** Above 0 only when staff accepted a short payment with a reason. */
+      underpaidCents: z.number().int().nonnegative(),
     })
     .nullable(),
 });
@@ -358,7 +361,8 @@ export const duplicateReceiptOverrideSchema = z
  * reason a person can judge (too old, over the limit).
  *
  * Never accepted for the two answers that settle the question: a payment
- * already spent elsewhere, and an underpayment. Those are refused outright.
+ * already spent elsewhere, and an underpayment. A payment spent elsewhere is
+ * refused outright; an underpayment has its own reason, below.
  *
  * With a reason, the grant goes ahead and the background worker keeps trying
  * to claim the payment afterwards, so it is still marked spent at the gateway
@@ -369,6 +373,26 @@ export const gatewayClaimOverrideSchema = z
   .string()
   .trim()
   .min(15, "Explain how you know this payment arrived.")
+  .max(500)
+  .optional();
+
+/**
+ * The typed reason that lets staff accept a payment that is short of the
+ * order total — the customer sent ৳1200 against ৳1250 and the shop has
+ * decided to take it (a rounding slip, a goodwill discount, the rest
+ * collected on delivery).
+ *
+ * Only ever offered after the gateway answered UNDERPAID, and never by the
+ * machine: checkout and the background worker refuse a short payment, always.
+ * With a reason, the payment is claimed at the gateway as accepted-short, so
+ * it is still spent exactly once, and the shortfall is recorded on the claim,
+ * the payment and the audit log. The payment itself is recorded at the order
+ * total, so the "a payment equals its order" rule holds everywhere else.
+ */
+export const shortfallOverrideSchema = z
+  .string()
+  .trim()
+  .min(15, "Explain why you are accepting less than the order total.")
   .max(500)
   .optional();
 
@@ -391,6 +415,8 @@ export const adminOrderTransitionRequestSchema = z.object({
   duplicateReceiptOverride: duplicateReceiptOverrideSchema,
 
   gatewayClaimOverride: gatewayClaimOverrideSchema,
+
+  shortfallOverride: shortfallOverrideSchema,
 
   /**
    * Walk every status in between rather than requiring `status` to be one
@@ -444,6 +470,8 @@ export const adminConfirmPaymentRequestSchema = z.object({
   duplicateReceiptOverride: duplicateReceiptOverrideSchema,
 
   gatewayClaimOverride: gatewayClaimOverrideSchema,
+
+  shortfallOverride: shortfallOverrideSchema,
 });
 
 export type AdminConfirmPaymentRequest = z.infer<typeof adminConfirmPaymentRequestSchema>;

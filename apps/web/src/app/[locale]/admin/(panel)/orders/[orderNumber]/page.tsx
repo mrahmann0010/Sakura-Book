@@ -68,6 +68,14 @@ export default function AdminOrderDetailPage() {
   const [gatewayBlock, setGatewayBlock] = useState<string | null>(null);
   const [gatewayReason, setGatewayReason] = useState("");
 
+  /**
+   * The payment is short of the total and the API asked for a reason before
+   * taking it. Same shape as the gateway block: the box appears only once the
+   * API has said the payment is short.
+   */
+  const [shortfallBlock, setShortfallBlock] = useState<string | null>(null);
+  const [shortfallReason, setShortfallReason] = useState("");
+
   const [verifying, setVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<AdminOrderVerifyPaymentResult | null>(null);
 
@@ -111,6 +119,8 @@ export default function AdminOrderDetailPage() {
         setVerifyResult(null);
         setGatewayBlock(null);
         setGatewayReason("");
+        setShortfallBlock(null);
+        setShortfallReason("");
         setError(null);
       })
       .catch((err: unknown) => {
@@ -132,11 +142,17 @@ export default function AdminOrderDetailPage() {
       setNote("");
       setGatewayBlock(null);
       setGatewayReason("");
+      setShortfallBlock(null);
+      setShortfallReason("");
       return true;
     } catch (err) {
       if (err instanceof AdminApiError && err.code === "PAYMENT_NOT_CLAIMED") {
         // Not a failure to show in red: the next step is the reason box.
         setGatewayBlock(err.message);
+        return false;
+      }
+      if (err instanceof AdminApiError && err.code === "PAYMENT_UNDERPAID") {
+        setShortfallBlock(err.message);
         return false;
       }
       setError(messageOf(err, "That action failed."));
@@ -154,15 +170,19 @@ export default function AdminOrderDetailPage() {
     const duplicateReceiptOverride =
       order.receipt.state === "DUPLICATE" ? overrideReason.trim() || undefined : undefined;
     const gatewayClaimOverride = gatewayBlock ? gatewayReason.trim() || undefined : undefined;
+    const shortfallOverride = shortfallBlock ? shortfallReason.trim() || undefined : undefined;
 
     if (order.paymentMethod === "manual-transfer") {
       await run(() =>
         confirmAdminOrderPayment(orderNumber, {
+          // The order total even when a shortfall is accepted: the payment
+          // row always equals its order, and the shortfall is recorded beside it.
           amountCents: order.totalCents,
           reference: order.transactionId ?? undefined,
           note: note || undefined,
           duplicateReceiptOverride,
           gatewayClaimOverride,
+          shortfallOverride,
         }),
       );
     } else {
@@ -172,6 +192,7 @@ export default function AdminOrderDetailPage() {
           note: note || "Accepted by admin",
           duplicateReceiptOverride,
           gatewayClaimOverride,
+          shortfallOverride,
         }),
       );
     }
@@ -199,6 +220,10 @@ export default function AdminOrderDetailPage() {
           status === "PAYMENT_CONFIRMED" && gatewayBlock
             ? gatewayReason.trim() || undefined
             : undefined,
+        shortfallOverride:
+          status === "PAYMENT_CONFIRMED" && shortfallBlock
+            ? shortfallReason.trim() || undefined
+            : undefined,
       }),
     );
   }
@@ -216,6 +241,7 @@ export default function AdminOrderDetailPage() {
       if (result.confirmed) {
         setOrder(await getAdminOrder(orderNumber));
         setGatewayBlock(null);
+        setShortfallBlock(null);
       }
     } catch (err) {
       setError(messageOf(err, "Could not check this payment."));
@@ -494,6 +520,16 @@ export default function AdminOrderDetailPage() {
             </div>
           ) : null}
 
+          {order.gatewayClaim && order.gatewayClaim.underpaidCents > 0 && !isPacker ? (
+            <Notice tone="info" className="mt-4">
+              <p>
+                <strong className="text-ink font-semibold">Accepted short.</strong> The customer
+                sent {formatMoney(order.gatewayClaim.underpaidCents, "en-GB", order.currency)} less
+                than the total, and staff accepted it. The reason is in the audit log.
+              </p>
+            </Notice>
+          ) : null}
+
           {order.gatewayClaim && order.gatewayClaim.overpaidCents > 0 && !isPacker ? (
             <Notice tone="info" className="mt-4">
               <p>
@@ -511,11 +547,11 @@ export default function AdminOrderDetailPage() {
           !isPacker ? (
             <Notice tone="error" className="mt-4">
               <p>
-                <strong className="text-clay font-semibold">Release the payment.</strong> This
-                order still holds payment{" "}
-                <span className="font-mono">{order.gatewayClaim.transactionId}</span> at the
-                payment gateway. Release it there (Claims → Release) so the customer can use the
-                receipt again.
+                <strong className="text-clay font-semibold">Release the payment.</strong> This order
+                still holds payment{" "}
+                <span className="font-mono">{order.gatewayClaim.transactionId}</span> at the payment
+                gateway. Release it there (Claims → Release) so the customer can use the receipt
+                again.
               </p>
             </Notice>
           ) : null}
@@ -650,6 +686,26 @@ export default function AdminOrderDetailPage() {
             </>
           ) : null}
 
+          {shortfallBlock ? (
+            <>
+              <Notice tone="info" className="mt-3">
+                <p>{shortfallBlock}</p>
+              </Notice>
+              <Textarea
+                label="Why accept less than the order total? (staff-only, goes to the audit log)"
+                value={shortfallReason}
+                onChange={(event) => setShortfallReason(event.target.value)}
+                rows={2}
+                className="mt-3"
+                error={
+                  shortfallReason.trim().length > 0 && shortfallReason.trim().length < 15
+                    ? "Explain why you are accepting less than the order total."
+                    : undefined
+                }
+              />
+            </>
+          ) : null}
+
           {order.receipt.state === "DUPLICATE" ? (
             <Textarea
               label={`Reason for overriding the duplicate receipt (also on ${order.receipt.claimedByOrderNumber})`}
@@ -669,7 +725,11 @@ export default function AdminOrderDetailPage() {
             {order.status === "PENDING" ? (
               <>
                 <Button type="button" loading={busy} onClick={() => void accept()}>
-                  {gatewayBlock ? "Accept anyway" : "Accept"}
+                  {shortfallBlock
+                    ? "Accept short payment"
+                    : gatewayBlock
+                      ? "Accept anyway"
+                      : "Accept"}
                 </Button>
                 <Button
                   type="button"
@@ -930,6 +990,12 @@ function VerifyResult({
           ) : null}
           {record.overpaidCents ? (
             <Row label="Overpaid" value={formatMoney(record.overpaidCents, "en-GB", currency)} />
+          ) : null}
+          {record.underpaidCents ? (
+            <Row
+              label="Short (accepted)"
+              value={formatMoney(record.underpaidCents, "en-GB", currency)}
+            />
           ) : null}
           {record.receivedAt ? (
             <Row label="Paid at" value={new Date(record.receivedAt).toLocaleString()} />

@@ -209,4 +209,7 @@ export const auditActionEnum = pgEnum("audit_action", [
   /* Staff corrected the transaction ID a customer typed at checkout, with a
      written reason. Its own value so every changed receipt is one filter. */
   "TRANSACTION_ID_EDIT",
+  /* Staff accepted a payment short of the order total, with a written reason.
+     Its own value so "how much have we let customers underpay" is a filter. */
+  "SHORTFALL_ACCEPTED",
 ]);

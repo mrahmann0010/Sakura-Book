@@ -71,6 +71,8 @@ export const paymentVerificationRecordSchema = z.object({
   receivedAt: z.string().datetime().optional(),
   /** On CLAIMED: how much more than the order total arrived. Owed back or credited. */
   overpaidCents: z.number().int().nonnegative().optional(),
+  /** On CLAIMED: how much less than the total arrived, when staff accepted a short payment. */
+  underpaidCents: z.number().int().nonnegative().optional(),
   /** When the payment was claimed — ours on CLAIMED, someone else's on ALREADY_CLAIMED. */
   claimedAt: z.string().datetime().optional(),
   /** The idempotency key the claim was sent with, `<orderNumber>:<attempt>`. */
