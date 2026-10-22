@@ -86,11 +86,15 @@ export class OrderPaymentClaimService {
    *   again straight away. Only for staff confirming the order: they have
    *   decided it should still be granted. The machine never re-takes a
    *   payment a gateway admin let go of.
+   * @param options.acceptShortfall claim the payment even if it is short of
+   *   the total. Only for staff who saw UNDERPAID and gave a reason to take
+   *   it. Same key as the refused claim: an underpayment is not stored at the
+   *   gateway, so the key is still unused there.
    */
   async claim(
     order: ClaimableOrder,
     checkedByEmail: string | null,
-    options: { retryReleased?: boolean } = {},
+    options: { retryReleased?: boolean; acceptShortfall?: boolean } = {},
   ): Promise<OrderClaimResult> {
     const transactionId = order.transactionId;
 
@@ -116,7 +120,9 @@ export class OrderPaymentClaimService {
     // Attempts count only under the key they were made with.
     let attempts = order.paymentClaimKey === key ? order.paymentClaimAttempts : 0;
 
-    let result = await this.attempt(claimable, key, checkedByEmail);
+    const acceptShortfall = options.acceptShortfall === true;
+
+    let result = await this.attempt(claimable, key, checkedByEmail, acceptShortfall);
     attempts += 1;
 
     if (result.outcome.outcome === "RELEASED") {
@@ -124,7 +130,7 @@ export class OrderPaymentClaimService {
       attempts = 0;
 
       if (options.retryReleased) {
-        result = await this.attempt(claimable, key, checkedByEmail);
+        result = await this.attempt(claimable, key, checkedByEmail, acceptShortfall);
         attempts = 1;
       }
     }
@@ -148,6 +154,7 @@ export class OrderPaymentClaimService {
     order: ClaimableOrder & { transactionId: string },
     key: string,
     checkedByEmail: string | null,
+    acceptShortfall: boolean,
   ): Promise<OrderClaimResult> {
     const outcome = await this.gateway.claims.claim({
       trxId: order.transactionId,
@@ -156,6 +163,7 @@ export class OrderPaymentClaimService {
       orderRef: order.orderNumber,
       platform: order.provider ?? undefined,
       senderPhone: senderPhoneFor(order.senderNumber),
+      ...(acceptShortfall ? { acceptShortfall: true } : {}),
     });
 
     this.report(order, key, outcome);
@@ -182,7 +190,10 @@ export class OrderPaymentClaimService {
       case "CLAIMED":
         this.logger.log(
           `${outcome.replay ? "Replayed" : "Made"} ${subject}` +
-            (outcome.overpaidPoisha > 0 ? `; overpaid by ${outcome.overpaidPoisha} poisha` : ""),
+            (outcome.overpaidPoisha > 0 ? `; overpaid by ${outcome.overpaidPoisha} poisha` : "") +
+            (outcome.underpaidPoisha > 0
+              ? `; short by ${outcome.underpaidPoisha} poisha, accepted`
+              : ""),
         );
         return;
       case "PENDING_ARRIVAL":

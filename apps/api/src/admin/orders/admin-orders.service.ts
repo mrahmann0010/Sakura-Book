@@ -48,7 +48,11 @@ import {
   toAdminOrderDetail,
   toAdminOrderSummary,
 } from "./admin-order.mapper";
-import { PaymentClaimRefusedError, PaymentNotClaimedError } from "./admin-order.errors";
+import {
+  PaymentClaimRefusedError,
+  PaymentNotClaimedError,
+  PaymentUnderpaidError,
+} from "./admin-order.errors";
 import { toPathaoCsv } from "./pathao-export";
 
 /** Who did it and from where, threaded through to every audit entry. */
@@ -406,16 +410,29 @@ export class AdminOrdersService {
    *
    * Claim the payment, so it is spent once across every business sharing the
    * receiving number. CLAIMED lets the grant through. Already spent elsewhere
-   * or short is refused outright. Anything else — not arrived, unreachable,
-   * refused for a reason a person can judge — needs a written
-   * `gatewayClaimOverride`; the background worker then keeps trying to claim
-   * the payment after the grant.
+   * is refused outright. Anything else — not arrived, unreachable, refused for
+   * a reason a person can judge — needs a written `gatewayClaimOverride`; the
+   * background worker then keeps trying to claim the payment after the grant.
+   *
+   * ## 3. A short payment
+   *
+   * Refused unless staff give a `shortfallOverride` reason. With one, the
+   * payment is claimed again as accepted-short — so it is still spent exactly
+   * once at the gateway — and the reason goes to the audit log before the
+   * grant, like the other two overrides. The shortfall is returned so the
+   * caller can record it on the payment.
+   *
+   * @returns the accepted shortfall, or null when the payment was not short.
    */
   private async guardPaymentGrant(
     order: OrderRow,
-    overrides: { duplicateReceiptOverride?: string; gatewayClaimOverride?: string },
+    overrides: {
+      duplicateReceiptOverride?: string;
+      gatewayClaimOverride?: string;
+      shortfallOverride?: string;
+    },
     context: AdminContext,
-  ): Promise<void> {
+  ): Promise<AcceptedShortfall | null> {
     const claim = await findTransactionIdClaim(this.dbService.db, order.transactionId, {
       excludeOrderId: order.id,
     });
@@ -466,20 +483,24 @@ export class AdminOrdersService {
         ),
       );
 
-      return;
+      return null;
     }
 
-    if (!OrderPaymentClaimService.isClaimable(order)) return;
+    if (!OrderPaymentClaimService.isClaimable(order)) return null;
 
     const { outcome } = await this.orderClaims.claim(order, context.actor.email, {
       retryReleased: true,
     });
 
-    if (outcome.outcome === "CLAIMED") return;
+    if (outcome.outcome === "CLAIMED") return null;
+
+    if (outcome.outcome === "UNDERPAID") {
+      return this.acceptShortfall(order, outcome, overrides.shortfallOverride, context);
+    }
 
     const summary = summarizeClaim(outcome, order.totalCents);
 
-    if (outcome.outcome === "ALREADY_CLAIMED" || outcome.outcome === "UNDERPAID") {
+    if (outcome.outcome === "ALREADY_CLAIMED") {
       this.logger.warn(
         `${context.actor.email} tried to confirm ${order.orderNumber}; the gateway refused: ${outcome.outcome}`,
       );
@@ -520,6 +541,93 @@ export class AdminOrdersService {
         tx,
       ),
     );
+
+    return null;
+  }
+
+  /**
+   * The UNDERPAID branch of `guardPaymentGrant`: refuse, or — with a reason —
+   * claim the payment as accepted-short and record why.
+   *
+   * The claim comes before the audit entry here, the other way round from the
+   * two overrides above, because only the claim can say what the shortfall
+   * is. If the audit write then fails, the payment is held for this order at
+   * the gateway but the order is not granted; staff retry, and the same key
+   * replays the claim rather than taking a second one.
+   */
+  private async acceptShortfall(
+    order: OrderRow,
+    underpaid: Extract<ClaimOutcome, { outcome: "UNDERPAID" }>,
+    reason: string | undefined,
+    context: AdminContext,
+  ): Promise<AcceptedShortfall> {
+    const summary = summarizeClaim(underpaid, order.totalCents);
+
+    if (!reason) {
+      this.logger.warn(
+        `${context.actor.email} tried to confirm ${order.orderNumber}; the payment is short`,
+      );
+
+      throw new PaymentUnderpaidError(
+        `${summary} To accept the shorter payment anyway, give a reason.`,
+        {
+          orderNumber: order.orderNumber,
+          outcome: underpaid.outcome,
+          expectedCents: order.totalCents,
+          paidCents: underpaid.paidPoisha,
+        },
+      );
+    }
+
+    const { outcome } = await this.orderClaims.claim(order, context.actor.email, {
+      retryReleased: true,
+      acceptShortfall: true,
+    });
+
+    if (outcome.outcome !== "CLAIMED") {
+      // A gateway too old to know `acceptShortfall` still answers UNDERPAID;
+      // anything else changed between the two claims. Either way there is no
+      // claim to grant on, and a reason does not change that.
+      this.logger.warn(
+        `${context.actor.email} accepted a shortfall on ${order.orderNumber}; the gateway still refused: ${outcome.outcome}`,
+      );
+
+      throw new PaymentClaimRefusedError(
+        outcome.outcome === "UNDERPAID"
+          ? "The payment gateway would not accept the short payment. It may need updating before short payments can be taken."
+          : summarizeClaim(outcome, order.totalCents),
+        { orderNumber: order.orderNumber, outcome: outcome.outcome },
+      );
+    }
+
+    const shortfall: AcceptedShortfall = {
+      paidCents: outcome.paidPoisha,
+      underpaidCents: outcome.underpaidPoisha,
+      reason,
+    };
+
+    this.logger.warn(
+      `${context.actor.email} accepted ${order.orderNumber} short by ${shortfall.underpaidCents} poisha: ${reason}`,
+    );
+
+    // `record` in its own transaction, before the grant: an accepted
+    // shortfall with no record of why is worth failing the request over.
+    await this.dbService.db.transaction((tx) =>
+      this.auditService.record(
+        {
+          ...auditContext(context),
+          action: "SHORTFALL_ACCEPTED",
+          entityType: "orders",
+          entityId: order.orderNumber,
+          before: { totalCents: order.totalCents, paidCents: shortfall.paidCents },
+          after: { underpaidCents: shortfall.underpaidCents, gatewayClaim: true },
+          note: reason,
+        },
+        tx,
+      ),
+    );
+
+    return shortfall;
   }
 
   /**
@@ -587,7 +695,7 @@ export class AdminOrdersService {
       const blocked = fulfillmentTransitionBlocker(
         from,
         entering,
-        request.duplicateReceiptOverride,
+        request.duplicateReceiptOverride ?? request.shortfallOverride,
       );
 
       if (blocked) {
@@ -674,19 +782,29 @@ export class AdminOrdersService {
       );
     }
 
-    await this.guardPaymentGrant(order, request, context);
+    const shortfall = await this.guardPaymentGrant(order, request, context);
 
     const { confirmed } = await this.paymentsService.confirmManually(order.paymentMethod, {
       referenceId: order.orderNumber,
       status: "SUCCEEDED",
       amountCents: request.amountCents,
       // Stored verbatim on the payment row, so the statement line a staff
-      // member matched from is recoverable months later.
+      // member matched from is recoverable months later. An accepted
+      // shortfall is kept here too: the row's amount is the order total (the
+      // rule every payment follows), and this is where what really arrived is
+      // written down.
       raw: {
         source: "admin",
         confirmedBy: context.actor.email,
         bankReference: request.reference ?? null,
         note: request.note ?? null,
+        ...(shortfall
+          ? {
+              paidCents: shortfall.paidCents,
+              underpaidCents: shortfall.underpaidCents,
+              shortfallReason: shortfall.reason,
+            }
+          : {}),
       },
     });
 
@@ -1218,6 +1336,9 @@ export class AdminOrdersService {
   }
 }
 
+/** A short payment staff chose to take, as `guardPaymentGrant` reports it. */
+type AcceptedShortfall = { paidCents: number; underpaidCents: number; reason: string };
+
 /** One or two sentences for staff, describing what the gateway said. */
 function summarizeClaim(outcome: ClaimOutcome, expectedCents: number): string {
   const amount = (cents: number) =>
@@ -1229,6 +1350,9 @@ function summarizeClaim(outcome: ClaimOutcome, expectedCents: number): string {
         `Claimed — ৳${amount(outcome.paidPoisha)} received via ${outcome.platform}.` +
         (outcome.overpaidPoisha > 0
           ? ` Overpaid by ৳${amount(outcome.overpaidPoisha)}: refund or credit the customer.`
+          : "") +
+        (outcome.underpaidPoisha > 0
+          ? ` Short by ৳${amount(outcome.underpaidPoisha)}, accepted by staff.`
           : "")
       );
     case "PENDING_ARRIVAL":
@@ -1236,7 +1360,8 @@ function summarizeClaim(outcome: ClaimOutcome, expectedCents: number): string {
     case "UNDERPAID":
       return (
         `Underpaid — ${outcome.paidPoisha === null ? "less than the total" : `৳${amount(outcome.paidPoisha)}`} ` +
-        `received, ৳${amount(expectedCents)} expected. The payment stays unclaimed so the customer can top up.`
+        `received, ৳${amount(expectedCents)} expected. The payment stays unclaimed so the customer can ` +
+        `top up, or staff can accept it short with a reason.`
       );
     case "ALREADY_CLAIMED":
       return (

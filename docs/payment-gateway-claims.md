@@ -101,7 +101,7 @@ same words.
 | --------------------------------------------------------------------------------------------------- | ----------------- | --------------------------- | ----------------------------- |
 | 201 / 200 `claimed: true`                                                                           | `CLAIMED`         | Grant the order             | Grant                         |
 | 404 `not_found`                                                                                     | `PENDING_ARRIVAL` | Stay PENDING, retry         | Needs a reason                |
-| 422 `amount_mismatch`                                                                               | `UNDERPAID`       | Stay PENDING                | **Refused**                   |
+| 422 `amount_mismatch`                                                                               | `UNDERPAID`       | Stay PENDING                | Needs a shortfall reason      |
 | 409 `already_claimed`                                                                               | `ALREADY_CLAIMED` | Stay PENDING                | **Refused**                   |
 | 409 `claim_released`                                                                                | `RELEASED`        | New key, no auto-retry      | New key, claims again at once |
 | `ambiguous_trx`, `outside_claim_window`, `exceeds_max_claim`, `sender_mismatch`                     | `REJECTED`        | Stay PENDING                | Needs a reason                |
@@ -247,7 +247,17 @@ PAYMENT_CONFIRMED** (including `advance` walks from PENDING), go through
    this one could only come back `already_claimed`.
 2. **Then the gateway.**
    - `CLAIMED`: grant.
-   - `ALREADY_CLAIMED` or `UNDERPAID`: refused outright with `PAYMENT_CLAIM_REFUSED`. No override.
+   - `ALREADY_CLAIMED`: refused outright with `PAYMENT_CLAIM_REFUSED`. No override.
+   - `UNDERPAID`: `PAYMENT_UNDERPAID`. The page shows the shortfall and a reason box, and the
+     button becomes "Accept short payment". With a `shortfallOverride` reason (min 15
+     characters), the payment is claimed again with `acceptShortfall: true` under the **same**
+     key (an underpayment is never stored at the gateway, so the key is still unused there). On
+     `CLAIMED` the reason is audited as `SHORTFALL_ACCEPTED`, then the order is granted. The
+     payment row is recorded at the **order total**, as every payment is; what really arrived
+     and the shortfall are kept in the payment's `raw`, the claim log and the audit entry, and
+     the order page shows "Accepted short". A gateway too old to know the flag still answers
+     `UNDERPAID`, and the grant is refused with `PAYMENT_CLAIM_REFUSED`. Checkout, the worker
+     and Check & confirm never send the flag.
    - Anything else: `PAYMENT_NOT_CLAIMED`. The page shows the gateway's sentence and a reason
      box, and the button becomes "Accept anyway". With a reason (min 15 characters), the grant
      goes ahead and is audited as `GATEWAY_CLAIM_OVERRIDE`. The worker keeps trying to claim

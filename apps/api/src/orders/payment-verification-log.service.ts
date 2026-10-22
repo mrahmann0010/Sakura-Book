@@ -45,6 +45,7 @@ export function toClaimRecord(
         provider: outcome.platform,
         paidCents: outcome.paidPoisha,
         overpaidCents: outcome.overpaidPoisha,
+        underpaidCents: outcome.underpaidPoisha,
         claimedAt: outcome.claimedAt.toISOString(),
       };
     case "UNDERPAID":
@@ -177,6 +178,7 @@ export class PaymentVerificationLogService {
       expectedCents: row.expectedCents ?? undefined,
       receivedAt: row.receivedAt?.toISOString(),
       overpaidCents: overpaidCentsOf(row),
+      underpaidCents: underpaidCentsOf(row),
       claimedAt: row.claimedAt?.toISOString(),
       claimKey: row.claimKey ?? undefined,
       reason: row.reason ?? undefined,
@@ -235,4 +237,21 @@ function overpaidCentsOf(row: {
   }
 
   return Math.max(0, row.paidCents - row.expectedCents);
+}
+
+/**
+ * How much less than the total arrived on a claim, if anything. Only a claim
+ * staff accepted short is ever CLAIMED with paid < expected; every other
+ * underpayment is UNDERPAID and never claimed.
+ */
+function underpaidCentsOf(row: {
+  outcome: string;
+  paidCents: number | null;
+  expectedCents: number | null;
+}): number | undefined {
+  if (row.outcome !== "CLAIMED" || row.paidCents === null || row.expectedCents === null) {
+    return undefined;
+  }
+
+  return Math.max(0, row.expectedCents - row.paidCents);
 }
