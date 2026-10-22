@@ -15,17 +15,15 @@ import type {
   AdminRevertPaymentRequest,
 } from "@sakura/contracts";
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { claimKeyFor, nextClaimKey, normaliseTrxId, type ClaimOutcome } from "@project-sakura/pay";
 import { InvalidInputError, ResourceNotFoundError } from "../../common/errors";
 import type { Env } from "../../config/env.schema";
 import { DbService } from "../../db/db.service";
 import { auditLog, orderItems, orders } from "../../db/schema";
 import {
-  claimKeyFor,
   findOrder,
   findTransactionIdClaim,
   forwardPathTo,
-  nextClaimKey,
-  normaliseTransactionId,
   OrderPaymentClaimService,
   RELEASED_STATUSES,
   reopenBlocker,
@@ -34,7 +32,6 @@ import {
 import { OrdersService, PaymentVerificationLogService } from "../../orders";
 import { PaymentsService } from "../../payments";
 import { AuditService } from "../../audit";
-import type { ClaimOutcome } from "../../payment-gateway";
 import type { AccessClaims } from "../auth/tokens";
 import { adminOrderFilters, adminOrderOrder } from "./admin-order.query";
 import {
@@ -364,8 +361,8 @@ export class AdminOrdersService {
           confirmedBy: context.actor.email,
           transactionId: outcome.trxId,
           claimKey: record.claimKey ?? null,
-          paidCents: outcome.paidCents,
-          overpaidCents: outcome.overpaidCents,
+          paidCents: outcome.paidPoisha,
+          overpaidCents: outcome.overpaidPoisha,
           claimedAt: outcome.claimedAt.toISOString(),
         },
       }));
@@ -1077,7 +1074,7 @@ export class AdminOrdersService {
       );
     }
 
-    if (normaliseTransactionId(next) === normaliseTransactionId(order.transactionId)) {
+    if (normaliseTrxId(next) === normaliseTrxId(order.transactionId)) {
       throw new InvalidInputError("That is the transaction ID already on this order.", {
         orderNumber: order.orderNumber,
       });
@@ -1103,7 +1100,10 @@ export class AdminOrdersService {
       );
     }
 
-    const claimKey = nextClaimKey(order.orderNumber, claimKeyFor(order));
+    const claimKey = nextClaimKey(
+      order.orderNumber,
+      claimKeyFor(order.orderNumber, order.paymentClaimKey),
+    );
 
     await this.dbService.db.transaction(async (tx) => {
       const updated = await tx
@@ -1226,16 +1226,16 @@ function summarizeClaim(outcome: ClaimOutcome, expectedCents: number): string {
   switch (outcome.outcome) {
     case "CLAIMED":
       return (
-        `Claimed — ৳${amount(outcome.paidCents)} received via ${outcome.provider}.` +
-        (outcome.overpaidCents > 0
-          ? ` Overpaid by ৳${amount(outcome.overpaidCents)}: refund or credit the customer.`
+        `Claimed — ৳${amount(outcome.paidPoisha)} received via ${outcome.platform}.` +
+        (outcome.overpaidPoisha > 0
+          ? ` Overpaid by ৳${amount(outcome.overpaidPoisha)}: refund or credit the customer.`
           : "")
       );
     case "PENDING_ARRIVAL":
       return "The payment SMS has not reached the gateway yet. It usually arrives within a few minutes.";
     case "UNDERPAID":
       return (
-        `Underpaid — ${outcome.paidCents === null ? "less than the total" : `৳${amount(outcome.paidCents)}`} ` +
+        `Underpaid — ${outcome.paidPoisha === null ? "less than the total" : `৳${amount(outcome.paidPoisha)}`} ` +
         `received, ৳${amount(expectedCents)} expected. The payment stays unclaimed so the customer can top up.`
       );
     case "ALREADY_CLAIMED":

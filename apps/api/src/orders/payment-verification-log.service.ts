@@ -1,23 +1,65 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { normaliseTrxId, type ClaimOutcome } from "@project-sakura/pay";
 import type { AdminOrderVerificationState, PaymentVerificationRecord } from "@sakura/contracts";
 import { and, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { DbService } from "../db/db.service";
 import { orders, paymentVerifications } from "../db/schema";
-import { toClaimRecord, type ClaimOutcome } from "../payment-gateway";
-import { normaliseTransactionId } from "./receipt";
 import { RELEASED_STATUSES } from "./transaction-id-claim";
 
 /* --------------------------------------------------------------------------
    The written record of every payment check — today, every gateway claim.
 
-   This lives in `orders` rather than in `payment-gateway` on purpose. That
-   module answers one question — "may this order spend this payment?" — and
-   deliberately knows nothing about orders. Storing an answer *against an
-   order* is the caller's concern, so it belongs on this side of the boundary.
+   The gateway client (@project-sakura/pay) answers one question — "may this
+   order spend this payment?" — and knows nothing about orders. Storing an
+   answer *against an order* is our concern, so it lives here, as does turning
+   the package's outcome into a row.
 
    Append-only, and best-effort by design; see `recordClaim`. Rows from before
    claims (MATCHED, NOT_FOUND) are still read back for the history.
    -------------------------------------------------------------------------- */
+
+/**
+ * Flatten a claim for the log: what we concluded, when, and enough of the
+ * evidence to explain it later without asking the gateway again — which is
+ * not possible anyway, since it has no read endpoint. The package says
+ * poisha; the log says cents. Same number, only the names differ.
+ *
+ * Exported for tests only; callers go through `recordClaim`.
+ */
+export function toClaimRecord(
+  outcome: ClaimOutcome,
+  context: { transactionId: string; expectedCents: number; claimKey: string },
+): PaymentVerificationRecord {
+  const base = {
+    outcome: outcome.outcome,
+    checkedAt: new Date().toISOString(),
+    transactionId: context.transactionId,
+    expectedCents: context.expectedCents,
+    claimKey: context.claimKey,
+  };
+
+  switch (outcome.outcome) {
+    case "CLAIMED":
+      return {
+        ...base,
+        provider: outcome.platform,
+        paidCents: outcome.paidPoisha,
+        overpaidCents: outcome.overpaidPoisha,
+        claimedAt: outcome.claimedAt.toISOString(),
+      };
+    case "UNDERPAID":
+      return { ...base, paidCents: outcome.paidPoisha ?? undefined };
+    case "ALREADY_CLAIMED":
+      return { ...base, claimedAt: outcome.claimedAt?.toISOString() };
+    case "REJECTED":
+    case "MISCONFIGURED":
+    case "UNAVAILABLE":
+      return { ...base, reason: outcome.reason };
+    case "PENDING_ARRIVAL":
+    case "RELEASED":
+      return base;
+  }
+}
 
 /** An order that has never been checked. The panel's most important state. */
 const UNCHECKED: AdminOrderVerificationState = {
@@ -56,7 +98,7 @@ export class PaymentVerificationLogService {
       await this.dbService.db.insert(paymentVerifications).values({
         orderId,
         outcome: record.outcome,
-        transactionIdNormalised: normaliseTransactionId(record.transactionId),
+        transactionIdNormalised: normaliseTrxId(record.transactionId),
         provider: record.provider,
         paidCents: record.paidCents,
         expectedCents: record.expectedCents,

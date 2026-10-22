@@ -191,7 +191,8 @@ export const envSchema = z.object({
    *
    * The shop asks it one thing — "let me spend payment `trxId` for this
    * order" — and it says yes once per payment across every business that
-   * shares the receiving number. See `src/payment-gateway/`.
+   * shares the receiving number. See `src/orders/payment-gateway.provider.ts`
+   * and `@project-sakura/pay`.
    *
    * Not `SMS_GATEWAY_*`: those belong to the outbound SMS sender.
    *

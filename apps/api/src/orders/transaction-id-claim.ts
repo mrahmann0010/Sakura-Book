@@ -1,7 +1,7 @@
 import { and, eq, ne, notInArray } from "drizzle-orm";
 import type { Executor } from "../db/db.types";
 import { orders } from "../db/schema";
-import { normaliseTransactionId } from "./receipt";
+import { normaliseTrxId } from "@project-sakura/pay";
 import type { OrderStatus } from "./order-status.machine";
 
 /* --------------------------------------------------------------------------
@@ -70,7 +70,7 @@ export async function findTransactionIdClaim(
   transactionId: string | null | undefined,
   options: { excludeOrderId?: string } = {},
 ): Promise<TransactionIdClaim | undefined> {
-  const normalised = normaliseTransactionId(transactionId);
+  const normalised = normaliseTrxId(transactionId);
 
   // No receipt is not a reused receipt. Cash on delivery lands here, as does
   // any manual-transfer order placed before the field was collected.

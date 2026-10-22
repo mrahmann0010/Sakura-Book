@@ -1,18 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { normaliseTransactionId } from "../../src/orders/receipt";
+import { normaliseTrxId } from "@project-sakura/pay";
 
 /**
- * How two receipts are compared on our side — the "is this receipt already
- * on another of our orders?" check, and the generated column it mirrors.
+ * How two receipts are compared — the "is this receipt already on another of
+ * our orders?" check, the generated column it mirrors, and the gateway.
+ *
+ * `normaliseTrxId` comes from @project-sakura/pay, so this is also the guard
+ * on package upgrades: if the package ever changes the rule, the agreement
+ * test below fails, and `transaction_id_normalised` needs a matching
+ * migration before upgrading.
  */
-describe("normaliseTransactionId", () => {
+describe("normaliseTrxId", () => {
   it("uppercases and strips whitespace, so a hand-typed ID matches the stored one", () => {
-    expect(normaliseTransactionId(" ab12 cd34ef ")).toBe("AB12CD34EF");
+    expect(normaliseTrxId(" ab12 cd34ef ")).toBe("AB12CD34EF");
   });
 
   it("treats null and undefined as empty rather than crashing", () => {
-    expect(normaliseTransactionId(null)).toBe("");
-    expect(normaliseTransactionId(undefined)).toBe("");
+    expect(normaliseTrxId(null)).toBe("");
+    expect(normaliseTrxId(undefined)).toBe("");
   });
 
   /**
@@ -26,15 +31,15 @@ describe("normaliseTransactionId", () => {
    * itself. Two orders could hold one payment and nothing objected.
    */
   it("strips the invisible characters a pasted receipt carries", () => {
-    expect(normaliseTransactionId("AB12 CD34EF")).toBe("AB12CD34EF");
-    expect(normaliseTransactionId("AB12​CD34EF")).toBe("AB12CD34EF");
-    expect(normaliseTransactionId(" AB12CD34EF ")).toBe("AB12CD34EF");
+    expect(normaliseTrxId("AB12 CD34EF")).toBe("AB12CD34EF");
+    expect(normaliseTrxId("AB12​CD34EF")).toBe("AB12CD34EF");
+    expect(normaliseTrxId(" AB12CD34EF ")).toBe("AB12CD34EF");
   });
 
   it("treats punctuation as noise, so PAY-123 and PAY123 are one receipt", () => {
-    expect(normaliseTransactionId("PAY-123")).toBe("PAY123");
-    expect(normaliseTransactionId("pay_123")).toBe("PAY123");
-    expect(normaliseTransactionId("PAY.123")).toBe("PAY123");
+    expect(normaliseTrxId("PAY-123")).toBe("PAY123");
+    expect(normaliseTrxId("pay_123")).toBe("PAY123");
+    expect(normaliseTrxId("PAY.123")).toBe("PAY123");
   });
 
   /**
@@ -51,13 +56,13 @@ describe("normaliseTransactionId", () => {
     const sqlEquivalent = (value: string) => value.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
 
     for (const sample of ["AB12 CD34", "pay-123", "  x  ", "!!!", "aA1"]) {
-      expect(normaliseTransactionId(sample)).toBe(sqlEquivalent(sample));
+      expect(normaliseTrxId(sample)).toBe(sqlEquivalent(sample));
     }
   });
 
   it("returns empty for a receipt with nothing alphanumeric in it", () => {
     // The column stores NULL for this case, and NULLs do not collide under the
     // partial unique index — which is right: "---" is not a receipt.
-    expect(normaliseTransactionId("---")).toBe("");
+    expect(normaliseTrxId("---")).toBe("");
   });
 });

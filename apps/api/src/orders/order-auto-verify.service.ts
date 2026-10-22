@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { DbService } from "../db/db.service";
 import { orders } from "../db/schema";
 import { PaymentsService } from "../payments";
-import type { ClaimOutcome } from "../payment-gateway";
+import type { ClaimOutcome } from "@project-sakura/pay";
 import { toOrderResponse, type OrderRow } from "./order.mapper";
 import { OrderPaymentClaimService } from "./order-payment-claim.service";
 import { findOrder } from "./order.query";
@@ -128,8 +128,8 @@ export class OrderAutoVerifyService {
             source: "gateway-claim",
             transactionId: outcome.trxId,
             claimKey: row.paymentClaimKey,
-            paidCents: outcome.paidCents,
-            overpaidCents: outcome.overpaidCents,
+            paidCents: outcome.paidPoisha,
+            overpaidCents: outcome.overpaidPoisha,
             claimedAt: outcome.claimedAt.toISOString(),
           },
         });

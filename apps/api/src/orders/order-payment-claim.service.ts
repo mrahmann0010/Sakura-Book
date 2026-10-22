@@ -1,13 +1,19 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import {
+  claimKeyFor,
+  isRetryable,
+  nextClaimKey,
+  nextRetryDelaySeconds,
+  normaliseTrxId,
+  type ClaimOutcome,
+  type GatewayClient,
+} from "@project-sakura/pay";
 import { eq } from "drizzle-orm";
 import { DbService } from "../db/db.service";
 import { orders } from "../db/schema";
 import { normaliseBdPhone, type PaymentVerificationRecord } from "@sakura/contracts";
-import { PaymentClaimService, type ClaimOutcome } from "../payment-gateway";
-import { normaliseTransactionId } from "./receipt";
 import type { OrderRow } from "./order.mapper";
-import { claimKeyFor, nextClaimKey } from "./payment-claim-key";
-import { nextRetryDelaySeconds } from "./payment-claim-retry";
+import { PAYMENT_GATEWAY } from "./payment-gateway.provider";
 import { PaymentVerificationLogService } from "./payment-verification-log.service";
 import { RELEASED_STATUSES } from "./transaction-id-claim";
 
@@ -63,13 +69,13 @@ export class OrderPaymentClaimService {
 
   constructor(
     private readonly dbService: DbService,
-    private readonly claims: PaymentClaimService,
+    @Inject(PAYMENT_GATEWAY) private readonly gateway: GatewayClient,
     private readonly verificationLog: PaymentVerificationLogService,
   ) {}
 
   /** A manual transfer with a usable transaction ID. Nothing else has a payment to claim. */
   static isClaimable(order: Pick<ClaimableOrder, "paymentMethod" | "transactionId">): boolean {
-    return order.paymentMethod === "manual-transfer" && normaliseTransactionId(order.transactionId) !== "";
+    return order.paymentMethod === "manual-transfer" && normaliseTrxId(order.transactionId) !== "";
   }
 
   /**
@@ -106,7 +112,7 @@ export class OrderPaymentClaimService {
 
     const claimable = { ...order, transactionId };
 
-    let key = claimKeyFor(order);
+    let key = claimKeyFor(order.orderNumber, order.paymentClaimKey);
     // Attempts count only under the key they were made with.
     let attempts = order.paymentClaimKey === key ? order.paymentClaimAttempts : 0;
 
@@ -143,14 +149,16 @@ export class OrderPaymentClaimService {
     key: string,
     checkedByEmail: string | null,
   ): Promise<OrderClaimResult> {
-    const outcome = await this.claims.claim({
+    const outcome = await this.gateway.claims.claim({
       trxId: order.transactionId,
-      expectedCents: order.totalCents,
+      expectedPoisha: order.totalCents,
       idempotencyKey: key,
       orderRef: order.orderNumber,
-      provider: order.provider ?? undefined,
+      platform: order.provider ?? undefined,
       senderPhone: senderPhoneFor(order.senderNumber),
     });
+
+    this.report(order, key, outcome);
 
     const record = await this.verificationLog.recordClaim(
       order.id,
@@ -163,14 +171,38 @@ export class OrderPaymentClaimService {
   }
 
   /**
+   * One line per claim in the server log. The package logs contract problems
+   * itself; this is the everyday trail. PENDING_ARRIVAL is the normal first
+   * answer at checkout, so it stays quiet.
+   */
+  private report(order: ClaimableOrder, key: string, outcome: ClaimOutcome): void {
+    const subject = `claim ${order.transactionId} for ${order.orderNumber} (key ${key})`;
+
+    switch (outcome.outcome) {
+      case "CLAIMED":
+        this.logger.log(
+          `${outcome.replay ? "Replayed" : "Made"} ${subject}` +
+            (outcome.overpaidPoisha > 0 ? `; overpaid by ${outcome.overpaidPoisha} poisha` : ""),
+        );
+        return;
+      case "PENDING_ARRIVAL":
+        return;
+      default:
+        this.logger.warn(
+          `Could not ${subject}: ${outcome.outcome}${"reason" in outcome ? ` — ${outcome.reason}` : ""}`,
+        );
+    }
+  }
+
+  /**
    * When to try again. Only the two "could not tell yet" answers are retried;
    * every other answer is final for this key. Nothing is scheduled while the
    * gateway is not configured, so switching it on later does not suddenly
    * claim a backlog of old orders.
    */
   private retryAtFor(order: ClaimableOrder, outcome: ClaimOutcome, attempts: number): Date | null {
-    if (outcome.outcome !== "PENDING_ARRIVAL" && outcome.outcome !== "UNAVAILABLE") return null;
-    if (!this.claims.enabled) return null;
+    if (!isRetryable(outcome)) return null;
+    if (!this.gateway.enabled) return null;
     if (RELEASED_STATUSES.includes(order.status)) return null;
 
     const granted = order.status !== "PENDING";

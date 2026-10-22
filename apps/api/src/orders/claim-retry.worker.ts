@@ -1,22 +1,24 @@
 import {
+  Inject,
   Injectable,
   Logger,
   type OnApplicationBootstrap,
   type OnApplicationShutdown,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import type { GatewayClient } from "@project-sakura/pay";
 import { eq, inArray, lte, sql } from "drizzle-orm";
 import type { Env } from "../config/env.schema";
 import { DbService } from "../db/db.service";
 import { orders } from "../db/schema";
-import { PaymentClaimService } from "../payment-gateway";
 import { OrderAutoVerifyService } from "./order-auto-verify.service";
 import { findOrder } from "./order.query";
+import { PAYMENT_GATEWAY } from "./payment-gateway.provider";
 
 /** How often the worker looks for orders whose next try is due. */
 const TICK_MS = 5_000;
 
-/** Orders handled per tick. Each is one gateway call of at most ~5s. */
+/** Orders handled per tick. Each is one gateway call of at most ~8s. */
 const BATCH_SIZE = 10;
 
 /**
@@ -29,9 +31,9 @@ const LEASE = sql`now() + interval '2 minutes'`;
 /**
  * Re-claims payments whose SMS had not reached the gateway yet.
  *
- * Lives with orders rather than inside the payment-gateway module because
- * its job ends in granting an order, and the gateway module never touches
- * orders. Each due order goes through `OrderAutoVerifyService.settle` — the
+ * Lives with orders because its job ends in granting an order.
+ * @project-sakura/pay computes the retry schedule but never runs jobs; this
+ * is the job runner. Each due order goes through `OrderAutoVerifyService.settle` — the
  * same code checkout uses — with the order's stored claim key, so a retry
  * gets our own earlier claim back rather than colliding with it.
  *
@@ -47,7 +49,7 @@ export class ClaimRetryWorker implements OnApplicationBootstrap, OnApplicationSh
 
   constructor(
     private readonly dbService: DbService,
-    private readonly claims: PaymentClaimService,
+    @Inject(PAYMENT_GATEWAY) private readonly gateway: GatewayClient,
     private readonly autoVerify: OrderAutoVerifyService,
     private readonly config: ConfigService<Env, true>,
   ) {}
@@ -55,7 +57,7 @@ export class ClaimRetryWorker implements OnApplicationBootstrap, OnApplicationSh
   onApplicationBootstrap(): void {
     if (this.config.get("NODE_ENV", { infer: true }) === "test") return;
 
-    if (!this.claims.enabled) {
+    if (!this.gateway.enabled) {
       this.logger.warn("Payment gateway not configured; claim retries are off.");
       return;
     }
