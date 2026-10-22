@@ -97,6 +97,7 @@ export function toGatewayBody(request: ClaimRequest): Record<string, unknown> {
     idempotencyKey: request.idempotencyKey,
     ...(request.orderRef ? { orderRef: request.orderRef } : {}),
     ...(request.provider ? { platform: request.provider } : {}),
+    ...(request.senderPhone ? { senderPhone: request.senderPhone } : {}),
   };
 }
 

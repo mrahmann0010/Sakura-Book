@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import {
+  normaliseBdPhone,
   TIER_REGION_SLUG,
   zoneById,
   type Order,
@@ -586,7 +587,7 @@ export function orderValuesFrom(
        transaction ID on the confirmation. Normalised to null rather than
        stored as "" so that "no receipt" is one value, not two: the form posts
        empty strings for these whenever cash on delivery is chosen. */
-    senderNumber: emptyToNull(customer.senderNumber),
+    senderNumber: senderNumberToStore(customer.senderNumber),
     transactionId: emptyToNull(customer.transactionId),
   };
 }
@@ -602,6 +603,18 @@ export function orderValuesFrom(
  */
 function emptyToNull(value: string | undefined): string | null {
   return value?.trim() || null;
+}
+
+/**
+ * The payer's wallet number, stored as `01XXXXXXXXX` — the form the payment
+ * gateway compares and staff read against a screenshot. The checkout schema
+ * has already refused a manual transfer whose number is not a Bangladeshi
+ * mobile; the fallback only keeps whatever else arrives (a COD form's stray
+ * value) from being dropped silently.
+ */
+function senderNumberToStore(value: string | undefined): string | null {
+  const typed = emptyToNull(value);
+  return typed === null ? null : (normaliseBdPhone(typed) ?? typed);
 }
 
 const UNIQUE_VIOLATION = "23505";

@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import { DbService } from "../db/db.service";
 import { orders } from "../db/schema";
-import type { PaymentVerificationRecord } from "@sakura/contracts";
+import { normaliseBdPhone, type PaymentVerificationRecord } from "@sakura/contracts";
 import { PaymentClaimService, type ClaimOutcome } from "../payment-gateway";
 import { normaliseTransactionId } from "./receipt";
 import type { OrderRow } from "./order.mapper";
@@ -20,10 +20,27 @@ export type ClaimableOrder = Pick<
   | "paymentMethod"
   | "provider"
   | "transactionId"
+  | "senderNumber"
   | "totalCents"
   | "paymentClaimKey"
   | "paymentClaimAttempts"
 >;
+
+/**
+ * The "Sent from" number as the gateway gets it: `01XXXXXXXXX`.
+ *
+ * New orders are stored that way already. Orders placed before checkout
+ * validated the number may hold anything, so one that is not a Bangladeshi
+ * mobile is sent as its bare digits: the gateway then answers
+ * `sender_mismatch`, which staff can act on, rather than "senderPhone is
+ * required", which reads as a setup fault. Undefined only when nothing was
+ * typed.
+ */
+export function senderPhoneFor(senderNumber: string | null): string | undefined {
+  if (!senderNumber) return undefined;
+
+  return normaliseBdPhone(senderNumber) ?? (senderNumber.replace(/\D/g, "") || undefined);
+}
 
 /** What one claim concluded, and the log record written for it. */
 export type OrderClaimResult = { outcome: ClaimOutcome; record: PaymentVerificationRecord };
@@ -132,6 +149,7 @@ export class OrderPaymentClaimService {
       idempotencyKey: key,
       orderRef: order.orderNumber,
       provider: order.provider ?? undefined,
+      senderPhone: senderPhoneFor(order.senderNumber),
     });
 
     const record = await this.verificationLog.recordClaim(

@@ -116,6 +116,12 @@ Rules worth knowing:
 - **Ambiguous wallet.** The first claim is sent _without_ `platform`, so a customer who picked
   the wrong wallet on the form isn't stuck with "not found" forever. Only on `ambiguous_trx` is
   it resent once with the order's `provider`.
+- **Payer's phone.** Every claim sends `senderPhone` as `01XXXXXXXXX` (the gateway has "require
+  sender match" on for sakura-book and compares the last 10 digits). Checkout accepts the number
+  loosely, normalises it with `normaliseBdPhone` (`@sakura/contracts`), refuses anything that isn't
+  `^01[3-9]\d{8}$`, and stores the normalised form in `orders.sender_number`. Older orders with an
+  unrecognised number send its bare digits, so the gateway answers `sender_mismatch` rather than
+  "senderPhone is required".
 - **Money.** `expectedAmount = totalCents / 100`; `amount` and `overpaidBy` are multiplied back
   by 100 and rounded (not truncated) on the way in.
 - Older history rows still read `MATCHED` / `NOT_FOUND` from the Mongo days. They're kept in
@@ -357,8 +363,6 @@ SAKURA_PAYMENT_GATEWAY_SECRET=<secret>
   email then, but the tracking page doesn't refresh itself.
 - **Automatic RELEASED handling:** the key moves on, but the machine never re-claims by itself.
   Staff must Check & confirm.
-- **`senderPhone` isn't sent.** If the gateway turns on "require sender match" for sakura-book,
-  claims will fail until `orders.sender_number` is sent with them.
 - **Changing a transaction ID** has no endpoint or UI. If one is added, it must call
   `nextClaimKey()`.
 - **Webhooks** (the gateway's reserved `callbackUrl`) aren't built. Confirmation relies on the

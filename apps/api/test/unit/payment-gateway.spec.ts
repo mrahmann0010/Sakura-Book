@@ -63,6 +63,11 @@ describe("toGatewayBody", () => {
     expect(toGatewayBody({ ...request, provider: "nagad" }).platform).toBe("nagad");
     expect(toGatewayBody(request)).not.toHaveProperty("platform");
   });
+
+  it("sends the payer's phone when there is one", () => {
+    expect(toGatewayBody({ ...request, senderPhone: "01615951697" }).senderPhone).toBe("01615951697");
+    expect(toGatewayBody(request)).not.toHaveProperty("senderPhone");
+  });
 });
 
 describe("interpretClaimResponse", () => {

@@ -159,6 +159,16 @@ describe("orderValuesFrom", () => {
     expect(values.transactionId).toBe("BKH7X2QM10");
   });
 
+  it("stores the payer's number in the 01XXXXXXXXX form the gateway compares", () => {
+    const values = orderValuesFrom(
+      request({ senderNumber: "+880 1615-951697", transactionId: "DJM6D36KB8" }),
+      priced,
+      "idem-1b",
+    );
+
+    expect(values.senderNumber).toBe("01615951697");
+  });
+
   it("stores an absent receipt as null, not an empty string", () => {
     /* `checkoutDefaults` posts "" for both whenever cash on delivery is
        chosen, so without normalising, "no receipt given" would be two
