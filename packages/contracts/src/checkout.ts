@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { normaliseBdPhone } from "./bd-phone";
+import { cleanTransactionId } from "./transaction-id";
 import { cartItemSchema } from "./cart";
 import { paymentProviders } from "./payment-verification";
 import { ZONES_BY_ID } from "./shipping-zones";
@@ -107,7 +108,10 @@ export const checkoutSchema = shippingAddressSchema
     /** Which wallet the transfer moved through — bKash, Rocket or Nagad. */
     provider: z.enum(paymentProviders).optional(),
     senderNumber: z.string().trim().optional(),
-    transactionId: z.string().trim().optional(),
+    /* Cleaned of a copied "TrxID" label before it is checked or stored — see
+       cleanTransactionId. Only "TrxID" with nothing after it ends up empty,
+       and the refinement below reports that as a missing ID. */
+    transactionId: z.string().trim().transform(cleanTransactionId).optional(),
     notes: z.string().trim().max(500, "Keep delivery notes under 500 characters.").optional(),
   })
   .superRefine((values, ctx) => {

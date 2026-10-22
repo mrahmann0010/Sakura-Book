@@ -145,8 +145,8 @@ Every claim carries an idempotency key, `<orderNumber>:<attempt>`. Code:
 - **Not on reopen.** If a cancelled order had already claimed its payment, the claim is still
   ours and the same key gets it back. A new key would collide with it. _(This differs from the
   integration guide, which says to bump on reopen; see §10.)_
-- The guide also says to bump the key when the customer submits a different transaction ID.
-  The app has no way to edit a transaction ID today. `nextClaimKey()` is there for when it does.
+- **The key also changes when staff correct the transaction ID** (§7). The gateway refuses a
+  key it has seen with a different ID (`idempotency_key_reused`).
 
 ---
 
@@ -194,6 +194,11 @@ sequenceDiagram
   through `POST /orders/payment-status`, which needs order number **and** email, has a 30/min
   limit, and never calls the gateway itself.
 - The copy was updated in English, Bangla and Japanese (`checkout.verify.*`).
+- **A copied label is removed from the transaction ID** before it's checked or stored:
+  `TrxID ABC123`, `TxnID: …`, `Transaction ID - …`, a Bangla label, and surrounding punctuation.
+  Bangla digits become Latin. See `cleanTransactionId` in
+  [`transaction-id.ts`](../packages/contracts/src/transaction-id.ts). Only a whole label word is
+  removed, so an ID that starts with `TXN…` is left alone.
 - Purchase analytics still fire the moment the order exists, not after the wait.
 
 ---
@@ -249,6 +254,17 @@ PAYMENT_CONFIRMED** (including `advance` walks from PENDING), go through
 claims the payment and, on a PENDING order, confirms it. A claim spends the payment, so this is
 an action, not a way to look. The last outcome is already on the page. It's refused for
 cancelled or refunded orders and for duplicated receipts.
+
+**Edit transaction ID** (`PATCH /admin/orders/:n/transaction-id`) corrects a typing mistake
+the customer messaged about. STAFF and ADMIN can use it; packers can't.
+
+- Allowed only on a PENDING manual-transfer order that holds no payment at the gateway. A
+  confirmed order is reverted first. A held claim must be released by a gateway admin first.
+- Refused if the new ID is the same receipt once cleaned up, or if another live order holds it.
+- Needs a reason (min 10 characters). Audited as `TRANSACTION_ID_EDIT` with the old and new ID
+  and claim key.
+- Moves the order to the next claim key and resets its retries, then runs Check & confirm. If
+  that check fails, the edit is still saved and the page says nothing was checked.
 
 **Reminders on the order page**
 
@@ -363,8 +379,8 @@ SAKURA_PAYMENT_GATEWAY_SECRET=<secret>
   email then, but the tracking page doesn't refresh itself.
 - **Automatic RELEASED handling:** the key moves on, but the machine never re-claims by itself.
   Staff must Check & confirm.
-- **Changing a transaction ID** has no endpoint or UI. If one is added, it must call
-  `nextClaimKey()`.
+- **Customers can't fix their own transaction ID.** Staff edit it (§7) after the customer
+  messages. Migration `0044` adds the `TRANSACTION_ID_EDIT` audit action.
 - **Webhooks** (the gateway's reserved `callbackUrl`) aren't built. Confirmation relies on the
   retry worker.
 - **The worker is an in-process timer** with no metrics or health check. It decides whether to

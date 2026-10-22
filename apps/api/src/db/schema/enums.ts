@@ -206,4 +206,7 @@ export const auditActionEnum = pgEnum("audit_action", [
      unreachable, or refused — with a written reason. Its own value so "how
      often do we confirm without the gateway" is a filter. */
   "GATEWAY_CLAIM_OVERRIDE",
+  /* Staff corrected the transaction ID a customer typed at checkout, with a
+     written reason. Its own value so every changed receipt is one filter. */
+  "TRANSACTION_ID_EDIT",
 ]);

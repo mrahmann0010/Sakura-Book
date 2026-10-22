@@ -41,7 +41,12 @@ export type AuditAction =
    * A member of staff confirmed a payment the gateway could not claim, with a
    * written reason. See `AdminOrdersService.guardPaymentGrant`.
    */
-  | "GATEWAY_CLAIM_OVERRIDE";
+  | "GATEWAY_CLAIM_OVERRIDE"
+  /**
+   * A member of staff corrected an order's transaction ID, with a written
+   * reason. See `AdminOrdersService.editTransactionId`.
+   */
+  | "TRANSACTION_ID_EDIT";
 
 /**
  * Who acted.

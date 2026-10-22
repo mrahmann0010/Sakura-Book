@@ -14,12 +14,14 @@ import {
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   adminConfirmPaymentRequestSchema,
+  adminEditTransactionIdRequestSchema,
   adminInternalNoteRequestSchema,
   adminOrderQuerySchema,
   adminOrderTransitionRequestSchema,
   adminRecordRefundRequestSchema,
   adminReopenOrderRequestSchema,
   adminRevertPaymentRequestSchema,
+  type AdminEditTransactionIdResult,
   type AdminOrderDetail,
   type AdminOrderList,
   type AdminOrderVerifyPaymentResult,
@@ -37,6 +39,7 @@ class AdminRecordRefundDto extends createZodDto(adminRecordRefundRequestSchema) 
 class AdminRevertPaymentDto extends createZodDto(adminRevertPaymentRequestSchema) {}
 class AdminReopenOrderDto extends createZodDto(adminReopenOrderRequestSchema) {}
 class AdminInternalNoteDto extends createZodDto(adminInternalNoteRequestSchema) {}
+class AdminEditTransactionIdDto extends createZodDto(adminEditTransactionIdRequestSchema) {}
 
 /**
  * The fulfilment desk, over HTTP.
@@ -265,6 +268,25 @@ export class AdminOrdersController {
     @Req() request: Request,
   ): Promise<AdminOrderDetail> {
     return this.adminOrdersService.recordRefund(orderNumber, body, contextOf(admin, request));
+  }
+
+  /**
+   * Correct the transaction ID the customer typed — a copied "TrxID" label or
+   * a typing mistake — then claim the payment under the new one.
+   *
+   * Open to STAFF, like Check & confirm: matching a customer's message to an
+   * order is the payment desk's job. Closed to packers by the guard's
+   * default. Pending orders only; see `AdminOrdersService.editTransactionId`.
+   */
+  @Patch(":orderNumber/transaction-id")
+  @ApiOperation({ summary: "Correct the transaction ID on a pending order, then claim it." })
+  async editTransactionId(
+    @Param("orderNumber") orderNumber: string,
+    @Body() body: AdminEditTransactionIdDto,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminEditTransactionIdResult> {
+    return this.adminOrdersService.editTransactionId(orderNumber, body, contextOf(admin, request));
   }
 
   /**
