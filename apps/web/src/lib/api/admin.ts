@@ -15,6 +15,8 @@ import {
   adminBookUpdateRequestSchema,
   adminConfirmPaymentRequestSchema,
   adminInternalNoteRequestSchema,
+  adminEditTransactionIdRequestSchema,
+  adminEditTransactionIdResultSchema,
   adminLoginRequestSchema,
   adminOrderDetailSchema,
   adminOrderListSchema,
@@ -62,6 +64,8 @@ import {
   type AdminBookUpdateInput,
   type AdminConfirmPaymentRequest,
   type AdminInternalNoteRequest,
+  type AdminEditTransactionIdRequest,
+  type AdminEditTransactionIdResult,
   type AdminLoginRequest,
   type AdminOrderDetail,
   type AdminOrderList,
@@ -578,6 +582,22 @@ export function recordAdminOrderRefund(
       method: "POST",
       body: validated,
     },
+  );
+}
+
+/**
+ * Correct the transaction ID on a pending order. The API claims the new ID
+ * straight away and returns what the gateway said beside the updated order.
+ */
+export function editAdminOrderTransactionId(
+  orderNumber: string,
+  request: AdminEditTransactionIdRequest,
+): Promise<AdminEditTransactionIdResult> {
+  const validated = validate(adminEditTransactionIdRequestSchema, request);
+  return adminFetch(
+    `/admin/orders/${encodeURIComponent(orderNumber)}/transaction-id`,
+    adminEditTransactionIdResultSchema,
+    { method: "PATCH", body: validated },
   );
 }
 

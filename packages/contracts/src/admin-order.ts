@@ -3,6 +3,7 @@ import { divisionSlugs } from "./bd-geo";
 import { paymentMethods } from "./checkout";
 import { orderSchema, orderStatuses } from "./order";
 import { paginated, pageQuerySchema } from "./pagination";
+import { cleanTransactionId } from "./transaction-id";
 import {
   paymentProviders,
   paymentVerificationOutcomes,
@@ -548,6 +549,41 @@ export const adminOrderVerifyPaymentResultSchema = z.object({
 });
 
 export type AdminOrderVerifyPaymentResult = z.infer<typeof adminOrderVerifyPaymentResultSchema>;
+
+/**
+ * Correcting the transaction ID a customer typed at checkout: a copied
+ * "TrxID" label, or a typing mistake they messaged the shop about.
+ *
+ * Cleaned the same way checkout cleans it. The reason is staff-facing and
+ * goes to the audit log beside the old and new values, because the ID is
+ * the evidence the payment is checked against.
+ */
+export const adminEditTransactionIdRequestSchema = z.object({
+  transactionId: z
+    .string()
+    .trim()
+    .transform(cleanTransactionId)
+    .pipe(
+      z
+        .string()
+        .min(4, "Enter the transaction ID from the payment SMS.")
+        .max(64, "That is too long for a transaction ID."),
+    ),
+  reason: z.string().trim().min(10, "Say why the transaction ID is being changed.").max(500),
+});
+
+export type AdminEditTransactionIdRequest = z.infer<typeof adminEditTransactionIdRequestSchema>;
+
+/**
+ * The updated order, and what claiming the new ID at the gateway said — or
+ * null when that check could not run. The edit is saved either way.
+ */
+export const adminEditTransactionIdResultSchema = z.object({
+  order: adminOrderDetailSchema,
+  check: adminOrderVerifyPaymentResultSchema.nullable(),
+});
+
+export type AdminEditTransactionIdResult = z.infer<typeof adminEditTransactionIdResultSchema>;
 
 /* --------------------------------------------------------------------------
    The packing table: what a FULFILLMENT account may see and do.

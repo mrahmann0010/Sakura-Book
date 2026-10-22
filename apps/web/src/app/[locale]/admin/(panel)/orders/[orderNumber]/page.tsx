@@ -11,10 +11,11 @@ import type {
 
 import { ReceiptBadge, VerificationBadge } from "@/components/admin/payment-safety";
 import { AdminDetailSkeleton } from "@/components/admin/skeletons";
-import { Button, Notice, Textarea } from "@/components/ui";
+import { Button, Input, Notice, Textarea } from "@/components/ui";
 import {
   AdminApiError,
   confirmAdminOrderPayment,
+  editAdminOrderTransactionId,
   getAdminOrder,
   recordAdminOrderRefund,
   reopenAdminOrder,
@@ -89,6 +90,12 @@ export default function AdminOrderDetailPage() {
   /** The reason for reopening a rejected order — collapsed the same way. */
   const [reopening, setReopening] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
+
+  /** Correcting the transaction ID the customer typed — collapsed until asked for. */
+  const [editingTrx, setEditingTrx] = useState(false);
+  const [trxValue, setTrxValue] = useState("");
+  const [trxReason, setTrxReason] = useState("");
+  const [savingTrx, setSavingTrx] = useState(false);
 
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
@@ -214,6 +221,38 @@ export default function AdminOrderDetailPage() {
       setError(messageOf(err, "Could not check this payment."));
     } finally {
       setVerifying(false);
+    }
+  }
+
+  async function saveTransactionId() {
+    if (trxValue.trim().length < 4) {
+      setError("Enter the transaction ID from the payment SMS.");
+      return;
+    }
+    if (trxReason.trim().length < 10) {
+      setError("Say why the transaction ID is being changed.");
+      return;
+    }
+
+    setSavingTrx(true);
+    setError(null);
+    setVerifyResult(null);
+    try {
+      const { order: updated, check } = await editAdminOrderTransactionId(orderNumber, {
+        transactionId: trxValue,
+        reason: trxReason,
+      });
+      setOrder(updated);
+      setGatewayBlock(null);
+      setVerifyResult(check);
+      setEditingTrx(false);
+      setTrxValue("");
+      setTrxReason("");
+    } catch (err) {
+      // The typed values stay, so a refusal can be fixed rather than retyped.
+      setError(messageOf(err, "Could not change the transaction ID."));
+    } finally {
+      setSavingTrx(false);
     }
   }
 
@@ -352,6 +391,75 @@ export default function AdminOrderDetailPage() {
               <Row label="Transaction ID" value={order.transactionId ?? "No receipt on file"} />
             )}
           </dl>
+
+          {/* For a customer who typed "TrxID" in front of the ID, or mistyped
+                it, and messaged the shop. Pending only, and not once the order
+                holds a payment at the gateway — the API refuses both anyway. */}
+          {order.paymentMethod === "manual-transfer" &&
+          order.status === "PENDING" &&
+          !order.gatewayClaim &&
+          !isPacker ? (
+            editingTrx ? (
+              <div className="border-rule mt-4 flex flex-col gap-3 border-t pt-4">
+                <Input
+                  label="Correct transaction ID"
+                  hint="As it appears in the payment SMS. A leading “TrxID” is removed."
+                  value={trxValue}
+                  onChange={(event) => setTrxValue(event.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="font-mono"
+                />
+                <Textarea
+                  label="Why is it being changed? (staff-only, goes to the audit log)"
+                  value={trxReason}
+                  onChange={(event) => setTrxReason(event.target.value)}
+                  rows={2}
+                  error={
+                    trxReason.trim().length > 0 && trxReason.trim().length < 10
+                      ? "Say why the transaction ID is being changed."
+                      : undefined
+                  }
+                />
+                <p className="text-caption text-muted">
+                  Saving claims the payment under the new ID and confirms the order if it is there.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    loading={savingTrx}
+                    onClick={() => void saveTransactionId()}
+                  >
+                    Save & check
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setEditingTrx(false);
+                      setTrxValue("");
+                      setTrxReason("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="text-13.5 text-secondary hover:text-ink mt-2 underline"
+                onClick={() => {
+                  setEditingTrx(true);
+                  setTrxValue(order.transactionId ?? "");
+                }}
+              >
+                Edit transaction ID
+              </button>
+            )
+          ) : null}
 
           {/* Present on load, before anyone presses anything. The old panel
                 said nothing about a receipt until an admin ran a check, which

@@ -2,6 +2,8 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type {
   AdminConfirmPaymentRequest,
+  AdminEditTransactionIdRequest,
+  AdminEditTransactionIdResult,
   AdminInternalNoteRequest,
   AdminOrderDetail,
   AdminOrderList,
@@ -18,9 +20,12 @@ import type { Env } from "../../config/env.schema";
 import { DbService } from "../../db/db.service";
 import { auditLog, orderItems, orders } from "../../db/schema";
 import {
+  claimKeyFor,
   findOrder,
   findTransactionIdClaim,
   forwardPathTo,
+  nextClaimKey,
+  normaliseTransactionId,
   OrderPaymentClaimService,
   RELEASED_STATUSES,
   reopenBlocker,
@@ -1025,6 +1030,129 @@ export class AdminOrdersService {
     });
 
     return this.detail(orderNumber, context.actor);
+  }
+
+  /**
+   * Correct the transaction ID the customer typed at checkout, then claim
+   * the payment under the new one.
+   *
+   * Only while the order is PENDING and holds no payment at the gateway.
+   * After that the ID is the evidence a confirmation or a claim was made on,
+   * and changing it would leave a payment held under one ID and the order
+   * showing another. A confirmed order with the wrong ID is reverted first.
+   *
+   * The new ID moves the order to its next claim key. The gateway ties a key
+   * to the transaction ID it was first sent with and refuses the same key
+   * with a different ID (`idempotency_key_reused`), so reusing the old key
+   * would fail as a setup error. The old key never claimed anything —
+   * that is checked above — so nothing is left behind under it.
+   *
+   * The update is guarded on the status we read, so an order confirmed a
+   * moment ago by the worker is not edited under it. The unique index on the
+   * normalised ID is the backstop for two orders racing to the same receipt.
+   *
+   * The claim afterwards is best effort: the edit is already saved, so a
+   * failure there is reported as `check: null`, not as a failed edit.
+   */
+  async editTransactionId(
+    orderNumber: string,
+    request: AdminEditTransactionIdRequest,
+    context: AdminContext,
+  ): Promise<AdminEditTransactionIdResult> {
+    const order = await this.requireOrder(orderNumber, context.actor);
+    const next = request.transactionId;
+
+    if (order.paymentMethod !== "manual-transfer") {
+      throw new InvalidInputError("Only manual-transfer orders have a transaction ID.", {
+        orderNumber: order.orderNumber,
+        paymentMethod: order.paymentMethod,
+      });
+    }
+
+    if (order.status !== "PENDING") {
+      throw new InvalidInputError(
+        "The transaction ID can only be changed while the order is pending. " +
+          "Revert the payment confirmation first if it was confirmed on the wrong ID.",
+        { orderNumber: order.orderNumber, status: order.status },
+      );
+    }
+
+    if (normaliseTransactionId(next) === normaliseTransactionId(order.transactionId)) {
+      throw new InvalidInputError("That is the transaction ID already on this order.", {
+        orderNumber: order.orderNumber,
+      });
+    }
+
+    const held = heldClaimOf(await this.verificationLog.historyFor(order.id));
+    if (held) {
+      throw new InvalidInputError(
+        `This order already holds payment ${held.transactionId} at the gateway. ` +
+          `Ask a gateway admin to release it before changing the transaction ID.`,
+        { orderNumber: order.orderNumber, heldTransactionId: held.transactionId },
+      );
+    }
+
+    const holder = await findTransactionIdClaim(this.dbService.db, next, {
+      excludeOrderId: order.id,
+    });
+    if (holder) {
+      throw new InvalidInputError(
+        `Transaction ID ${next} is already recorded against order ${holder.orderNumber} ` +
+          `(${holder.status}).`,
+        { orderNumber: order.orderNumber, claimedBy: holder.orderNumber },
+      );
+    }
+
+    const claimKey = nextClaimKey(order.orderNumber, claimKeyFor(order));
+
+    await this.dbService.db.transaction(async (tx) => {
+      const updated = await tx
+        .update(orders)
+        .set({
+          transactionId: next,
+          paymentClaimKey: claimKey,
+          paymentClaimAttempts: 0,
+          paymentClaimRetryAt: null,
+        })
+        .where(and(eq(orders.id, order.id), eq(orders.status, "PENDING")))
+        .returning({ id: orders.id });
+
+      if (updated.length === 0) {
+        throw new InvalidInputError(
+          "This order is no longer pending — it changed while you were editing. Reload it.",
+          { orderNumber: order.orderNumber },
+        );
+      }
+
+      await this.auditService.record(
+        {
+          ...auditContext(context),
+          action: "TRANSACTION_ID_EDIT",
+          entityType: "orders",
+          entityId: order.orderNumber,
+          before: { transactionId: order.transactionId, paymentClaimKey: order.paymentClaimKey },
+          after: { transactionId: next, paymentClaimKey: claimKey },
+          note: request.reason,
+        },
+        tx,
+      );
+    });
+
+    this.logger.log(
+      `Transaction ID on ${order.orderNumber} changed by ${context.actor.email}: ` +
+        `${order.transactionId ?? "(none)"} → ${next} (${request.reason})`,
+    );
+
+    let check: AdminOrderVerifyPaymentResult | null = null;
+    try {
+      check = await this.verifyPayment(order.orderNumber, context);
+    } catch (error) {
+      this.logger.warn(
+        `Saved the new transaction ID on ${order.orderNumber}, but claiming it failed: ${String(error)}`,
+      );
+    }
+
+    return { order: await this.detail(order.orderNumber, context.actor), check };
   }
 
   /**

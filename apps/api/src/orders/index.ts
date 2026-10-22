@@ -27,6 +27,9 @@ export {
 // The written record of every gateway check, and the page-wide duplicate
 // lookup the admin queue's badges are computed from.
 export { PaymentVerificationLogService } from "./payment-verification-log.service";
+// For the desk's transaction-ID edit, which must move the order to a new claim key.
+export { claimKeyFor, nextClaimKey } from "./payment-claim-key";
+export { normaliseTransactionId } from "./receipt";
 // Claiming an order's payment at the gateway — shared with the desk so staff
 // confirmations reuse the order's claim key and land in the same log.
 export {
