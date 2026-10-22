@@ -27,6 +27,7 @@ export * from "./shipping";
 export * from "./shipping-zones";
 export * from "./shipping-rates";
 export * from "./bd-geo";
+export * from "./bd-phone";
 export * from "./admin-auth";
 export * from "./admin-users";
 export * from "./admin-order";

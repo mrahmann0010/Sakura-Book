@@ -1,3 +1,4 @@
+import { normaliseBdPhone } from "@sakura/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { heldClaimOf } from "../../src/admin/orders/admin-order.mapper";
 import {
@@ -7,7 +8,7 @@ import {
 import { AdminOrdersService, type AdminContext } from "../../src/admin/orders/admin-orders.service";
 import { InvalidInputError } from "../../src/common/errors";
 import { OrderAutoVerifyService } from "../../src/orders/order-auto-verify.service";
-import { OrderPaymentClaimService } from "../../src/orders/order-payment-claim.service";
+import { OrderPaymentClaimService, senderPhoneFor } from "../../src/orders/order-payment-claim.service";
 import {
   FAST_RETRY_DELAYS_SECONDS,
   LATE_RETRY_ATTEMPTS,
@@ -55,6 +56,7 @@ type TestOrder = {
   provider: string | null;
   transactionId: string | null;
   transactionIdNormalised: string | null;
+  senderNumber: string | null;
   totalCents: number;
   paymentClaimKey: string | null;
   paymentClaimAttempts: number;
@@ -68,6 +70,7 @@ const order = (overrides: Partial<TestOrder> = {}): TestOrder => ({
   provider: "bkash",
   transactionId: "8F3K2M9X01",
   transactionIdNormalised: "8F3K2M9X01",
+  senderNumber: "01711111111",
   totalCents: 125_000,
   paymentClaimKey: "SB-10482:1",
   paymentClaimAttempts: 0,
@@ -170,7 +173,18 @@ describe("OrderPaymentClaimService", () => {
       idempotencyKey: "SB-10482:3",
       orderRef: "SB-10482",
       provider: "bkash",
+      senderPhone: "01711111111",
     });
+  });
+
+  it("leaves the payer's phone out only when none was typed", async () => {
+    const { service, gateway } = claimsWith([CLAIMED]);
+
+    await service.claim(order({ senderNumber: null }) as never, null);
+
+    expect(gateway.claim.mock.calls[0]).toEqual([
+      expect.objectContaining({ senderPhone: undefined }),
+    ]);
   });
 
   it("gives an order placed before keys existed the first key, and stores it", async () => {
@@ -616,5 +630,40 @@ describe("heldClaimOf", () => {
 
   it("is null for an order that never claimed", () => {
     expect(heldClaimOf([{ outcome: "PENDING_ARRIVAL", checkedAt: at(1), transactionId: "X" }])).toBeNull();
+  });
+});
+
+describe("normaliseBdPhone", () => {
+  it.each([
+    ["01615951697", "01615951697"],
+    ["+880 1615-951697", "01615951697"],
+    ["8801615951697", "01615951697"],
+    ["008801615951697", "01615951697"],
+    ["(01615) 951697", "01615951697"],
+    ["০১৬১৫৯৫১৬৯৭", "01615951697"],
+  ])("reads %s as %s", (raw, expected) => {
+    expect(normaliseBdPhone(raw)).toBe(expected);
+  });
+
+  it.each(["01215951697", "0161595169", "016159516971", "+44 20 7946 0000", ""])(
+    "refuses %s",
+    (raw) => {
+      expect(normaliseBdPhone(raw)).toBeNull();
+    },
+  );
+});
+
+describe("senderPhoneFor", () => {
+  it("sends a stored number in the 01XXXXXXXXX form", () => {
+    expect(senderPhoneFor("+880 1615-951697")).toBe("01615951697");
+  });
+
+  it("sends an old order's unrecognised number as digits, for the gateway to judge", () => {
+    expect(senderPhoneFor("+44 20 7946 0000")).toBe("442079460000");
+  });
+
+  it("sends nothing when nothing was typed", () => {
+    expect(senderPhoneFor(null)).toBeUndefined();
+    expect(senderPhoneFor("  ")).toBeUndefined();
   });
 });

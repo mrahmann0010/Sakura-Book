@@ -211,7 +211,7 @@
       "cash-on-delivery": "Cash on delivery",
       "manual-transfer": "bKash or bank transfer",
       "manual-transferMeta": "manual transfer",
-      "manual-transferHint": "Send the total, then give us the sender number and transaction ID.",
+      "manual-transferHint": "Send the total, then give us the number you paid from and the transaction ID.",
       "bkash": "bKash",
       "rocket": "Rocket",
       "nagad": "Nagad",
@@ -229,7 +229,7 @@
       "card": "Card payment",
       "cardMeta": "coming later",
       "cardUnavailable": "Card payments are not switched on yet.",
-      "senderNumber": "Sender number",
+      "senderNumber": "bKash/Rocket/Nagad number you paid from",
       "transactionId": "Transaction ID"
     },
     "items": {

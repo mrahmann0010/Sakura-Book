@@ -30,6 +30,12 @@ export type ClaimRequest = {
    * only used to settle an `ambiguous_trx` answer. See PaymentClaimService.
    */
   provider?: PaymentProvider;
+  /**
+   * The number the customer says they paid from, as `01XXXXXXXXX`. The
+   * gateway requires it for clients with "require sender match" switched on,
+   * and refuses a claim whose payer does not match.
+   */
+  senderPhone?: string;
 };
 
 /** Why the gateway refused a payment that does exist. */

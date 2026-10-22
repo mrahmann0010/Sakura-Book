@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normaliseBdPhone } from "./bd-phone";
 import { cartItemSchema } from "./cart";
 import { paymentProviders } from "./payment-verification";
 import { ZONES_BY_ID } from "./shipping-zones";
@@ -124,6 +125,15 @@ export const checkoutSchema = shippingAddressSchema
         code: "custom",
         path: ["senderNumber"],
         message: "Add the number you sent the money from.",
+      });
+    } else if (!normaliseBdPhone(values.senderNumber)) {
+      /* The gateway checks this against the paying wallet, so a typo here
+         would stop the order confirming. Caught now, while the customer can
+         still fix it. */
+      ctx.addIssue({
+        code: "custom",
+        path: ["senderNumber"],
+        message: "Enter the 11-digit wallet number you paid from, like 01XXXXXXXXX.",
       });
     }
     if (!values.transactionId) {
