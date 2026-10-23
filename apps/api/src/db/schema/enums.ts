@@ -212,4 +212,9 @@ export const auditActionEnum = pgEnum("audit_action", [
   /* Staff accepted a payment short of the order total, with a written reason.
      Its own value so "how much have we let customers underpay" is a filter. */
   "SHORTFALL_ACCEPTED",
+  /* Staff corrected the delivery details a customer typed at checkout — name,
+     phone, address — with a written reason. Its own value so "which parcels
+     were re-addressed after they were placed" is a filter, which is the
+     question asked when a courier returns one. */
+  "CONTACT_EDIT",
 ]);

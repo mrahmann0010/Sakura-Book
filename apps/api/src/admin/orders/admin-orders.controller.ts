@@ -14,6 +14,7 @@ import {
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   adminConfirmPaymentRequestSchema,
+  adminEditOrderContactRequestSchema,
   adminEditTransactionIdRequestSchema,
   adminInternalNoteRequestSchema,
   adminOrderQuerySchema,
@@ -40,6 +41,7 @@ class AdminRevertPaymentDto extends createZodDto(adminRevertPaymentRequestSchema
 class AdminReopenOrderDto extends createZodDto(adminReopenOrderRequestSchema) {}
 class AdminInternalNoteDto extends createZodDto(adminInternalNoteRequestSchema) {}
 class AdminEditTransactionIdDto extends createZodDto(adminEditTransactionIdRequestSchema) {}
+class AdminEditOrderContactDto extends createZodDto(adminEditOrderContactRequestSchema) {}
 
 /**
  * The fulfilment desk, over HTTP.
@@ -287,6 +289,27 @@ export class AdminOrdersController {
     @Req() request: Request,
   ): Promise<AdminEditTransactionIdResult> {
     return this.adminOrdersService.editTransactionId(orderNumber, body, contextOf(admin, request));
+  }
+
+  /**
+   * Correct the delivery details a customer typed wrong at checkout — phone,
+   * address, the thana a parcel is addressed by.
+   *
+   * Open to STAFF: a customer who rings to say their number is missing a
+   * digit is talking to whoever answers, and routing that through the owner
+   * means the parcel ships wrong while it waits. Closed to packers by the
+   * guard's default — a packer who spots a bad address leaves a note, which
+   * is the same line drawn for every other write on this controller.
+   */
+  @Patch(":orderNumber/contact")
+  @ApiOperation({ summary: "Correct the customer and delivery details on an open order." })
+  async editContact(
+    @Param("orderNumber") orderNumber: string,
+    @Body() body: AdminEditOrderContactDto,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminOrderDetail> {
+    return this.adminOrdersService.editContactDetails(orderNumber, body, contextOf(admin, request));
   }
 
   /**

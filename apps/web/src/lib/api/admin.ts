@@ -15,6 +15,7 @@ import {
   adminBookUpdateRequestSchema,
   adminConfirmPaymentRequestSchema,
   adminInternalNoteRequestSchema,
+  adminEditOrderContactRequestSchema,
   adminEditTransactionIdRequestSchema,
   adminEditTransactionIdResultSchema,
   adminLoginRequestSchema,
@@ -64,6 +65,7 @@ import {
   type AdminBookUpdateInput,
   type AdminConfirmPaymentRequest,
   type AdminInternalNoteRequest,
+  type AdminEditOrderContactRequest,
   type AdminEditTransactionIdRequest,
   type AdminEditTransactionIdResult,
   type AdminLoginRequest,
@@ -597,6 +599,23 @@ export function editAdminOrderTransactionId(
   return adminFetch(
     `/admin/orders/${encodeURIComponent(orderNumber)}/transaction-id`,
     adminEditTransactionIdResultSchema,
+    { method: "PATCH", body: validated },
+  );
+}
+
+/**
+ * Correct the customer and delivery details on an open order. Returns the
+ * updated order, so the page re-renders from the server's reading of it
+ * rather than from what the form thought it sent.
+ */
+export function editAdminOrderContact(
+  orderNumber: string,
+  request: AdminEditOrderContactRequest,
+): Promise<AdminOrderDetail> {
+  const validated = validate(adminEditOrderContactRequestSchema, request);
+  return adminFetch(
+    `/admin/orders/${encodeURIComponent(orderNumber)}/contact`,
+    adminOrderDetailSchema,
     { method: "PATCH", body: validated },
   );
 }

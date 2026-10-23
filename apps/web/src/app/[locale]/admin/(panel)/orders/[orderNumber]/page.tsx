@@ -15,6 +15,7 @@ import { Button, Input, Notice, Textarea } from "@/components/ui";
 import {
   AdminApiError,
   confirmAdminOrderPayment,
+  editAdminOrderContact,
   editAdminOrderTransactionId,
   getAdminOrder,
   recordAdminOrderRefund,
@@ -98,6 +99,19 @@ export default function AdminOrderDetailPage() {
   /** The reason for reopening a rejected order — collapsed the same way. */
   const [reopening, setReopening] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
+
+  /**
+   * Correcting what the customer typed at checkout — a phone number missing
+   * a digit, a flat number left off the address.
+   *
+   * The whole card turns into a form rather than each line becoming
+   * separately editable: the fields are one address, and staff correcting a
+   * phoned-in fix usually have two of them to change at once.
+   */
+  const [editingContact, setEditingContact] = useState(false);
+  const [contact, setContact] = useState<ContactForm>(EMPTY_CONTACT);
+  const [contactReason, setContactReason] = useState("");
+  const [savingContact, setSavingContact] = useState(false);
 
   /** Correcting the transaction ID the customer typed — collapsed until asked for. */
   const [editingTrx, setEditingTrx] = useState(false);
@@ -282,6 +296,31 @@ export default function AdminOrderDetailPage() {
     }
   }
 
+  async function saveContact() {
+    if (contactReason.trim().length < 5) {
+      setError("Say why the delivery details are being changed.");
+      return;
+    }
+
+    setSavingContact(true);
+    setError(null);
+    try {
+      const updated = await editAdminOrderContact(orderNumber, {
+        ...contact,
+        reason: contactReason,
+      });
+      setOrder(updated);
+      setEditingContact(false);
+      setContactReason("");
+    } catch (err) {
+      // The typed values stay, like the transaction-id form above: a refusal
+      // is something to fix, not something to retype an address over.
+      setError(messageOf(err, "Could not save these details."));
+    } finally {
+      setSavingContact(false);
+    }
+  }
+
   async function saveInternalNote() {
     setError(null);
     try {
@@ -382,19 +421,149 @@ export default function AdminOrderDetailPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-container border-rule bg-surface p-card border">
           <h2 className="text-h4 text-ink font-serif">Customer</h2>
-          <dl className="text-13.5 mt-4 flex flex-col gap-2">
-            <Row label="Name" value={order.shipping.fullName} />
-            {order.customerEmail ? <Row label="Email" value={order.customerEmail} /> : null}
-            <Row label="Phone" value={order.shipping.phone} />
-            {order.shipping.secondaryPhone ? (
-              <Row label="Secondary phone" value={order.shipping.secondaryPhone} />
-            ) : null}
-            <Row
-              label="Address"
-              value={`${order.shipping.address}, ${order.shipping.city}, ${order.shipping.region}`}
-            />
-            {order.customerNote ? <Row label="Customer note" value={order.customerNote} /> : null}
-          </dl>
+
+          {editingContact ? (
+            <div className="mt-4 flex flex-col gap-3">
+              <Input
+                label="Name"
+                value={contact.fullName}
+                onChange={(event) => setContact({ ...contact, fullName: event.target.value })}
+              />
+              <Input
+                label="Email"
+                type="email"
+                value={contact.email}
+                onChange={(event) => setContact({ ...contact, email: event.target.value })}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <Input
+                label="Phone"
+                hint="The number the courier calls first."
+                value={contact.phone}
+                onChange={(event) => setContact({ ...contact, phone: event.target.value })}
+                autoComplete="off"
+              />
+              <Input
+                label="Secondary phone"
+                hint="Optional. Leave empty if there is no second number."
+                value={contact.secondaryPhone}
+                onChange={(event) => setContact({ ...contact, secondaryPhone: event.target.value })}
+                autoComplete="off"
+              />
+              <Textarea
+                label="Address"
+                hint="Street, house and area — the line the courier reads."
+                value={contact.address}
+                onChange={(event) => setContact({ ...contact, address: event.target.value })}
+                rows={3}
+              />
+              <Input
+                label="City / district"
+                value={contact.city}
+                onChange={(event) => setContact({ ...contact, city: event.target.value })}
+              />
+              {/* The manifest's levels, kept apart from the line above because
+                  the courier addresses a parcel by them. Optional: orders
+                  placed before they were collected have none, and this form
+                  must be able to save one without inventing them. */}
+              <Input
+                label="Upazila / thana"
+                value={contact.upazila}
+                onChange={(event) => setContact({ ...contact, upazila: event.target.value })}
+              />
+              <Input
+                label="Area"
+                value={contact.area}
+                onChange={(event) => setContact({ ...contact, area: event.target.value })}
+              />
+              <Input
+                label="Post code"
+                value={contact.postCode}
+                onChange={(event) => setContact({ ...contact, postCode: event.target.value })}
+              />
+              <Textarea
+                label="Customer note"
+                hint="What the customer asked for, in their words."
+                value={contact.customerNote}
+                onChange={(event) => setContact({ ...contact, customerNote: event.target.value })}
+                rows={2}
+              />
+              <Textarea
+                label="Why are these being changed? (staff-only, goes to the audit log)"
+                value={contactReason}
+                onChange={(event) => setContactReason(event.target.value)}
+                rows={2}
+                error={
+                  contactReason.trim().length > 0 && contactReason.trim().length < 5
+                    ? "Say why the delivery details are being changed."
+                    : undefined
+                }
+              />
+              {/* Said before they look for the field and cannot find it. */}
+              <p className="text-caption text-muted">
+                The delivery zone and the postage priced off it stay as they were. Moving an order
+                to another zone is a re-quote, not a correction.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  loading={savingContact}
+                  onClick={() => void saveContact()}
+                >
+                  Save details
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setEditingContact(false);
+                    setContactReason("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <dl className="text-13.5 mt-4 flex flex-col gap-2">
+                <Row label="Name" value={order.shipping.fullName} />
+                {order.customerEmail ? <Row label="Email" value={order.customerEmail} /> : null}
+                <Row label="Phone" value={order.shipping.phone} />
+                {order.shipping.secondaryPhone ? (
+                  <Row label="Secondary phone" value={order.shipping.secondaryPhone} />
+                ) : null}
+                <Row
+                  label="Address"
+                  value={`${order.shipping.address}, ${order.shipping.city}, ${order.shipping.region}`}
+                />
+                {order.customerNote ? (
+                  <Row label="Customer note" value={order.customerNote} />
+                ) : null}
+              </dl>
+
+              {/* For the customer who rings an hour later to say the number is
+                  missing a digit. Closed on a finished order, where these
+                  fields are a record of what was sent rather than instructions
+                  for sending it — and closed to packers, who leave a note
+                  instead. The API refuses both anyway. */}
+              {isPacker || CLOSED_STATUSES.includes(order.status) ? null : (
+                <button
+                  type="button"
+                  className="text-13.5 text-secondary hover:text-ink mt-3 underline"
+                  onClick={() => {
+                    setEditingContact(true);
+                    setContact(contactFormOf(order));
+                  }}
+                >
+                  Edit delivery details
+                </button>
+              )}
+            </>
+          )}
         </section>
 
         <section className="rounded-container border-rule bg-surface p-card border">
@@ -1009,6 +1178,62 @@ function VerifyResult({
     </Notice>
   );
 }
+
+/**
+ * The delivery-details form's values.
+ *
+ * Every field a string, including the optional ones: a controlled input over
+ * `string | null` flips between controlled and uncontrolled the first time
+ * someone clears it. Empty means absent, and the API normalises it to null.
+ */
+type ContactForm = {
+  fullName: string;
+  email: string;
+  phone: string;
+  secondaryPhone: string;
+  address: string;
+  city: string;
+  upazila: string;
+  area: string;
+  postCode: string;
+  customerNote: string;
+};
+
+const EMPTY_CONTACT: ContactForm = {
+  fullName: "",
+  email: "",
+  phone: "",
+  secondaryPhone: "",
+  address: "",
+  city: "",
+  upazila: "",
+  area: "",
+  postCode: "",
+  customerNote: "",
+};
+
+/** The order as the form sees it. The parts come unjoined from the API. */
+function contactFormOf(order: AdminOrderDetail): ContactForm {
+  return {
+    fullName: order.shipping.fullName,
+    email: order.customerEmail,
+    phone: order.shipping.phone,
+    secondaryPhone: order.shipping.secondaryPhone ?? "",
+    address: order.shipping.address,
+    city: order.shipping.city,
+    upazila: order.addressParts.upazila ?? "",
+    area: order.addressParts.area ?? "",
+    postCode: order.addressParts.postCode ?? "",
+    customerNote: order.customerNote ?? "",
+  };
+}
+
+/**
+ * The statuses where the delivery details stop being editable — the same
+ * terminal set the API checks, named here so the control is not drawn on an
+ * order that would refuse it.
+ */
+const CLOSED_STATUSES: OrderStatus[] = ["DELIVERED", "CANCELLED", "REFUNDED"];
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
