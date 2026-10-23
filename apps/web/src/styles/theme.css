@@ -222,6 +222,9 @@
   --text-13\.5: 0.84375rem;
   --text-14\.5: 0.90625rem;
   --text-15: 0.9375rem;
+  /* 16 is also --text-h4, but that step carries a line-height and a weight of
+     its own; this is the bare size, for the places that are not a heading. */
+  --text-16: 1rem;
   --text-17: 1.0625rem;
   --text-18: 1.125rem;
   --text-19: 1.1875rem;
@@ -358,10 +361,58 @@
      have landed. Scale rather than width so it costs no layout. */
   --animate-hero-rule: hero-rule var(--duration-slide) var(--ease-out-soft) both;
 
+  /* The sample flag beside the book cover — see domain/cover-preview.tsx.
+
+     Two beats, because the flag has a problem no other control here has: it is
+     bare type with no panel, sitting beside a photograph, and it has to say
+     "the picture is a button" to somebody who has never seen this page before.
+
+     `flag` is the entrance, delayed past the cover's own paint so the label
+     arrives after the thing it labels rather than with it. `nudge` is the
+     attention beat: the arrow — never the words, which stay still and legible
+     — leans toward the cover and comes back.
+
+     The nudge loops, which principle 04 otherwise reserves for loading states,
+     and the cycle is deliberately mostly rest: motion occupies about a fifth
+     of its 3.6s and the arrow is stationary for the other four fifths. That is
+     what keeps it a periodic beckon rather than a throb next to the reader's
+     eye while they read the description. Both are flattened globally under
+     prefers-reduced-motion (globals.css). */
+  --animate-sample-flag: sample-flag-in var(--duration-slide) var(--ease-out-soft) 400ms both;
+  --animate-sample-nudge: sample-nudge 3.6s var(--ease-standard) 1s infinite;
+
   --ease-standard: ease-in-out;
   /* Decelerating, for entrances — motion that arrives and settles rather than
      easing in and out of a state change. */
   --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Up the spine, the direction the label itself reads. */
+@keyframes sample-flag-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Toward the cover, which is the direction the arrow points. Positive X is
+   rightwards and the flag sits to the cover's left. */
+@keyframes sample-nudge {
+  0%,
+  70%,
+  100% {
+    transform: translateX(0);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+  90% {
+    transform: translateX(0);
+  }
 }
 
 @keyframes shimmer {

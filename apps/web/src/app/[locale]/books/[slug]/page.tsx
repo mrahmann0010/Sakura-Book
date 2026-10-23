@@ -20,7 +20,6 @@ import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
 import { getBook } from "@/lib/api/catalog";
 import { ApiError } from "@/lib/api/client";
-import { getShippingTerms } from "@/lib/api/shipping";
 import { footerColumns } from "@/lib/books";
 import { languageName, toBookSummary } from "@/lib/book-view";
 import { toSearchParams } from "@/lib/catalog";
@@ -53,22 +52,6 @@ async function loadBook(slug: string) {
        because those are not "no such book" and must not be dressed up as one. */
     if (error instanceof ApiError && error.isNotFound) notFound();
     throw error;
-  }
-}
-
-/**
- * The postage terms behind the buy card's free-delivery line.
- *
- * Soft-fails: a shipping endpoint that is down should cost the reader one line
- * of reassurance, not the book page. The caller renders nothing when this
- * returns null, which is the only honest alternative — the figure it would
- * otherwise print is a promise about money.
- */
-async function loadShippingTerms() {
-  try {
-    return await getShippingTerms();
-  } catch {
-    return null;
   }
 }
 
@@ -105,15 +88,12 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
   /* The book fetch is deduped with generateMetadata's (see loadBook above),
      but translations don't depend on it either way — load both at once.
 
-     The postage terms join them because the buy card states the free-delivery
-     promise, and that figure is shop policy: it comes from the API, which is
-     the only thing that knows what the shop currently charges. There is no
-     client constant to fall back on any more — see lib/cart.ts. */
-  const [{ t }, book, shipping] = await Promise.all([
-    getTranslation(locale),
-    loadBook(slug),
-    loadShippingTerms(),
-  ]);
+     The postage terms used to be fetched here too, for a free-delivery line
+     under the buy card. That line is gone — delivery cost is a question the
+     cart and checkout answer, where an address exists to price it against,
+     not one to raise on a page where nobody has decided to buy yet — and with
+     it goes a shipping request on every render of every book page. */
+  const [{ t }, book] = await Promise.all([getTranslation(locale), loadBook(slug)]);
   const view = toBookSummary(book, locale);
   const money = (cents: number) => formatMoney(cents, intlLocale(locale));
 
@@ -172,19 +152,6 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
     </p>
   );
 
-  /* Reassurance at the decision moment — the same delivery facts the cart
-     and checkout summaries already state, not a new claim. */
-  const deliveryNote = (
-    <p className="text-11.5 text-muted mt-4">
-      {shipping
-        ? `${t("cart.summary.deliveryFree", {
-            threshold: money(shipping.freeDeliveryThresholdCents),
-          })} · `
-        : null}
-      {t("cart.summary.note")}
-    </p>
-  );
-
   /* primary, against the component's `secondary` default. That default is
      right where the button appears in a grid of cards — a page of filled clay
      buttons has no hierarchy at all — but this is the one screen devoted to a
@@ -230,15 +197,14 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
      narrow viewports. That copy is gone: on a phone the purchase control now
      lives in MobileBuyBar, pinned to the bottom edge, so it is on screen in
      the description and the gallery too rather than only where the card
-     happened to fall. What stays inline under `lg:` is the price, the stock
-     line and the delivery note — facts, which belong in the reading order,
-     with no second control to go stale beside the pinned one. */
+     happened to fall. What stays inline under `lg:` is the price and the stock
+     line — facts, which belong in the reading order, with no second control to
+     go stale beside the pinned one. */
   const buyCard = (
     <Card className="p-6">
       {priceRow}
       {stockRow}
       <div className="mt-5">{buyAction}</div>
-      {deliveryNote}
     </Card>
   );
 
@@ -431,16 +397,15 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
             <p className="text-13 text-muted mt-2">{t("book.noReviews")}</p>
           )}
 
-          {/* The price, the stock line and the delivery promise, inline and
-              unboxed while the layout is stacked. The Card they used to sit in
-              came with the purchase control; that control is pinned to the
-              bottom of the viewport now, so what is left here are three facts,
-              and three facts on a cream page do not need a white panel around
-              them to be read. The rule above does the separating. */}
+          {/* The price and the stock line, inline and unboxed while the layout
+              is stacked. The Card they used to sit in came with the purchase
+              control; that control is pinned to the bottom of the viewport
+              now, so what is left here are two facts, and two facts on a cream
+              page do not need a white panel around them to be read. The rule
+              above does the separating. */}
           <div className="hairline mt-6 pt-6 lg:hidden">
             {priceRow}
             {stockRow}
-            {deliveryNote}
           </div>
 
           <div className="max-w-measure-lede text-body hairline mt-8 space-y-4 pt-8">
