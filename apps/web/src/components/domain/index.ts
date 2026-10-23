@@ -8,7 +8,8 @@ export { BookCard } from "./book-card";
 export type { BookCardProps } from "./book-card";
 
 export { BookCover } from "./book-cover";
-export { BookPreview } from "./book-preview";
+export { BookPreview, BookPreviewDialog } from "./book-preview";
+export { CoverPreview } from "./cover-preview";
 /* PdfReader is deliberately not re-exported here. Both its callers reach it
    through `next/dynamic`, and a barrel export would put it back in whatever
    chunk imports this file — which is the one thing the dynamic import exists

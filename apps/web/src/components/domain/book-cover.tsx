@@ -59,6 +59,20 @@ export type BookCoverProps = Variants<VariantProps<typeof coverRadius>> & {
    * make the browser fetch a whole grid at once and help nothing.
    */
   priority?: boolean;
+  /**
+   * The rendered width at each breakpoint, for `next/image`'s candidate
+   * picking. The default describes a cover in a grid of cards.
+   *
+   * It is a prop because the default was being applied to the book detail
+   * page's own cover, where it was simply untrue: it promised 45vw — about
+   * 175px on a phone — while that cover rendered at the full 342px column
+   * width, so the browser dutifully downloaded a candidate half the size it
+   * needed and upscaled it. The largest image on the page was also the only
+   * blurry one. A wrong `sizes` costs nothing on the covers it happens to fit
+   * and silently degrades the ones it does not, so each call site that is not
+   * a card states its own.
+   */
+  sizes?: string;
 };
 
 /**
@@ -73,6 +87,7 @@ export function BookCover({
   radius = "control",
   className,
   priority = false,
+  sizes = "(max-width: 768px) 45vw, 240px",
 }: BookCoverProps) {
   const shape = cn(coverRadius({ radius }), className);
 
@@ -84,7 +99,7 @@ export function BookCover({
           alt={`${title} — cover`}
           width={400}
           height={600}
-          sizes="(max-width: 768px) 45vw, 240px"
+          sizes={sizes}
           className={shape}
           priority={priority}
         />

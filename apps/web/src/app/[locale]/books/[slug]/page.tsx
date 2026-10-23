@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ViewItemTracker } from "@/components/analytics";
 // import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { BuyNowButton } from "@/components/cart/buy-now-button";
-import { BookCover, BookMeta, BookPreview } from "@/components/domain";
+import { MobileBuyBar } from "@/components/cart/mobile-buy-bar";
+import { BookCover, BookMeta, CoverPreview } from "@/components/domain";
 import {
   AppNav,
   Breadcrumbs,
@@ -134,112 +136,109 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
     t("book.meta.language", { language: languageName(book.language, locale) }),
   ].filter((item): item is string => item !== null);
 
-  /* The buy card, rendered twice: inline under the title on narrow viewports,
-     where it is the thing the reader reaches for right after deciding they
-     want the book, and again in the sticky rail at `lg:`, where there is
-     room for it beside the description. Each copy is hidden at the other's
-     breakpoint via `display: none`, which drops it from both the tab order
-     and the accessibility tree — never two live "Add to cart" controls on
-     screen at once. */
+  /* Only ever shown when it is genuinely higher — a "was" price at or below
+     the current one is a data error, and printing it would read as a price
+     rise dressed as a discount. */
+  const compareAtPrice =
+    book.compareAtPriceCents && book.compareAtPriceCents > book.priceCents
+      ? money(book.compareAtPriceCents)
+      : null;
+
+  const priceRow = (
+    <p className="flex items-baseline gap-3">
+      <span className="text-26 text-ink font-serif">{money(book.priceCents)}</span>
+      {compareAtPrice ? (
+        <span className="text-13 text-muted line-through">{compareAtPrice}</span>
+      ) : null}
+    </p>
+  );
+
+  const stockRow = (
+    <p className="text-13 text-secondary mt-3">
+      {view.flag === "coming-soon"
+        ? t("book.stock.comingSoon")
+        : book.stockQuantity === 0
+          ? t("book.stock.out")
+          : view.expectedShipDate
+            ? t("book.preOrder.shipsAround", {
+                date: new Intl.DateTimeFormat(intlLocale(locale), {
+                  year: "numeric",
+                  month: "long",
+                }).format(new Date(view.expectedShipDate)),
+              })
+            : book.stockQuantity <= 5
+              ? t("book.stock.low", { count: book.stockQuantity })
+              : t("book.stock.in")}
+    </p>
+  );
+
+  /* Reassurance at the decision moment — the same delivery facts the cart
+     and checkout summaries already state, not a new claim. */
+  const deliveryNote = (
+    <p className="text-11.5 text-muted mt-4">
+      {shipping
+        ? `${t("cart.summary.deliveryFree", {
+            threshold: money(shipping.freeDeliveryThresholdCents),
+          })} · `
+        : null}
+      {t("cart.summary.note")}
+    </p>
+  );
+
+  /* primary, against the component's `secondary` default. That default is
+     right where the button appears in a grid of cards — a page of filled clay
+     buttons has no hierarchy at all — but this is the one screen devoted to a
+     single book, where buying it is the page's purpose.
+
+     It is also now the page's only clay element, which is what principle 02
+     asks for and what the old card could not manage: the sample used to sit
+     directly beneath this as a second full-width control, and no amount of
+     tuning its variant stopped two stacked slabs reading as one. The sample
+     moved onto the cover (CoverPreview), where it has a target 200px wide and
+     nothing to compete with. */
+  const buyAction = (
+    <BuyNowButton
+      bookId={book.id}
+      title={book.title}
+      priceCents={book.priceCents}
+      soldOut={view.soldOut}
+      comingSoon={view.flag === "coming-soon"}
+      size="md"
+      variant="primary"
+      block
+      /* The bag glyph, which the grid call sites leave off — see the `icon`
+         prop. Here the button is full width and the label has room beside
+         it, and a label alone gave the page's one purchase control nothing
+         to be recognised by before it is read. */
+      icon
+    />
+  );
+
+  /* Add to cart is commented out, not deleted — the audience doesn't shop
+     from a cart, so Buy Now is the only purchase control now. */
+  /* <AddToCartButton
+    bookId={book.id}
+    soldOut={view.soldOut}
+    comingSoon={view.flag === "coming-soon"}
+    size="md"
+    block
+  /> */
+
+  /* The buy card, for the sticky rail at `lg:` only.
+
+     It used to be rendered twice, the second copy inline under the title for
+     narrow viewports. That copy is gone: on a phone the purchase control now
+     lives in MobileBuyBar, pinned to the bottom edge, so it is on screen in
+     the description and the gallery too rather than only where the card
+     happened to fall. What stays inline under `lg:` is the price, the stock
+     line and the delivery note — facts, which belong in the reading order,
+     with no second control to go stale beside the pinned one. */
   const buyCard = (
     <Card className="p-6">
-      <p className="flex items-baseline gap-3">
-        <span className="text-26 text-ink font-serif">{money(book.priceCents)}</span>
-        {/* Only ever shown when it is genuinely higher — a "was" price
-            at or below the current one is a data error, and printing it
-            would read as a price rise dressed as a discount. */}
-        {book.compareAtPriceCents && book.compareAtPriceCents > book.priceCents ? (
-          <span className="text-13 text-muted line-through">{money(book.compareAtPriceCents)}</span>
-        ) : null}
-      </p>
-
-      <p className="text-13 text-secondary mt-3">
-        {view.flag === "coming-soon"
-          ? t("book.stock.comingSoon")
-          : book.stockQuantity === 0
-            ? t("book.stock.out")
-            : view.expectedShipDate
-              ? t("book.preOrder.shipsAround", {
-                  date: new Intl.DateTimeFormat(intlLocale(locale), {
-                    year: "numeric",
-                    month: "long",
-                  }).format(new Date(view.expectedShipDate)),
-                })
-              : book.stockQuantity <= 5
-                ? t("book.stock.low", { count: book.stockQuantity })
-                : t("book.stock.in")}
-      </p>
-
-      {/* flex-col with a gap, not two stacked block elements: the buttons had
-          no vertical space between them at all, so a filled control and a
-          ghost one met edge to edge and read as a single two-storey slab. The
-          gap lives on the container rather than as a margin on the preview
-          trigger because BookPreview renders nothing when there is no sample —
-          a margin there is a margin that sometimes exists, while a flex gap
-          simply has nothing to space. */}
-      <div className="mt-5 flex flex-col gap-2.5">
-        {/* Add to cart is commented out, not deleted — the audience doesn't
-            shop from a cart, so Buy Now is the only purchase control now. */}
-        {/* <AddToCartButton
-          bookId={book.id}
-          soldOut={view.soldOut}
-          comingSoon={view.flag === "coming-soon"}
-          size="md"
-          block
-        /> */}
-        {/* primary here, against the component's `secondary` default. That
-            default is right where the button appears in a grid of cards — a
-            page of filled clay buttons has no hierarchy at all — but this is
-            the one screen devoted to a single book, where buying it is the
-            page's purpose. Left as secondary it was an outline button directly
-            above a ghost one: two pale controls of near-identical weight, with
-            nothing saying which one the page wanted. */}
-        <BuyNowButton
-          bookId={book.id}
-          title={book.title}
-          priceCents={book.priceCents}
-          soldOut={view.soldOut}
-          comingSoon={view.flag === "coming-soon"}
-          size="md"
-          variant="primary"
-          block
-          /* The bag glyph, which the grid call sites leave off — see the
-             `icon` prop. Here the button is full width and the label has
-             room beside it, and a label alone on a card this sparse gave
-             the page's one purchase control nothing to be recognised by
-             before it is read. */
-          icon
-        />
-
-        {/* Read-before-you-buy, under the purchase control rather than above
-            it: it is the quieter question, and an outline control leaves Buy
-            Now as the card's one clay primary (§2). Renders nothing when the
-            shop has not uploaded a sample, so the card does not grow a dead
-            row.
-
-            `soft`, against the component's ghost default: a borderless grey
-            label sitting under a solid clay button had no edge to it and was
-            being missed entirely, and `secondary` did not fix it — its white
-            fill is this Card's own colour. Reading a few pages is how someone
-            decides on a title they have not seen in a shop, so it has to look
-            pressable. See the prop's note and variants.ts. */}
-        {/* The sample is handed to the reader as this shop's own
-            `/api/files/…` path, never the storage provider's URL — which also
-            makes it a same-origin fetch, so the reader no longer relies on the
-            bucket's CORS header. See lib/storage-url.ts. */}
-        <BookPreview pdfUrl={fileUrl(book.pdfUrl)} bookTitle={book.title} variant="soft" />
-      </div>
-
-      {/* Reassurance at the decision moment — the same delivery facts the
-          cart and checkout summaries already state, not a new claim. */}
-      <p className="text-11.5 text-muted mt-4">
-        {shipping
-          ? `${t("cart.summary.deliveryFree", {
-              threshold: money(shipping.freeDeliveryThresholdCents),
-            })} · `
-          : null}
-        {t("cart.summary.note")}
-      </p>
+      {priceRow}
+      {stockRow}
+      <div className="mt-5">{buyAction}</div>
+      {deliveryNote}
     </Card>
   );
 
@@ -316,38 +315,90 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <Shell className="py-10 lg:py-14">
-        <Breadcrumbs
-          items={[
-            { href: routes(locale).catalog, label: t("nav.catalog", { defaultValue: "Books" }) },
-            /* The first category is the one the crumb trail uses. It links back
+      {/* `pt-3` on a phone, against `py-14` at `lg:`. The floating nav already
+          reserves its own 60px height in the document (see FloatingNav's
+          spacer), so every px here is a second gap stacked under the first
+          one — and it is spent before the cover, which means it is spent twice
+          over: once as empty cream at the top and again as content pushed off
+          the bottom of the first screen.
+
+          `pb-28` clears MobileBuyBar, which is fixed and so takes no space in
+          the flow: without it the bar covers the last rows of the gallery and
+          the footer's first line, permanently. */}
+      <Shell className="pt-3 pb-28 lg:py-14">
+        {/* The full trail is a desktop affordance. At 342px "বই · N5 · Kanji
+            Redical Guide Book" wraps to two lines and spends ~45px above the
+            title to tell a reader on a phone where they are — which they know,
+            because they tapped the card that brought them. One way back is the
+            useful half of a breadcrumb trail on a phone; the hierarchy is the
+            half that is not. */}
+        <div className="lg:hidden">
+          <Link
+            href={routes(locale).catalog}
+            className="text-13 text-secondary hover:text-ink inline-flex items-center gap-1.5 transition-colors"
+          >
+            <span aria-hidden>←</span>
+            {t("nav.catalog", { defaultValue: "Books" })}
+          </Link>
+        </div>
+
+        <div className="hidden lg:block">
+          <Breadcrumbs
+            items={[
+              { href: routes(locale).catalog, label: t("nav.catalog", { defaultValue: "Books" }) },
+              /* The first category is the one the crumb trail uses. It links back
                into the catalogue as a filter rather than to a category page,
                because the filtered catalogue *is* the category page — one
                view, one URL shape, one thing to keep working. */
-            ...(book.categories[0]
-              ? [
-                  {
-                    href: `${routes(locale).catalog}${toSearchParams({
-                      genres: [book.categories[0].slug],
-                    })}`,
-                    label: book.categories[0].name,
-                  },
-                ]
-              : []),
-            { label: book.title },
-          ]}
-        />
+              ...(book.categories[0]
+                ? [
+                    {
+                      href: `${routes(locale).catalog}${toSearchParams({
+                        genres: [book.categories[0].slug],
+                      })}`,
+                      label: book.categories[0].name,
+                    },
+                  ]
+                : []),
+              { label: book.title },
+            ]}
+          />
+        </div>
 
         <DetailLayout
-          className="mt-8 lg:mt-10"
+          /* `mt-2` on a phone: the gap between the back link and the cover is
+             the last of the three stacked spacings above the fold, and the
+             back link is a 13px line, not a heading — it does not need a
+             heading's air under it. `lg:mt-10` is untouched, where the
+             breadcrumb trail does. */
+          className="mt-2 lg:mt-10"
           cover={
-            <BookCover
-              src={view.coverUrl}
-              title={book.title}
-              author={view.author}
-              fallback="wordmark"
-              priority
-            />
+            /* The cover is the way into the sample — see CoverPreview. The
+               page used to ask for it with a full-width button under Buy Now,
+               which nobody pressed; this is a target 200px wide with a label
+               down its edge, and on a shop where most titles have never been
+               seen in a shop, reading a few pages is how the decision gets
+               made.
+
+               The sample is handed to the reader as this shop's own
+               `/api/files/…` path, never the storage provider's URL — which
+               also makes it a same-origin fetch, so the reader no longer
+               relies on the bucket's CORS header. See lib/storage-url.ts. */
+            <CoverPreview pdfUrl={fileUrl(book.pdfUrl)} bookTitle={book.title}>
+              <BookCover
+                src={view.coverUrl}
+                title={book.title}
+                author={view.author}
+                fallback="wordmark"
+                priority
+                /* The widths this cover is actually rendered at, which the
+                   component's card-shaped default got wrong by half — see the
+                   `sizes` prop. 200px while the layout is stacked (the cap
+                   that keeps the price above the fold), and the 320px column
+                   less the sample flag at `lg:`. */
+                sizes="(max-width: 1023px) 200px, 284px"
+              />
+            </CoverPreview>
           }
           rail={<div className="hidden lg:block">{buyCard}</div>}
         >
@@ -380,7 +431,17 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
             <p className="text-13 text-muted mt-2">{t("book.noReviews")}</p>
           )}
 
-          <div className="mt-6 lg:hidden">{buyCard}</div>
+          {/* The price, the stock line and the delivery promise, inline and
+              unboxed while the layout is stacked. The Card they used to sit in
+              came with the purchase control; that control is pinned to the
+              bottom of the viewport now, so what is left here are three facts,
+              and three facts on a cream page do not need a white panel around
+              them to be read. The rule above does the separating. */}
+          <div className="hairline mt-6 pt-6 lg:hidden">
+            {priceRow}
+            {stockRow}
+            {deliveryNote}
+          </div>
 
           <div className="max-w-measure-lede text-body hairline mt-8 space-y-4 pt-8">
             {book.description.split(/\n{2,}/).map((paragraph, index) => (
@@ -407,6 +468,16 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
           ) : null}
         </DetailLayout>
       </Shell>
+
+      {/* Last in the tree, after the content it floats over, so a reader
+          tabbing through the page reaches the cover, the description and the
+          links before the control that leaves for checkout — the DOM order is
+          the reading order even where the paint order is not. */}
+      <MobileBuyBar
+        price={money(book.priceCents)}
+        compareAtPrice={compareAtPrice}
+        action={buyAction}
+      />
     </PageShell>
   );
 }
