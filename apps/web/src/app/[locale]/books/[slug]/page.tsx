@@ -360,9 +360,10 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
                 /* The widths this cover is actually rendered at, which the
                    component's card-shaped default got wrong by half — see the
                    `sizes` prop. 200px while the layout is stacked (the cap
-                   that keeps the price above the fold), and the 320px column
-                   less the sample flag at `lg:`. */
-                sizes="(max-width: 1023px) 200px, 284px"
+                   that keeps the price above the fold), and the whole 320px
+                   column at `lg:` — the sample flag hangs in the gutter now
+                   and takes none of it. */
+                sizes="(max-width: 1023px) 200px, 320px"
               />
             </CoverPreview>
           }

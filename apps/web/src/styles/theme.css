@@ -372,14 +372,39 @@
      attention beat: the arrow — never the words, which stay still and legible
      — leans toward the cover and comes back.
 
-     The nudge loops, which principle 04 otherwise reserves for loading states,
-     and the cycle is deliberately mostly rest: motion occupies about a fifth
-     of its 3.6s and the arrow is stationary for the other four fifths. That is
-     what keeps it a periodic beckon rather than a throb next to the reader's
-     eye while they read the description. Both are flattened globally under
-     prefers-reduced-motion (globals.css). */
+     Both attention beats loop for as long as the page is open, which principle
+     04 otherwise reserves for loading states. The exception is deliberate: the
+     label is 16px of rotated type with no panel, it is the page's only route
+     to the sample, and a hover-only hint reaches nobody on a phone and nobody
+     who never puts a pointer there. Something that must be found without being
+     looked for has to still be moving when the eye finally passes it.
+
+     `nudge` is a double lean — out, back part-way, out again, settle — because
+     a single 3px pulse reads as a rendering hiccup, while a doubled one reads
+     as intent, the way a knock at a door is never one knock. It is still
+     mostly rest: roughly a quarter of the 2.6s cycle, the arrow stationary for
+     the remainder.
+
+     `sheen` carries the words, and carries them without moving them: a band of
+     clay travels along the column of glyphs, through the letterforms rather
+     than past them, because the text is painted with a gradient and the
+     gradient is what moves. Nothing is displaced, so nothing about the Bangla
+     gets harder to read while it runs — the only thing changing is which
+     glyphs are warm at this instant.
+
+     Clay is the page's accent and principle 02 spends it on one thing per
+     screen, which here is Buy Now. A travelling band is the narrow exception:
+     at any instant it colours two or three characters for a few hundred
+     milliseconds, so it never stands as a second accent block competing with
+     the buy bar — there is no moment where the label is clay, only moments
+     where part of it is.
+
+     All three are flattened globally under prefers-reduced-motion
+     (globals.css) — which means a machine with Reduce Motion switched on sees
+     a still label, by design. */
   --animate-sample-flag: sample-flag-in var(--duration-slide) var(--ease-out-soft) 400ms both;
-  --animate-sample-nudge: sample-nudge 3.6s var(--ease-standard) 1s infinite;
+  --animate-sample-nudge: sample-nudge 2.6s var(--ease-standard) 1s infinite;
+  --animate-sample-sheen: sample-sheen 2.6s var(--ease-standard) 1.2s infinite;
 
   --ease-standard: ease-in-out;
   /* Decelerating, for entrances — motion that arrives and settles rather than
@@ -403,15 +428,39 @@
    rightwards and the flag sits to the cover's left. */
 @keyframes sample-nudge {
   0%,
-  70%,
+  62%,
   100% {
     transform: translateX(0);
   }
-  80% {
-    transform: translateX(3px);
+  70% {
+    transform: translateX(6px);
   }
-  90% {
-    transform: translateX(0);
+  /* Back part-way, not all the way home: the second lean has to start from a
+     place that still reads as the first one continuing. */
+  78% {
+    transform: translateX(2px);
+  }
+  86% {
+    transform: translateX(5px);
+  }
+}
+
+/* The label's own beat: a warm band drawn along the glyphs themselves.
+
+   The span is painted with a gradient three times its own length and clipped
+   to the text, so moving the gradient's origin walks the band from one end of
+   the word to the other. `background-position` is the only property animating
+   and the element never moves, which is what lets this run beside a page of
+   body copy without dragging the eye off the sentence being read.
+
+   Percentages here are of the gradient box, not the element, so 100% → -100%
+   is a full pass end to end with the plain-ink thirds covering the gaps. */
+@keyframes sample-sheen {
+  from {
+    background-position: 0% 100%;
+  }
+  to {
+    background-position: 0% -100%;
   }
 }
 
