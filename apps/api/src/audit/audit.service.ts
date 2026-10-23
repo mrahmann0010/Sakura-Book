@@ -51,7 +51,12 @@ export type AuditAction =
    * A member of staff accepted a payment short of the order total, with a
    * written reason. See `AdminOrdersService.acceptShortfall`.
    */
-  | "SHORTFALL_ACCEPTED";
+  | "SHORTFALL_ACCEPTED"
+  /**
+   * A member of staff corrected an order's delivery details, with a written
+   * reason. See `AdminOrdersService.editContactDetails`.
+   */
+  | "CONTACT_EDIT";
 
 /**
  * Who acted.

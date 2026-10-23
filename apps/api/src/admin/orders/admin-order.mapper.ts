@@ -136,6 +136,12 @@ export function toAdminOrderDetail(
     senderNumber: row.senderNumber,
     transactionId: row.transactionId,
 
+    addressParts: {
+      upazila: (row.shippingAddress as ShippingAddress).upazila ?? null,
+      area: (row.shippingAddress as ShippingAddress).area ?? null,
+      postCode: (row.shippingAddress as ShippingAddress).postCode ?? null,
+    },
+
     payments: paymentRows.map(toAdminPayment),
 
     /**

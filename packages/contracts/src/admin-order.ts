@@ -260,6 +260,27 @@ export const adminOrderDetailSchema = orderSchema.extend({
   senderNumber: z.string().nullable(),
   transactionId: z.string().nullable(),
 
+  /**
+   * The address unjoined — the levels a courier manifest addresses a parcel
+   * by, which `shipping.address` is only the joined reading of.
+   *
+   * On the admin detail and not on the customer's order, because the one
+   * thing done with them here is editing them: a form that showed only the
+   * joined line would have to split it back up to prefill, which is exactly
+   * the thing ShippingAddress documents as not working.
+   *
+   * Null individually on every order placed before each was collected.
+   * Defaulted as a whole so a newly-deployed panel parses a response from an
+   * API that has not shipped yet — same reasoning as `paymentSenderNumber`.
+   */
+  addressParts: z
+    .object({
+      upazila: z.string().nullable(),
+      area: z.string().nullable(),
+      postCode: z.string().nullable(),
+    })
+    .default({ upazila: null, area: null, postCode: null }),
+
   payments: z.array(adminPaymentSchema),
 
   /**
@@ -612,6 +633,44 @@ export const adminEditTransactionIdResultSchema = z.object({
 });
 
 export type AdminEditTransactionIdResult = z.infer<typeof adminEditTransactionIdResultSchema>;
+
+/**
+ * Correcting the delivery details a customer got wrong at checkout: a
+ * mistyped phone number, a half-written address, the wrong thana.
+ *
+ * Every field is sent, not just the changed ones — the form renders the
+ * current values and posts them back, so a partial payload would make
+ * "cleared the secondary phone" and "did not touch it" the same request.
+ * What actually changed is worked out server-side and lands in the audit
+ * entry's `before`/`after`, which is where the history of these fields
+ * lives.
+ *
+ * What is deliberately *not* here is the delivery zone. The zone is what
+ * postage was priced off, and the order's `shippingCents` is frozen against
+ * it; letting this form move an order between tiers would silently leave a
+ * parcel priced for Dhaka being sent to Sylhet. Moving zones is a re-quote,
+ * not a typo fix, and it stays out until there is a flow that re-prices.
+ */
+export const adminEditOrderContactRequestSchema = z.object({
+  fullName: z.string().trim().min(1, "Add the name the parcel is addressed to.").max(120),
+  email: z.string().trim().email("Use an address like name@example.com."),
+  phone: z.string().trim().min(1, "Add a number the courier can reach.").max(32),
+  /** Empty means "there is no second number" — normalised to null on the way in. */
+  secondaryPhone: z.string().trim().max(32).optional(),
+  address: z.string().trim().min(1, "Add the street, house and area.").max(500),
+  city: z.string().trim().min(1, "Add the town or city.").max(120),
+  /* The manifest's levels, as optional here as they are at checkout: every
+     order placed before they were collected has none, and this form must be
+     able to save such an order without inventing them. */
+  upazila: z.string().trim().max(120).optional(),
+  area: z.string().trim().max(120).optional(),
+  postCode: z.string().trim().max(16).optional(),
+  /** What the customer asked for ("leave at the gate"). Cleared when empty. */
+  customerNote: z.string().trim().max(500).optional(),
+  reason: z.string().trim().min(5, "Say why the details are being changed.").max(500),
+});
+
+export type AdminEditOrderContactRequest = z.infer<typeof adminEditOrderContactRequestSchema>;
 
 /* --------------------------------------------------------------------------
    The packing table: what a FULFILLMENT account may see and do.

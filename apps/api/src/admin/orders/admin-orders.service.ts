@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type {
   AdminConfirmPaymentRequest,
+  AdminEditOrderContactRequest,
   AdminEditTransactionIdRequest,
   AdminEditTransactionIdResult,
   AdminInternalNoteRequest,
@@ -10,6 +11,7 @@ import type {
   AdminOrderQuery,
   AdminOrderTransitionRequest,
   AdminOrderVerifyPaymentResult,
+  OrderStatus,
   AdminRecordRefundRequest,
   AdminReopenOrderRequest,
   AdminRevertPaymentRequest,
@@ -19,7 +21,7 @@ import { claimKeyFor, nextClaimKey, normaliseTrxId, type ClaimOutcome } from "@p
 import { InvalidInputError, ResourceNotFoundError } from "../../common/errors";
 import type { Env } from "../../config/env.schema";
 import { DbService } from "../../db/db.service";
-import { auditLog, orderItems, orders } from "../../db/schema";
+import { auditLog, orderItems, orders, type ShippingAddress } from "../../db/schema";
 import {
   findOrder,
   findTransactionIdClaim,
@@ -54,6 +56,16 @@ import {
   PaymentUnderpaidError,
 } from "./admin-order.errors";
 import { toPathaoCsv } from "./pathao-export";
+
+/**
+ * The statuses whose delivery details are a record rather than instructions.
+ *
+ * Not `isTerminal`: DELIVERED is not terminal — it can still be refunded —
+ * but a parcel that has arrived cannot be re-addressed, and rewriting where
+ * it went would destroy the only answer to "where did we send it?". The
+ * panel draws its Edit link off the same three.
+ */
+const CLOSED_TO_CONTACT_EDITS: OrderStatus[] = ["DELIVERED", "CANCELLED", "REFUNDED"];
 
 /** Who did it and from where, threaded through to every audit entry. */
 export type AdminContext = {
@@ -1145,6 +1157,111 @@ export class AdminOrdersService {
     });
 
     return this.detail(orderNumber, context.actor);
+  }
+
+  /**
+   * Correct the delivery details a customer got wrong at checkout.
+   *
+   * The common case this exists for: a customer messages the shop an hour
+   * after ordering to say the phone number is missing a digit, or that they
+   * left the flat number off. Until now the only record of that was an
+   * internal note that a courier manifest never reads, so the parcel went out
+   * addressed to the mistake.
+   *
+   * Open while the order can still be influenced, and closed on the three
+   * statuses CLOSED_TO_CONTACT_EDITS names: re-addressing a delivered,
+   * cancelled or refunded order changes nothing about where the parcel went,
+   * and that record is worth more than the correction. An order already
+   * handed to the courier is editable on purpose — the manifest is wrong by
+   * then, but staff phone the courier with the fix and the order should say
+   * what they told them.
+   *
+   * The zone is deliberately not editable here; see the request schema on
+   * why re-pricing is a different operation. Everything derived from it —
+   * `region`, `tier`, the parcel weight, `shippingCents` — is carried through
+   * untouched, which is why this merges into the stored address rather than
+   * writing a fresh one: a jsonb overwrite would drop the keys this form
+   * never shows.
+   *
+   * The whole address is sent each time, so "what changed" is computed here
+   * and both sides of it go to the audit log. That log is the history of
+   * these fields — the order itself only ever holds the current truth, the
+   * same arrangement as the internal note.
+   */
+  async editContactDetails(
+    orderNumber: string,
+    request: AdminEditOrderContactRequest,
+    context: AdminContext,
+  ): Promise<AdminOrderDetail> {
+    const order = await this.requireOrder(orderNumber, context.actor);
+
+    if (CLOSED_TO_CONTACT_EDITS.includes(order.status)) {
+      throw new InvalidInputError(
+        "This order is closed, so its delivery details are a record of what was sent rather " +
+          "than instructions for sending it. They can no longer be changed.",
+        { orderNumber: order.orderNumber, status: order.status },
+      );
+    }
+
+    const current = order.shippingAddress as ShippingAddress;
+    const blank = (value: string | undefined) => value?.trim() || undefined;
+
+    const next = {
+      customerName: request.fullName,
+      customerEmail: request.email,
+      customerPhone: request.phone,
+      // Empty normalises to null, so "no second number" has one representation
+      // — the same rule the column's own comment states.
+      customerSecondaryPhone: blank(request.secondaryPhone) ?? null,
+      customerNote: blank(request.customerNote) ?? null,
+      shippingAddress: {
+        ...current,
+        address: request.address,
+        city: request.city,
+        upazila: blank(request.upazila),
+        area: blank(request.area),
+        postCode: blank(request.postCode),
+      } satisfies ShippingAddress,
+    };
+
+    const before = {
+      customerName: order.customerName,
+      customerEmail: order.customerEmail,
+      customerPhone: order.customerPhone,
+      customerSecondaryPhone: order.customerSecondaryPhone,
+      customerNote: order.customerNote,
+      shippingAddress: current,
+    };
+
+    if (JSON.stringify(before) === JSON.stringify(next)) {
+      throw new InvalidInputError("Nothing was changed on this order.", {
+        orderNumber: order.orderNumber,
+      });
+    }
+
+    await this.dbService.db.transaction(async (tx) => {
+      await tx.update(orders).set(next).where(eq(orders.id, order.id));
+
+      await this.auditService.record(
+        {
+          ...auditContext(context),
+          action: "CONTACT_EDIT",
+          entityType: "orders",
+          entityId: order.orderNumber,
+          before,
+          after: next,
+          note: request.reason,
+        },
+        tx,
+      );
+    });
+
+    this.logger.log(
+      `Delivery details on ${order.orderNumber} changed by ${context.actor.email} ` +
+        `(${request.reason})`,
+    );
+
+    return this.detail(order.orderNumber, context.actor);
   }
 
   /**
