@@ -66,11 +66,14 @@ export function CoverPreview({
            to somebody who cannot see one. */
         aria-label={`${t("book.preview.action")} — ${bookTitle}`}
         onClick={() => setOpen(true)}
-        /* `w-fit` and centred while the layout is stacked, so the flag and the
-           capped cover travel together as one object in the middle of the
-           column; full width in the detail grid's cover column at `lg:`,
-           where the cover takes whatever the flag leaves. */
-        className="group focus-visible:ring-clay-ring rounded-control mx-auto flex w-fit cursor-pointer items-stretch gap-2 focus-visible:ring-2 focus-visible:outline-none lg:mx-0 lg:w-full"
+        /* The button is the cover and nothing else, so centring it centres the
+           artwork — which is what a reader's eye measures. The label hangs
+           outside this box (`right-full` below) rather than sitting inside it:
+           when it was a flex sibling, `mx-auto` centred label-plus-cover as
+           one object and left the cover itself sitting ~22px right of centre
+           on a phone, and 44px right of its column's edge at `lg:`.
+           Out of flow, it costs the cover no width either. */
+        className="group focus-visible:ring-clay-ring rounded-control relative mx-auto block w-fit cursor-pointer focus-visible:ring-2 focus-visible:outline-none lg:mx-0 lg:w-full"
       >
         {/* No chip behind the label: ink on the cream page is 18:1, and once
             the words are that legible a panel around them is decoration. It
@@ -84,7 +87,11 @@ export function CoverPreview({
             character height, so it has to clear font-size × line-height — at
             16px against the inherited body leading that is a shade over 27px,
             and 36px leaves it room to sit centred rather than wedged. */}
-        <span className="animate-sample-flag flex w-9 flex-none flex-col items-center justify-center gap-2.5">
+        {/* `right-full mr-2` puts the label immediately left of the cover and
+            out of the layout, in the gutter beside it: 44px of reach, against
+            a `lg:` grid gap of 64px and, on a phone, the margin a 200px cover
+            leaves at any viewport down to 288px. */}
+        <span className="animate-sample-flag absolute inset-y-0 right-full mr-2 flex w-9 flex-col items-center justify-center gap-2.5">
           <SampleArrowIcon size={17} className="animate-sample-nudge text-secondary" />
           {/* Reads bottom-to-top, the way a spine does: `vertical-rl` turns
               the line box on its side and the half-turn puts its start at the
@@ -100,7 +107,20 @@ export function CoverPreview({
               `latin`, so these glyphs come from whatever Bengali face the
               device supplies. One more reason to let size do the work — the
               weight that arrives is not entirely ours to pick. */}
-          <span className="text-16 text-ink rotate-180 font-semibold tracking-wide whitespace-nowrap underline-offset-4 [writing-mode:vertical-rl] group-hover:underline">
+          {/* The sheen runs through the glyphs, not past them: the type is
+              painted with a clay band on an ink gradient and clipped to the
+              letterforms, so what travels is the colour and not the text. It
+              loops for as long as the page is open rather than waiting for a
+              hover, because a hover hint reaches no phone and no reader who
+              never points at the cover — and this label is the only way to the
+              sample.
+
+              `text-transparent` is what lets the gradient show through, so the
+              ink colour has to live in the gradient's own stops; the stops are
+              two thirds plain ink, which is the resting state the band passes
+              across. `bg-[length:…]` makes the gradient box three times the
+              column so there is somewhere for it to travel from. */}
+          <span className="animate-sample-sheen text-16 group-hover:decoration-ink rotate-180 bg-[linear-gradient(to_bottom,var(--ink)_0%,var(--ink)_38%,var(--clay)_50%,var(--ink)_62%,var(--ink)_100%)] bg-[length:100%_300%] bg-clip-text font-semibold tracking-wide whitespace-nowrap text-transparent underline-offset-4 [writing-mode:vertical-rl] group-hover:underline">
             {t("book.preview.action")}
           </span>
         </span>
@@ -109,7 +129,7 @@ export function CoverPreview({
             what keeps the title, the price and the stock line above the fold.
             Released at `lg:`, where the cover column is 320px wide and the
             fold is not a constraint. */}
-        <span className="w-[200px] min-w-0 lg:w-auto lg:flex-1">{children}</span>
+        <span className="block w-[200px] min-w-0 lg:w-full">{children}</span>
       </button>
 
       {open ? (
