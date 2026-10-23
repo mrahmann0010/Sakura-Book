@@ -307,10 +307,17 @@
 }
 
 @utility grid-detail {
-  /* Book detail: cover · content · buy rail. Stacks under desktop. */
+  /* Book detail: cover · content · buy rail. Stacks under desktop.
+
+     The stacked gap is its own value, not --spacing-block. At 56px the gap
+     between the cover and the title was a desktop column gutter turned on its
+     side: on a phone it put an empty band of cream between the one thing a
+     reader has looked at and the one thing they came to read, and pushed the
+     price off the first screen on its own. 24px is the same rhythm as the
+     rest of the stacked page. */
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--spacing-block);
+  gap: 1.5rem;
   align-items: start;
 
   @media (width >= 64rem) {

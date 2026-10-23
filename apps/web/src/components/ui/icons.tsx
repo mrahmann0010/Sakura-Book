@@ -92,6 +92,22 @@ export function BookOpenIcon(props: IconProps) {
   );
 }
 
+/**
+ * Points at the sample. A hand-drawn-looking curve aimed into the cover beside
+ * it, for the "read a sample" flag down the cover's edge — the one place in
+ * the shop where a glyph has to say "this picture is a button", because a book
+ * cover does not otherwise look pressable.
+ */
+export function SampleArrowIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M5.2 19.6C5.2 12.6 8.6 7.4 16 5.6" />
+      <path d="M16 5.6 12.1 4.7" />
+      <path d="M16 5.6 14.3 9.3" />
+    </Icon>
+  );
+}
+
 /** Where we are. A pin, for the one contact row that is a place and not a link. */
 export function MapPinIcon(props: IconProps) {
   return (
