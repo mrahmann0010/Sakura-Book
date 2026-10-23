@@ -80,16 +80,27 @@ export function CoverPreview({
             The underline is the affordance in its place. Colour cannot be it
             — the accent is spent on Buy Now — and a bare line of text needs
             something that answers "is this pressable?" on contact. */}
-        <span className="flex w-7 flex-none flex-col items-center justify-center gap-2.5">
-          <SampleArrowIcon size={16} className="text-secondary" />
+        {/* `w-9`: this column's width is the rotated label's LINE BOX, not its
+            character height, so it has to clear font-size × line-height — at
+            16px against the inherited body leading that is a shade over 27px,
+            and 36px leaves it room to sit centred rather than wedged. */}
+        <span className="animate-sample-flag flex w-9 flex-none flex-col items-center justify-center gap-2.5">
+          <SampleArrowIcon size={17} className="animate-sample-nudge text-secondary" />
           {/* Reads bottom-to-top, the way a spine does: `vertical-rl` turns
               the line box on its side and the half-turn puts its start at the
               bottom. Bangla conjuncts are unaffected — the glyphs are laid
               out normally and the whole line is rotated. */}
-          {/* `font-semibold` (600): with no panel behind it the weight is the
-              only thing left to give the label presence, and at 12px rotated
-              onto its side Bangla needs the extra stroke to hold up. */}
-          <span className="text-12 text-ink rotate-180 font-semibold tracking-wide whitespace-nowrap underline-offset-4 [writing-mode:vertical-rl] group-hover:underline">
+          {/* 14.5px at `font-semibold`. Not `font-bold`: Public Sans is loaded
+              at 400/500/600 only (see [locale]/layout.tsx), so 700 would be
+              synthesised faux bold — smeared stems, and worst of all on type
+              that is rotated a quarter turn. 600 is the real ceiling, so the
+              size carries the rest of the emphasis.
+
+              Bangla is not Public Sans at all, incidentally: the subset is
+              `latin`, so these glyphs come from whatever Bengali face the
+              device supplies. One more reason to let size do the work — the
+              weight that arrives is not entirely ours to pick. */}
+          <span className="text-16 text-ink rotate-180 font-semibold tracking-wide whitespace-nowrap underline-offset-4 [writing-mode:vertical-rl] group-hover:underline">
             {t("book.preview.action")}
           </span>
         </span>
