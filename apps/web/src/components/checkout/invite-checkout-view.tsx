@@ -229,8 +229,9 @@ export function InviteCheckoutView({
       // Counted as soon as the order exists — see the same call in CheckoutView.
       trackPurchase(order);
 
-      // The modal stays on "verifying" while the payment lands. See waitForPayment.
-      const settled = await waitForPayment(order, values.email);
+      // The claim inside the request is the only one, so this answer is final
+      // and the modal resolves on it at once. See waitForPayment.
+      const settled = await waitForPayment(order);
 
       setPendingOrder({ order: settled, email: values.email });
       setVerification(settled.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");

@@ -1,47 +1,28 @@
 import type { Order } from "@sakura/contracts";
 
-import { getOrderPaymentStatus } from "@/lib/api/orders";
-
 /* --------------------------------------------------------------------------
-   Keeping the "payment is being checked" modal open while the payment lands.
+   What the "payment is being checked" modal settles on.
 
-   The customer pays before pressing "Place order", but the payment SMS often
-   reaches the gateway a few seconds after the order does. The server claims
-   once inside the request and then keeps retrying in the background, so a
-   PENDING answer here usually turns into PAYMENT_CONFIRMED within a minute.
-   This re-reads the order until it does, or until it is time to stop waiting
-   and say "we'll confirm it shortly".
+   The customer pays before pressing "Place order", so the payment SMS can
+   reach the gateway a moment after the order does. The server claims the
+   payment once inside the checkout request and does not retry: a receipt it
+   could not see yet waits for staff to press "Check & confirm". That makes
+   the status on the checkout response final, so there is nothing to wait for
+   here — a PENDING order cannot turn into PAYMENT_CONFIRMED while the modal
+   is open.
+
+   This used to re-read the order every 3s for a minute, which is what the
+   background retry worker needed. With that worker off (see
+   ClaimRetryWorker), the poll could only return the same PENDING answer
+   twenty times before showing "we'll confirm it shortly" anyway, so the
+   shopper now gets that answer at once. Restoring the worker means restoring
+   the poll: re-read with `getOrderPaymentStatus` until the status moves.
    -------------------------------------------------------------------------- */
 
-/** How long the modal waits before showing "not yet". */
-const WAIT_MS = 60_000;
-
-/** Between re-reads. Inside the endpoint's 30-a-minute limit with room to spare. */
-const POLL_MS = 3_000;
-
 /**
- * Resolves with the order as soon as its payment is no longer pending, or
- * with the latest copy once the wait is over. Never rejects: a failed
- * re-read is retried on the next tick, and the order exists either way.
+ * The order the modal should resolve on. Kept as a seam so the checkout views
+ * do not have to know whether a payment can still settle after the response.
  */
-export async function waitForPayment(order: Order, email: string): Promise<Order> {
-  if (order.paymentMethod !== "manual-transfer" || order.status !== "PENDING") return order;
-
-  const deadline = Date.now() + WAIT_MS;
-  let latest = order;
-
-  while (Date.now() + POLL_MS <= deadline) {
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-
-    try {
-      latest = await getOrderPaymentStatus({ orderNumber: order.orderNumber, email });
-    } catch {
-      // A dropped request or a rate limit says nothing about the payment.
-      continue;
-    }
-
-    if (latest.status !== "PENDING") return latest;
-  }
-
-  return latest;
+export async function waitForPayment(order: Order): Promise<Order> {
+  return order;
 }
