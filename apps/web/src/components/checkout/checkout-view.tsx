@@ -211,11 +211,10 @@ export function CheckoutView({
 
       /* The server claims the payment once inside the request — a
          manual-transfer order comes back PAYMENT_CONFIRMED when the claim
-         succeeded. When the payment SMS was still on its way it comes back
-         PENDING, and the server keeps retrying in the background; the modal
-         stays on "verifying" and re-reads the order until it is confirmed or
-         a minute has passed. */
-      const settled = await waitForPayment(order, values.email);
+         succeeded, and PENDING when the gateway had not seen the receipt yet.
+         There is no background retry, so that answer is final and the modal
+         resolves on it straight away. See waitForPayment. */
+      const settled = await waitForPayment(order);
 
       setPendingOrder({ order: settled, email: values.email });
       setVerification(settled.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");

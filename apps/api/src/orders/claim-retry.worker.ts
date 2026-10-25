@@ -15,6 +15,14 @@ import { OrderAutoVerifyService } from "./order-auto-verify.service";
 import { findOrder } from "./order.query";
 import { PAYMENT_GATEWAY } from "./payment-gateway.provider";
 
+/**
+ * Off for now. A payment is claimed once per customer action — the try inside
+ * checkout, or a staff "Check & confirm" — and a receipt the gateway has not
+ * seen yet waits for a person rather than for a schedule. Flip this back to
+ * true to start the timer again; nothing else has to change.
+ */
+const ENABLED = false;
+
 /** How often the worker looks for orders whose next try is due. */
 const TICK_MS = 5_000;
 
@@ -37,6 +45,10 @@ const LEASE = sql`now() + interval '2 minutes'`;
  * same code checkout uses — with the order's stored claim key, so a retry
  * gets our own earlier claim back rather than colliding with it.
  *
+ * Disabled: see `ENABLED` above. The class, the schedule it reads and the
+ * `paymentClaimRetryAt` column it drains are all left in place, so turning it
+ * back on is a one-line change.
+ *
  * In-process, on a timer. Several API instances can run it at once: due
  * orders are taken with `FOR UPDATE SKIP LOCKED` and leased forward in the
  * same statement, so no two instances claim the same order in one window.
@@ -56,6 +68,11 @@ export class ClaimRetryWorker implements OnApplicationBootstrap, OnApplicationSh
 
   onApplicationBootstrap(): void {
     if (this.config.get("NODE_ENV", { infer: true }) === "test") return;
+
+    if (!ENABLED) {
+      this.logger.log("Claim retries are off; payments are claimed once per request.");
+      return;
+    }
 
     if (!this.gateway.enabled) {
       this.logger.warn("Payment gateway not configured; claim retries are off.");
