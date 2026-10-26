@@ -3,8 +3,8 @@ import { ConfigService } from "@nestjs/config";
 import type {
   AdminConfirmPaymentRequest,
   AdminEditOrderContactRequest,
-  AdminEditTransactionIdRequest,
-  AdminEditTransactionIdResult,
+  AdminEditPaymentDetailsRequest,
+  AdminEditPaymentDetailsResult,
   AdminInternalNoteRequest,
   AdminOrderDetail,
   AdminOrderList,
@@ -1265,19 +1265,27 @@ export class AdminOrdersService {
   }
 
   /**
-   * Correct the transaction ID the customer typed at checkout, then claim
-   * the payment under the new one.
+   * Correct the receipt the customer typed at checkout — the transaction ID,
+   * the wallet number they sent from, or both — then claim the payment under
+   * the corrected details.
+   *
+   * Both fields are here together because the gateway claim is made of both:
+   * it looks the receipt up by ID and checks it came from `senderPhone`, so a
+   * mistyped number fails a claim on a payment that was really made, and the
+   * desk fixes it from the same message that reported it.
    *
    * Only while the order is PENDING and holds no payment at the gateway.
-   * After that the ID is the evidence a confirmation or a claim was made on,
-   * and changing it would leave a payment held under one ID and the order
+   * After that the receipt is the evidence a confirmation or a claim was made
+   * on, and changing it would leave a payment held under one ID and the order
    * showing another. A confirmed order with the wrong ID is reverted first.
    *
-   * The new ID moves the order to its next claim key. The gateway ties a key
-   * to the transaction ID it was first sent with and refuses the same key
-   * with a different ID (`idempotency_key_reused`), so reusing the old key
-   * would fail as a setup error. The old key never claimed anything —
-   * that is checked above — so nothing is left behind under it.
+   * Any edit moves the order to its next claim key, including one that only
+   * touches the number. The gateway ties a key to the request it was first
+   * sent with and answers a reused key with that first answer, so keeping the
+   * old key would replay the failure the correction was meant to clear — and
+   * a changed ID under the old key fails outright as `idempotency_key_reused`.
+   * The old key never claimed anything — that is checked above — so nothing
+   * is left behind under it.
    *
    * The update is guarded on the status we read, so an order confirmed a
    * moment ago by the worker is not edited under it. The unique index on the
@@ -1286,16 +1294,17 @@ export class AdminOrdersService {
    * The claim afterwards is best effort: the edit is already saved, so a
    * failure there is reported as `check: null`, not as a failed edit.
    */
-  async editTransactionId(
+  async editPaymentDetails(
     orderNumber: string,
-    request: AdminEditTransactionIdRequest,
+    request: AdminEditPaymentDetailsRequest,
     context: AdminContext,
-  ): Promise<AdminEditTransactionIdResult> {
+  ): Promise<AdminEditPaymentDetailsResult> {
     const order = await this.requireOrder(orderNumber, context.actor);
     const next = request.transactionId;
+    const nextSender = request.senderNumber;
 
     if (order.paymentMethod !== "manual-transfer") {
-      throw new InvalidInputError("Only manual-transfer orders have a transaction ID.", {
+      throw new InvalidInputError("Only manual-transfer orders have a payment receipt.", {
         orderNumber: order.orderNumber,
         paymentMethod: order.paymentMethod,
       });
@@ -1303,16 +1312,19 @@ export class AdminOrdersService {
 
     if (order.status !== "PENDING") {
       throw new InvalidInputError(
-        "The transaction ID can only be changed while the order is pending. " +
-          "Revert the payment confirmation first if it was confirmed on the wrong ID.",
+        "The payment details can only be changed while the order is pending. " +
+          "Revert the payment confirmation first if it was confirmed on the wrong receipt.",
         { orderNumber: order.orderNumber, status: order.status },
       );
     }
 
-    if (normaliseTrxId(next) === normaliseTrxId(order.transactionId)) {
-      throw new InvalidInputError("That is the transaction ID already on this order.", {
-        orderNumber: order.orderNumber,
-      });
+    const idChanged = normaliseTrxId(next) !== normaliseTrxId(order.transactionId);
+    const senderChanged = nextSender !== order.senderNumber;
+    if (!idChanged && !senderChanged) {
+      throw new InvalidInputError(
+        "Those are the payment details already on this order — nothing to change.",
+        { orderNumber: order.orderNumber },
+      );
     }
 
     const held = heldClaimOf(await this.verificationLog.historyFor(order.id));
@@ -1345,6 +1357,7 @@ export class AdminOrdersService {
         .update(orders)
         .set({
           transactionId: next,
+          senderNumber: nextSender,
           paymentClaimKey: claimKey,
           paymentClaimAttempts: 0,
           paymentClaimRetryAt: null,
@@ -1365,8 +1378,12 @@ export class AdminOrdersService {
           action: "TRANSACTION_ID_EDIT",
           entityType: "orders",
           entityId: order.orderNumber,
-          before: { transactionId: order.transactionId, paymentClaimKey: order.paymentClaimKey },
-          after: { transactionId: next, paymentClaimKey: claimKey },
+          before: {
+            transactionId: order.transactionId,
+            senderNumber: order.senderNumber,
+            paymentClaimKey: order.paymentClaimKey,
+          },
+          after: { transactionId: next, senderNumber: nextSender, paymentClaimKey: claimKey },
           note: request.reason,
         },
         tx,
@@ -1374,8 +1391,10 @@ export class AdminOrdersService {
     });
 
     this.logger.log(
-      `Transaction ID on ${order.orderNumber} changed by ${context.actor.email}: ` +
-        `${order.transactionId ?? "(none)"} → ${next} (${request.reason})`,
+      `Payment details on ${order.orderNumber} changed by ${context.actor.email}: ` +
+        `${order.transactionId ?? "(none)"} → ${next}, ` +
+        `sent from ${order.senderNumber ?? "(none)"} → ${nextSender ?? "(none)"} ` +
+        `(${request.reason})`,
     );
 
     let check: AdminOrderVerifyPaymentResult | null = null;
@@ -1383,7 +1402,7 @@ export class AdminOrdersService {
       check = await this.verifyPayment(order.orderNumber, context);
     } catch (error) {
       this.logger.warn(
-        `Saved the new transaction ID on ${order.orderNumber}, but claiming it failed: ${String(error)}`,
+        `Saved the corrected payment details on ${order.orderNumber}, but claiming it failed: ${String(error)}`,
       );
     }
 

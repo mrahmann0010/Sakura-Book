@@ -1,5 +1,5 @@
 import {
-  adminEditTransactionIdRequestSchema,
+  adminEditPaymentDetailsRequestSchema,
   checkoutSchema,
   cleanTransactionId,
 } from "@sakura/contracts";
@@ -8,8 +8,9 @@ import { AdminOrdersService, type AdminContext } from "../../src/admin/orders/ad
 import { InvalidInputError } from "../../src/common/errors";
 
 /**
- * Correcting a transaction ID the customer typed wrong: the label cleanup
- * checkout applies, and the desk's edit.
+ * Correcting a receipt the customer typed wrong — the transaction ID or the
+ * wallet number it was sent from: the label cleanup checkout applies, and the
+ * desk's edit.
  */
 
 describe("cleanTransactionId", () => {
@@ -69,21 +70,51 @@ describe("checkout", () => {
   });
 });
 
-describe("adminEditTransactionIdRequestSchema", () => {
+describe("adminEditPaymentDetailsRequestSchema", () => {
+  const valid = {
+    transactionId: "ABC1234XYZ",
+    reason: "Customer messaged with a screenshot",
+  };
+
   it("cleans the new ID the same way checkout does", () => {
     expect(
-      adminEditTransactionIdRequestSchema.parse({
+      adminEditPaymentDetailsRequestSchema.parse({
+        ...valid,
         transactionId: "TrxID: ABC1234XYZ",
-        reason: "Customer messaged with a screenshot",
       }).transactionId,
     ).toBe("ABC1234XYZ");
   });
 
   it("needs a reason", () => {
     expect(
-      adminEditTransactionIdRequestSchema.safeParse({ transactionId: "ABC1234XYZ", reason: "typo" })
-        .success,
+      adminEditPaymentDetailsRequestSchema.safeParse({ ...valid, reason: "typo" }).success,
     ).toBe(false);
+  });
+
+  it.each([
+    ["+880 1615-951697", "01615951697"],
+    ["01615951697", "01615951697"],
+    ["০১৬১৫৯৫১৬৯৭", "01615951697"],
+  ])("stores the number typed as %j as %j", (typed, stored) => {
+    expect(
+      adminEditPaymentDetailsRequestSchema.parse({ ...valid, senderNumber: typed }).senderNumber,
+    ).toBe(stored);
+  });
+
+  it.each([undefined, "", "   "])("reads %j as no number on file", (typed) => {
+    expect(
+      adminEditPaymentDetailsRequestSchema.parse({ ...valid, senderNumber: typed }).senderNumber,
+    ).toBeNull();
+  });
+
+  it("refuses a number that is not a Bangladeshi mobile", () => {
+    const parsed = adminEditPaymentDetailsRequestSchema.safeParse({
+      ...valid,
+      senderNumber: "0121 555 5555",
+    });
+
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues.map((issue) => issue.path.join("."))).toContain("senderNumber");
   });
 });
 
@@ -104,7 +135,11 @@ const CONTEXT: AdminContext = {
   actor: { sub: "admin-1", sid: "s-1", role: "STAFF", email: "staff@shop.com", iat: 0, exp: 0 },
 };
 
-const REQUEST = { transactionId: "ABC1234XYZ", reason: "Customer messaged with a screenshot" };
+const REQUEST = {
+  transactionId: "ABC1234XYZ",
+  senderNumber: "01711111111",
+  reason: "Customer messaged with a screenshot",
+};
 
 const row = (overrides: Record<string, unknown> = {}) => ({
   id: "order-1",
@@ -112,6 +147,7 @@ const row = (overrides: Record<string, unknown> = {}) => ({
   status: "PENDING",
   paymentMethod: "manual-transfer",
   transactionId: "TRXIDABC1234XYZ",
+  senderNumber: "01711111111",
   paymentClaimKey: "SB-10482:1",
   paymentClaimAttempts: 3,
   ...overrides,
@@ -154,20 +190,22 @@ function deskWith(
   vi.spyOn(internals, "detail").mockResolvedValue({ orderNumber: "SB-10482" });
   const verify = vi.spyOn(service, "verifyPayment");
   if (options.verifyFails) verify.mockRejectedValue(new Error("gateway down"));
-  else verify.mockResolvedValue({ record: { outcome: "NO_RECEIPT" }, summary: "", confirmed: false });
+  else
+    verify.mockResolvedValue({ record: { outcome: "NO_RECEIPT" }, summary: "", confirmed: false });
 
   return { service, updates, auditRecord, verify };
 }
 
-describe("editing an order's transaction ID", () => {
-  it("saves the ID under the next claim key, records why, and claims it", async () => {
+describe("editing an order's payment details", () => {
+  it("saves the receipt under the next claim key, records why, and claims it", async () => {
     const { service, updates, auditRecord, verify } = deskWith(row());
 
-    const result = await service.editTransactionId("SB-10482", REQUEST, CONTEXT);
+    const result = await service.editPaymentDetails("SB-10482", REQUEST, CONTEXT);
 
     expect(updates).toEqual([
       {
         transactionId: "ABC1234XYZ",
+        senderNumber: "01711111111",
         paymentClaimKey: "SB-10482:2",
         paymentClaimAttempts: 0,
         paymentClaimRetryAt: null,
@@ -175,18 +213,57 @@ describe("editing an order's transaction ID", () => {
     ]);
     expect(auditRecord.mock.calls[0]?.[0]).toMatchObject({
       action: "TRANSACTION_ID_EDIT",
-      before: { transactionId: "TRXIDABC1234XYZ", paymentClaimKey: "SB-10482:1" },
-      after: { transactionId: "ABC1234XYZ", paymentClaimKey: "SB-10482:2" },
+      before: {
+        transactionId: "TRXIDABC1234XYZ",
+        senderNumber: "01711111111",
+        paymentClaimKey: "SB-10482:1",
+      },
+      after: {
+        transactionId: "ABC1234XYZ",
+        senderNumber: "01711111111",
+        paymentClaimKey: "SB-10482:2",
+      },
       note: REQUEST.reason,
     });
     expect(verify).toHaveBeenCalledWith("SB-10482", CONTEXT);
     expect(result.check).not.toBeNull();
   });
 
+  it("saves a corrected sender number on its own, and re-claims under a new key", async () => {
+    const { service, updates, auditRecord } = deskWith(row({ transactionId: "ABC1234XYZ" }));
+
+    await service.editPaymentDetails(
+      "SB-10482",
+      { ...REQUEST, senderNumber: "01615951697" },
+      CONTEXT,
+    );
+
+    expect(updates[0]).toMatchObject({
+      transactionId: "ABC1234XYZ",
+      senderNumber: "01615951697",
+      /* Not the key the failed claim went out under: the gateway would answer
+         a reused key with that first failure instead of checking again. */
+      paymentClaimKey: "SB-10482:2",
+      paymentClaimAttempts: 0,
+    });
+    expect(auditRecord.mock.calls[0]?.[0]).toMatchObject({
+      before: { senderNumber: "01711111111" },
+      after: { senderNumber: "01615951697" },
+    });
+  });
+
+  it("fills in a number on an order that was placed without one", async () => {
+    const { service, updates } = deskWith(row({ senderNumber: null }));
+
+    await service.editPaymentDetails("SB-10482", REQUEST, CONTEXT);
+
+    expect(updates[0]?.senderNumber).toBe("01711111111");
+  });
+
   it("gives an order placed before claim keys existed the second key", async () => {
     const { service, updates } = deskWith(row({ paymentClaimKey: null }));
 
-    await service.editTransactionId("SB-10482", REQUEST, CONTEXT);
+    await service.editPaymentDetails("SB-10482", REQUEST, CONTEXT);
 
     expect(updates[0]?.paymentClaimKey).toBe("SB-10482:2");
   });
@@ -194,7 +271,7 @@ describe("editing an order's transaction ID", () => {
   it("keeps the edit when the claim afterwards fails", async () => {
     const { service, updates } = deskWith(row(), { verifyFails: true });
 
-    const result = await service.editTransactionId("SB-10482", REQUEST, CONTEXT);
+    const result = await service.editPaymentDetails("SB-10482", REQUEST, CONTEXT);
 
     expect(updates).toHaveLength(1);
     expect(result.check).toBeNull();
@@ -204,11 +281,11 @@ describe("editing an order's transaction ID", () => {
     ["a confirmed order", row({ status: "PAYMENT_CONFIRMED" })],
     ["a cancelled order", row({ status: "CANCELLED" })],
     ["cash on delivery", row({ paymentMethod: "cash-on-delivery", transactionId: null })],
-    ["the same ID, typed differently", row({ transactionId: "abc-1234-xyz" })],
+    ["the same ID and number, the ID typed differently", row({ transactionId: "abc-1234-xyz" })],
   ])("refuses %s", async (_label, order) => {
     const { service, updates } = deskWith(order);
 
-    await expect(service.editTransactionId("SB-10482", REQUEST, CONTEXT)).rejects.toBeInstanceOf(
+    await expect(service.editPaymentDetails("SB-10482", REQUEST, CONTEXT)).rejects.toBeInstanceOf(
       InvalidInputError,
     );
     expect(updates).toHaveLength(0);
@@ -219,7 +296,7 @@ describe("editing an order's transaction ID", () => {
       history: [{ outcome: "CLAIMED", checkedAt: "2026-10-21T08:00:00.000Z", transactionId: "X1" }],
     });
 
-    await expect(service.editTransactionId("SB-10482", REQUEST, CONTEXT)).rejects.toThrow(
+    await expect(service.editPaymentDetails("SB-10482", REQUEST, CONTEXT)).rejects.toThrow(
       /holds payment X1/,
     );
     expect(updates).toHaveLength(0);
@@ -229,7 +306,7 @@ describe("editing an order's transaction ID", () => {
     local.holder = { orderNumber: "SB-10001", status: "PENDING", createdAt: new Date() };
     const { service, updates } = deskWith(row());
 
-    await expect(service.editTransactionId("SB-10482", REQUEST, CONTEXT)).rejects.toThrow(
+    await expect(service.editPaymentDetails("SB-10482", REQUEST, CONTEXT)).rejects.toThrow(
       /SB-10001/,
     );
     expect(updates).toHaveLength(0);
@@ -238,7 +315,7 @@ describe("editing an order's transaction ID", () => {
   it("does not claim when the order stopped being pending mid-edit", async () => {
     const { service, auditRecord, verify } = deskWith(row(), { updatedRows: 0 });
 
-    await expect(service.editTransactionId("SB-10482", REQUEST, CONTEXT)).rejects.toThrow(
+    await expect(service.editPaymentDetails("SB-10482", REQUEST, CONTEXT)).rejects.toThrow(
       /no longer pending/,
     );
     expect(auditRecord).not.toHaveBeenCalled();

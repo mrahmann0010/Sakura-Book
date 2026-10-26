@@ -15,14 +15,14 @@ import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
   adminConfirmPaymentRequestSchema,
   adminEditOrderContactRequestSchema,
-  adminEditTransactionIdRequestSchema,
+  adminEditPaymentDetailsRequestSchema,
   adminInternalNoteRequestSchema,
   adminOrderQuerySchema,
   adminOrderTransitionRequestSchema,
   adminRecordRefundRequestSchema,
   adminReopenOrderRequestSchema,
   adminRevertPaymentRequestSchema,
-  type AdminEditTransactionIdResult,
+  type AdminEditPaymentDetailsResult,
   type AdminOrderDetail,
   type AdminOrderList,
   type AdminOrderVerifyPaymentResult,
@@ -40,7 +40,7 @@ class AdminRecordRefundDto extends createZodDto(adminRecordRefundRequestSchema) 
 class AdminRevertPaymentDto extends createZodDto(adminRevertPaymentRequestSchema) {}
 class AdminReopenOrderDto extends createZodDto(adminReopenOrderRequestSchema) {}
 class AdminInternalNoteDto extends createZodDto(adminInternalNoteRequestSchema) {}
-class AdminEditTransactionIdDto extends createZodDto(adminEditTransactionIdRequestSchema) {}
+class AdminEditPaymentDetailsDto extends createZodDto(adminEditPaymentDetailsRequestSchema) {}
 class AdminEditOrderContactDto extends createZodDto(adminEditOrderContactRequestSchema) {}
 
 /**
@@ -273,22 +273,23 @@ export class AdminOrdersController {
   }
 
   /**
-   * Correct the transaction ID the customer typed — a copied "TrxID" label or
-   * a typing mistake — then claim the payment under the new one.
+   * Correct the receipt the customer typed — a copied "TrxID" label, a
+   * mistyped ID, a mistyped wallet number — then claim the payment under the
+   * corrected details.
    *
    * Open to STAFF, like Check & confirm: matching a customer's message to an
    * order is the payment desk's job. Closed to packers by the guard's
-   * default. Pending orders only; see `AdminOrdersService.editTransactionId`.
+   * default. Pending orders only; see `AdminOrdersService.editPaymentDetails`.
    */
-  @Patch(":orderNumber/transaction-id")
-  @ApiOperation({ summary: "Correct the transaction ID on a pending order, then claim it." })
-  async editTransactionId(
+  @Patch(":orderNumber/payment-details")
+  @ApiOperation({ summary: "Correct the receipt on a pending order, then claim it." })
+  async editPaymentDetails(
     @Param("orderNumber") orderNumber: string,
-    @Body() body: AdminEditTransactionIdDto,
+    @Body() body: AdminEditPaymentDetailsDto,
     @CurrentAdmin() admin: AccessClaims,
     @Req() request: Request,
-  ): Promise<AdminEditTransactionIdResult> {
-    return this.adminOrdersService.editTransactionId(orderNumber, body, contextOf(admin, request));
+  ): Promise<AdminEditPaymentDetailsResult> {
+    return this.adminOrdersService.editPaymentDetails(orderNumber, body, contextOf(admin, request));
   }
 
   /**

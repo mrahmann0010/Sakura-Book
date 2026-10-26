@@ -16,8 +16,8 @@ import {
   adminConfirmPaymentRequestSchema,
   adminInternalNoteRequestSchema,
   adminEditOrderContactRequestSchema,
-  adminEditTransactionIdRequestSchema,
-  adminEditTransactionIdResultSchema,
+  adminEditPaymentDetailsRequestSchema,
+  adminEditPaymentDetailsResultSchema,
   adminLoginRequestSchema,
   adminOrderDetailSchema,
   adminOrderListSchema,
@@ -66,8 +66,8 @@ import {
   type AdminConfirmPaymentRequest,
   type AdminInternalNoteRequest,
   type AdminEditOrderContactRequest,
-  type AdminEditTransactionIdRequest,
-  type AdminEditTransactionIdResult,
+  type AdminEditPaymentDetailsRequest,
+  type AdminEditPaymentDetailsResult,
   type AdminLoginRequest,
   type AdminOrderDetail,
   type AdminOrderList,
@@ -588,17 +588,18 @@ export function recordAdminOrderRefund(
 }
 
 /**
- * Correct the transaction ID on a pending order. The API claims the new ID
- * straight away and returns what the gateway said beside the updated order.
+ * Correct the transaction ID and sender number on a pending order. The API
+ * claims the corrected receipt straight away and returns what the gateway
+ * said beside the updated order.
  */
-export function editAdminOrderTransactionId(
+export function editAdminOrderPaymentDetails(
   orderNumber: string,
-  request: AdminEditTransactionIdRequest,
-): Promise<AdminEditTransactionIdResult> {
-  const validated = validate(adminEditTransactionIdRequestSchema, request);
+  request: AdminEditPaymentDetailsRequest,
+): Promise<AdminEditPaymentDetailsResult> {
+  const validated = validate(adminEditPaymentDetailsRequestSchema, request);
   return adminFetch(
-    `/admin/orders/${encodeURIComponent(orderNumber)}/transaction-id`,
-    adminEditTransactionIdResultSchema,
+    `/admin/orders/${encodeURIComponent(orderNumber)}/payment-details`,
+    adminEditPaymentDetailsResultSchema,
     { method: "PATCH", body: validated },
   );
 }
