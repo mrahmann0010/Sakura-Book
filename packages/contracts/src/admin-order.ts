@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { divisionSlugs } from "./bd-geo";
+import { normaliseBdPhone } from "./bd-phone";
 import { paymentMethods } from "./checkout";
 import { orderSchema, orderStatuses } from "./order";
 import { paginated, pageQuerySchema } from "./pagination";
@@ -600,14 +601,24 @@ export const adminOrderVerifyPaymentResultSchema = z.object({
 export type AdminOrderVerifyPaymentResult = z.infer<typeof adminOrderVerifyPaymentResultSchema>;
 
 /**
- * Correcting the transaction ID a customer typed at checkout: a copied
- * "TrxID" label, or a typing mistake they messaged the shop about.
+ * Correcting the receipt a customer typed at checkout: the transaction ID
+ * with a copied "TrxID" label in front of it, the wallet number they sent
+ * the money from, or a typing mistake in either that they messaged the shop
+ * about.
  *
- * Cleaned the same way checkout cleans it. The reason is staff-facing and
- * goes to the audit log beside the old and new values, because the ID is
- * the evidence the payment is checked against.
+ * Both fields are sent on every edit, like the delivery form below, because
+ * the panel renders the current values and posts them back — and both are
+ * what the gateway claim is made of. The ID is the receipt it looks up and
+ * the number is the payer it checks that receipt against, so a typo in the
+ * number stops a real payment confirming just as surely as a typo in the ID.
+ *
+ * The ID is cleaned the same way checkout cleans it and the number is
+ * normalised to `01XXXXXXXXX` the same way checkout stores it, so an edit
+ * cannot leave the two fields in forms the claim code has never seen.
+ * The reason is staff-facing and goes to the audit log beside the old and
+ * new values, because this is the evidence the payment is checked against.
  */
-export const adminEditTransactionIdRequestSchema = z.object({
+export const adminEditPaymentDetailsRequestSchema = z.object({
   transactionId: z
     .string()
     .trim()
@@ -618,21 +629,43 @@ export const adminEditTransactionIdRequestSchema = z.object({
         .min(4, "Enter the transaction ID from the payment SMS.")
         .max(64, "That is too long for a transaction ID."),
     ),
-  reason: z.string().trim().min(10, "Say why the transaction ID is being changed.").max(500),
+  /* Empty means "no number on file", which is what every manual transfer
+     placed before the field was collected has. Staff must be able to fix
+     such an order's ID without inventing a wallet number for it. */
+  senderNumber: z
+    .string()
+    .trim()
+    .max(32)
+    .optional()
+    .transform((value, ctx) => {
+      if (!value) return null;
+
+      const normalised = normaliseBdPhone(value);
+      if (!normalised) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Enter the 11-digit wallet number the money came from, like 01XXXXXXXXX.",
+        });
+        return z.NEVER;
+      }
+
+      return normalised;
+    }),
+  reason: z.string().trim().min(10, "Say why the payment details are being changed.").max(500),
 });
 
-export type AdminEditTransactionIdRequest = z.infer<typeof adminEditTransactionIdRequestSchema>;
+export type AdminEditPaymentDetailsRequest = z.infer<typeof adminEditPaymentDetailsRequestSchema>;
 
 /**
- * The updated order, and what claiming the new ID at the gateway said — or
- * null when that check could not run. The edit is saved either way.
+ * The updated order, and what claiming the corrected receipt at the gateway
+ * said — or null when that check could not run. The edit is saved either way.
  */
-export const adminEditTransactionIdResultSchema = z.object({
+export const adminEditPaymentDetailsResultSchema = z.object({
   order: adminOrderDetailSchema,
   check: adminOrderVerifyPaymentResultSchema.nullable(),
 });
 
-export type AdminEditTransactionIdResult = z.infer<typeof adminEditTransactionIdResultSchema>;
+export type AdminEditPaymentDetailsResult = z.infer<typeof adminEditPaymentDetailsResultSchema>;
 
 /**
  * Correcting the delivery details a customer got wrong at checkout: a

@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import type {
-  AdminOrderDetail,
-  AdminOrderVerifyPaymentResult,
-  OrderStatus,
+import {
+  normaliseBdPhone,
+  type AdminOrderDetail,
+  type AdminOrderVerifyPaymentResult,
+  type OrderStatus,
 } from "@sakura/contracts";
 
 import { ReceiptBadge, VerificationBadge } from "@/components/admin/payment-safety";
@@ -16,7 +17,7 @@ import {
   AdminApiError,
   confirmAdminOrderPayment,
   editAdminOrderContact,
-  editAdminOrderTransactionId,
+  editAdminOrderPaymentDetails,
   getAdminOrder,
   recordAdminOrderRefund,
   reopenAdminOrder,
@@ -113,9 +114,10 @@ export default function AdminOrderDetailPage() {
   const [contactReason, setContactReason] = useState("");
   const [savingContact, setSavingContact] = useState(false);
 
-  /** Correcting the transaction ID the customer typed — collapsed until asked for. */
+  /** Correcting the receipt the customer typed — collapsed until asked for. */
   const [editingTrx, setEditingTrx] = useState(false);
   const [trxValue, setTrxValue] = useState("");
+  const [senderValue, setSenderValue] = useState("");
   const [trxReason, setTrxReason] = useState("");
   const [savingTrx, setSavingTrx] = useState(false);
 
@@ -264,13 +266,13 @@ export default function AdminOrderDetailPage() {
     }
   }
 
-  async function saveTransactionId() {
+  async function savePaymentDetails() {
     if (trxValue.trim().length < 4) {
       setError("Enter the transaction ID from the payment SMS.");
       return;
     }
     if (trxReason.trim().length < 10) {
-      setError("Say why the transaction ID is being changed.");
+      setError("Say why the payment details are being changed.");
       return;
     }
 
@@ -278,8 +280,9 @@ export default function AdminOrderDetailPage() {
     setError(null);
     setVerifyResult(null);
     try {
-      const { order: updated, check } = await editAdminOrderTransactionId(orderNumber, {
+      const { order: updated, check } = await editAdminOrderPaymentDetails(orderNumber, {
         transactionId: trxValue,
+        senderNumber: senderValue,
         reason: trxReason,
       });
       setOrder(updated);
@@ -287,10 +290,11 @@ export default function AdminOrderDetailPage() {
       setVerifyResult(check);
       setEditingTrx(false);
       setTrxValue("");
+      setSenderValue("");
       setTrxReason("");
     } catch (err) {
       // The typed values stay, so a refusal can be fixed rather than retyped.
-      setError(messageOf(err, "Could not change the transaction ID."));
+      setError(messageOf(err, "Could not change the payment details."));
     } finally {
       setSavingTrx(false);
     }
@@ -581,15 +585,21 @@ export default function AdminOrderDetailPage() {
               }
               value={formatMoney(order.totalCents, "en-GB", order.currency)}
             />
-            {order.senderNumber ? <Row label="Sent from" value={order.senderNumber} /> : null}
+            {/* Shown empty on a manual transfer rather than hidden: a missing
+                wallet number is why a claim fails, and the desk has to be able
+                to see that it is missing before it can fill it in. */}
+            {order.senderNumber || (order.paymentMethod === "manual-transfer" && !isPacker) ? (
+              <Row label="Sent from" value={order.senderNumber ?? "No number on file"} />
+            ) : null}
             {isPacker ? null : (
               <Row label="Transaction ID" value={order.transactionId ?? "No receipt on file"} />
             )}
           </dl>
 
-          {/* For a customer who typed "TrxID" in front of the ID, or mistyped
-                it, and messaged the shop. Pending only, and not once the order
-                holds a payment at the gateway — the API refuses both anyway. */}
+          {/* For a customer who typed "TrxID" in front of the ID, mistyped it,
+                or paid from a different wallet than the number they gave, and
+                messaged the shop. Pending only, and not once the order holds a
+                payment at the gateway — the API refuses both anyway. */}
           {order.paymentMethod === "manual-transfer" &&
           order.status === "PENDING" &&
           !order.gatewayClaim &&
@@ -605,6 +615,23 @@ export default function AdminOrderDetailPage() {
                   spellCheck={false}
                   className="font-mono"
                 />
+                <Input
+                  label="Sent from"
+                  hint="The wallet the money came from. Leave empty if no number was given."
+                  value={senderValue}
+                  onChange={(event) => setSenderValue(event.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                  inputMode="numeric"
+                  className="font-mono"
+                  error={
+                    /* The gateway checks the receipt against this number, so a
+                       typo here fails the claim on a payment that was made. */
+                    senderValue.trim() && !normaliseBdPhone(senderValue)
+                      ? "Enter the 11-digit wallet number the money came from, like 01XXXXXXXXX."
+                      : undefined
+                  }
+                />
                 <Textarea
                   label="Why is it being changed? (staff-only, goes to the audit log)"
                   value={trxReason}
@@ -612,19 +639,20 @@ export default function AdminOrderDetailPage() {
                   rows={2}
                   error={
                     trxReason.trim().length > 0 && trxReason.trim().length < 10
-                      ? "Say why the transaction ID is being changed."
+                      ? "Say why the payment details are being changed."
                       : undefined
                   }
                 />
                 <p className="text-caption text-muted">
-                  Saving claims the payment under the new ID and confirms the order if it is there.
+                  Saving claims the payment under the corrected details and confirms the order if it
+                  is there.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button
                     type="button"
                     size="sm"
                     loading={savingTrx}
-                    onClick={() => void saveTransactionId()}
+                    onClick={() => void savePaymentDetails()}
                   >
                     Save & check
                   </Button>
@@ -635,6 +663,7 @@ export default function AdminOrderDetailPage() {
                     onClick={() => {
                       setEditingTrx(false);
                       setTrxValue("");
+                      setSenderValue("");
                       setTrxReason("");
                     }}
                   >
@@ -649,9 +678,10 @@ export default function AdminOrderDetailPage() {
                 onClick={() => {
                   setEditingTrx(true);
                   setTrxValue(order.transactionId ?? "");
+                  setSenderValue(order.senderNumber ?? "");
                 }}
               >
-                Edit transaction ID
+                Edit payment details
               </button>
             )
           ) : null}

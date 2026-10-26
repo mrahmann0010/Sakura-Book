@@ -43,8 +43,14 @@ export type AuditAction =
    */
   | "GATEWAY_CLAIM_OVERRIDE"
   /**
-   * A member of staff corrected an order's transaction ID, with a written
-   * reason. See `AdminOrdersService.editTransactionId`.
+   * A member of staff corrected an order's payment receipt — its transaction
+   * ID, the wallet number it was sent from, or both — with a written reason.
+   * See `AdminOrdersService.editPaymentDetails`.
+   *
+   * Still named for the transaction ID, which is all it covered when the
+   * column's enum was written: renaming it would rewrite the action on every
+   * entry already filed under it, for no gain to the one question the filter
+   * answers — which receipts were corrected after the order was placed.
    */
   | "TRANSACTION_ID_EDIT"
   /**
