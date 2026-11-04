@@ -219,11 +219,11 @@
       "mobileMoneyMeta": "ম্যানুয়াল ট্রান্সফার",
       "walletOption": {
         "payment": {
-          "banner": "⚠️ {{provider}} অ্যাপে \"PAYMENT\" অপশন ব্যবহার করুন — Send Money বা Cash Out নয়।",
+          "banner": "⚠️ {{provider}} অ্যাপে \"PAYMENT\" অপশন ব্যবহার করুন।",
           "sendTo": "এই {{provider}} মার্চেন্ট নম্বরে Payment করুন"
         },
         "sendMoney": {
-          "banner": "⚠️ {{provider}} অ্যাপে \"SEND MONEY\" অপশন ব্যবহার করুন — Payment বা Cash Out নয়।",
+          "banner": "⚠️ {{provider}} অ্যাপে \"SEND MONEY\" অপশন ব্যবহার করুন।",
           "sendTo": "এই {{provider}} নম্বরে Send Money করুন"
         }
       },
