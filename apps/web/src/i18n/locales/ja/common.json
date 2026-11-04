@@ -217,11 +217,11 @@
       "mobileMoneyMeta": "手動振込",
       "walletOption": {
         "payment": {
-          "banner": "⚠️ {{provider}}アプリの「PAYMENT」を使ってください（Send Money や Cash Out ではありません）。",
+          "banner": "⚠️ {{provider}}アプリの「PAYMENT」を使ってください。",
           "sendTo": "この{{provider}}加盟店番号へ「Payment」でお支払いください"
         },
         "sendMoney": {
-          "banner": "⚠️ {{provider}}アプリの「SEND MONEY」を使ってください（Payment や Cash Out ではありません）。",
+          "banner": "⚠️ {{provider}}アプリの「SEND MONEY」を使ってください。",
           "sendTo": "この{{provider}}番号へ「Send Money」で送金してください"
         }
       },

@@ -219,11 +219,11 @@
       "mobileMoneyMeta": "manual transfer",
       "walletOption": {
         "payment": {
-          "banner": "⚠️ Use \"PAYMENT\" in your {{provider}} app — not Send Money or Cash Out.",
+          "banner": "⚠️ Use \"PAYMENT\" in your {{provider}} app.",
           "sendTo": "Pay this {{provider}} merchant number"
         },
         "sendMoney": {
-          "banner": "⚠️ Use \"SEND MONEY\" in your {{provider}} app — not Payment or Cash Out.",
+          "banner": "⚠️ Use \"SEND MONEY\" in your {{provider}} app.",
           "sendTo": "Send Money to this {{provider}} number"
         }
       },

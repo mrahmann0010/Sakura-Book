@@ -24,13 +24,14 @@ import type { CheckoutValues } from "@/lib/checkout";
    examples so nobody has to hunt through a list; Munshiganj adds "Gazaria or
    elsewhere". A customer in Rajshahi never sees a Dhaka option.
 
-   The thana or upazila is then typed, by everyone, as free text. It is what
-   the courier reads, but no price pivots on it, so it is not a pick.
+   Thana/upazila, area and post code are no longer asked for — three typed
+   lines that no price pivoted on, and that the address line and the zone
+   already covered between them. They are commented out rather than deleted;
+   see the note by their state below.
 
    Whichever step lands on it, the result is one zone from the shared list
-   (@sakura/contracts' shipping-zones) — what postage is priced off. Everything
-   is then composed into the single `address` line a customer and a rider
-   read, with the parts kept alongside it unjoined for the Pathao manifest.
+   (@sakura/contracts' shipping-zones) — what postage is priced off. The rest
+   is composed into the single `address` line a customer and a rider read.
    -------------------------------------------------------------------------- */
 
 /* Bangla names for the division and district dropdowns. Districts reuse the
@@ -73,10 +74,17 @@ export function ShippingFields({
   const [division, setDivision] = useState("");
   const [district, setDistrict] = useState("");
   const [zoneId, setZoneId] = useState("");
-  const [upazila, setUpazila] = useState("");
-  const [area, setArea] = useState("");
   const [detail, setDetail] = useState("");
-  const [postCode, setPostCode] = useState("");
+
+  /* Thana/upazila, area and post code are no longer asked for: the zone and
+     the address line carry enough for the courier. Commented out rather than
+     deleted — the manifest parts they fed and the schema's optional slots for
+     them all still exist, so bringing a field back is uncommenting it, not
+     rebuilding it. Every line that belonged to these three is commented
+     alongside its live neighbour, here and below. */
+  // const [upazila, setUpazila] = useState("");
+  // const [area, setArea] = useState("");
+  // const [postCode, setPostCode] = useState("");
 
   const zone = zoneById(zoneId);
   const districtZones = district ? zonesInDistrict(district) : [];
@@ -98,17 +106,17 @@ export function ShippingFields({
 
   function sync(next: {
     zoneId?: string;
-    upazila?: string;
-    area?: string;
+    // upazila?: string;
+    // area?: string;
     detail?: string;
-    postCode?: string;
+    // postCode?: string;
   }) {
     const chosen = zoneById(next.zoneId ?? zoneId);
     const merged = {
-      upazila: next.upazila ?? upazila,
-      area: next.area ?? area,
+      // upazila: next.upazila ?? upazila,
+      // area: next.area ?? area,
       detail: next.detail ?? detail,
-      postCode: next.postCode ?? postCode,
+      // postCode: next.postCode ?? postCode,
     };
     const city = chosen?.city ?? "";
     const divisionLabel = chosen ? (divisionOfDistrict(city)?.label ?? "") : "";
@@ -122,17 +130,19 @@ export function ShippingFields({
 
     /* The parts, kept beside the line they are joined into below — sent rather
        than recovered by splitting `address` back up, which cannot be made to
-       work. */
-    setValue("upazila", merged.upazila, { shouldDirty: true });
-    setValue("area", merged.area, { shouldDirty: true });
-    setValue("postCode", merged.postCode, { shouldDirty: true });
+       work. Nothing is collected to send while the three fields are commented
+       out, and the API's slots for all three are optional, so none is sent
+       at all rather than sent empty. */
+    // setValue("upazila", merged.upazila, { shouldDirty: true });
+    // setValue("area", merged.area, { shouldDirty: true });
+    // setValue("postCode", merged.postCode, { shouldDirty: true });
     setValue(
       "address",
       [
         merged.detail,
-        [merged.area, merged.upazila].filter(Boolean).join(", "),
+        // [merged.area, merged.upazila].filter(Boolean).join(", "),
         [city, divisionLabel].filter((part, i, all) => part && all.indexOf(part) === i).join(", "),
-        merged.postCode,
+        // merged.postCode,
       ]
         .filter(Boolean)
         .join("\n"),
@@ -263,7 +273,7 @@ export function ShippingFields({
           />
         ) : null}
 
-        {zone ? (
+        {/* {zone ? (
           <Input
             label={t("checkout.shipping.upazila")}
             value={upazila}
@@ -280,7 +290,7 @@ export function ShippingFields({
             setArea(e.target.value);
             sync({ area: e.target.value });
           }}
-        />
+        /> */}
 
         <Textarea
           label={t("checkout.shipping.address")}
@@ -296,7 +306,7 @@ export function ShippingFields({
           fieldClassName="sm:col-span-2"
         />
 
-        <Input
+        {/* <Input
           label={t("checkout.shipping.postCode")}
           inputMode="numeric"
           autoComplete="postal-code"
@@ -305,7 +315,7 @@ export function ShippingFields({
             setPostCode(e.target.value);
             sync({ postCode: e.target.value });
           }}
-        />
+        /> */}
         <Textarea
           label={t("checkout.shipping.notes")}
           hint={t("checkout.shipping.notesHint")}
