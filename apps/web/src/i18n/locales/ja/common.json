@@ -215,8 +215,16 @@
       "nagad": "Nagad",
       "mobileMoneyLegend": "モバイルマネー",
       "mobileMoneyMeta": "手動振込",
-      "sendMoneyBanner": "⚠️ {{provider}}アプリの「SEND MONEY」を使ってください（Payment や Cash Out ではありません）。",
-      "sendTo": "この{{provider}}番号へ「Send Money」で送金してください",
+      "walletOption": {
+        "payment": {
+          "banner": "⚠️ {{provider}}アプリの「PAYMENT」を使ってください（Send Money や Cash Out ではありません）。",
+          "sendTo": "この{{provider}}加盟店番号へ「Payment」でお支払いください"
+        },
+        "sendMoney": {
+          "banner": "⚠️ {{provider}}アプリの「SEND MONEY」を使ってください（Payment や Cash Out ではありません）。",
+          "sendTo": "この{{provider}}番号へ「Send Money」で送金してください"
+        }
+      },
       "amount": "送金額",
       "sendToHint": "{{provider}}アプリを開いて送金し、完了したらこちらに戻ってください。",
       "verifyHint": "送金内容の詳細をご入力ください。",

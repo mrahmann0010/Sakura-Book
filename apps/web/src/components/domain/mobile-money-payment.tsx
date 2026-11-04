@@ -12,6 +12,7 @@ import { getPaymentNumbers } from "@/lib/api/payments";
 import type { CheckoutValues } from "@/lib/checkout";
 import { paymentOption } from "@/lib/variants";
 import { cn } from "@/lib/utils";
+import { walletMenuOption } from "@/lib/wallet-menu";
 
 /* --------------------------------------------------------------------------
    MobileMoneyPayment — bKash / Rocket / Nagad, wireframe-free but the same
@@ -192,6 +193,7 @@ function ProviderOption({
         checked ? (
           <TransferDetails
             number={entry.number}
+            provider={entry.id}
             providerLabel={label}
             register={register}
             errors={errors}
@@ -206,6 +208,7 @@ function ProviderOption({
 
 function TransferDetails({
   number,
+  provider,
   providerLabel,
   register,
   errors,
@@ -213,6 +216,9 @@ function TransferDetails({
   breakdown,
 }: {
   number: string;
+  /** The raw wallet id, not just its label: the menu option to tap differs
+      per wallet, and `walletMenuOption` resolves it from this. */
+  provider: PaymentProvider;
   providerLabel: string;
   register: UseFormRegister<CheckoutValues>;
   errors: FieldErrors<CheckoutValues>;
@@ -220,6 +226,7 @@ function TransferDetails({
   breakdown?: ReactNode;
 }) {
   const { t } = useTranslation();
+  const option = walletMenuOption(provider);
 
   return (
     <div className={cn(paymentOption({ selected: false }), "bg-tint border-none px-4 py-3.5")}>
@@ -236,17 +243,20 @@ function TransferDetails({
         </div>
       ) : null}
 
-      {/* Shoppers kept picking Payment or Cash Out in their wallet app; the
-          number only works with Send Money, so that is said loudest. */}
+      {/* Shoppers kept picking the wrong entry in their wallet app's menu, and
+          a payment made the wrong way cannot be verified — so the one option
+          that works for this wallet is said loudest. Which one that is comes
+          from `walletMenuOption`: bKash is a merchant account ("Payment"),
+          Rocket and Nagad are personal numbers ("Send Money"). */}
       <p
         role="note"
         className="rounded-control border-clay bg-surface text-clay-deep mb-3.5 border-2 px-3.5 py-2.5 font-semibold"
       >
-        {t("checkout.payment.sendMoneyBanner", { provider: providerLabel })}
+        {t(`checkout.payment.walletOption.${option}.banner`, { provider: providerLabel })}
       </p>
 
       <p className="text-body text-ink font-semibold">
-        {t("checkout.payment.sendTo", { provider: providerLabel })}
+        {t(`checkout.payment.walletOption.${option}.sendTo`, { provider: providerLabel })}
       </p>
 
       <div className="mt-2 flex items-center justify-between gap-3">

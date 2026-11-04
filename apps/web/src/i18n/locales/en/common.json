@@ -217,8 +217,16 @@
       "nagad": "Nagad",
       "mobileMoneyLegend": "Mobile money",
       "mobileMoneyMeta": "manual transfer",
-      "sendMoneyBanner": "⚠️ Use \"SEND MONEY\" in your {{provider}} app — not Payment or Cash Out.",
-      "sendTo": "Send Money to this {{provider}} number",
+      "walletOption": {
+        "payment": {
+          "banner": "⚠️ Use \"PAYMENT\" in your {{provider}} app — not Send Money or Cash Out.",
+          "sendTo": "Pay this {{provider}} merchant number"
+        },
+        "sendMoney": {
+          "banner": "⚠️ Use \"SEND MONEY\" in your {{provider}} app — not Payment or Cash Out.",
+          "sendTo": "Send Money to this {{provider}} number"
+        }
+      },
       "amount": "Amount to send",
       "sendToHint": "Open your {{provider}} app, send the amount, then come back here.",
       "verifyHint": "Now enter the details from the payment you just sent.",
