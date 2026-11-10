@@ -19,7 +19,7 @@ export default function NewAdminBookPage() {
       <div>
         <h1 className="text-h2 text-ink font-serif">New book</h1>
         <p className="text-13.5 text-secondary mt-1">
-          The URL slug is generated from the title automatically.
+          The URL slug is generated from the title unless you set one yourself.
         </p>
       </div>
 

@@ -115,6 +115,10 @@ function updateColumns(request: AdminBookUpdateRequest): BookColumns {
   if (request.metaDescription !== undefined) {
     columns.metaDescription = request.metaDescription ?? null;
   }
+  /* Last, so a slug rename shows up in the audit entry's before/after beside
+     whatever else moved. Uniqueness is checked in `update` — a column write
+     cannot ask the database a question first. */
+  if (request.slug !== undefined) columns.slug = request.slug;
 
   /* The request-level refine only catches a PATCH that sets both fields at
      once. Flipping a book to `coming_soon` without also repeating
@@ -198,7 +202,15 @@ export class AdminBooksService {
   }
 
   async create(request: AdminBookCreateRequest, actor: AdminActor): Promise<AdminBookDetail> {
-    const slug = request.slug ?? (await this.uniqueSlug(request.title));
+    /* A slug the operator typed is taken at its word: if it is taken, say so.
+       Only the title-derived fallback may be suffixed — see `uniqueSlug`. */
+    let slug: string;
+    if (request.slug === undefined) {
+      slug = await this.uniqueSlug(request.title);
+    } else {
+      await this.assertSlugFree(request.slug);
+      slug = request.slug;
+    }
 
     const bookId = await this.dbService.db.transaction(async (tx) => {
       const publisherId = request.publisherName
@@ -238,6 +250,15 @@ export class AdminBooksService {
   ): Promise<AdminBookDetail> {
     const existing = await this.requireBook(id);
     const columns = updateColumns(request);
+
+    /* Before the transaction, so a taken slug is a 409 with a sentence about
+       slugs rather than a unique-constraint violation surfacing as a 500.
+       Re-sending the slug a book already has is not a change and not a
+       conflict with itself — a form that posts every field would otherwise be
+       unable to save anything else. */
+    if (columns.slug !== undefined && columns.slug !== existing.slug) {
+      await this.assertSlugFree(columns.slug);
+    }
 
     await this.dbService.db.transaction(async (tx) => {
       const publisherId =
@@ -428,6 +449,28 @@ export class AdminBooksService {
 
     const existing = await tx.query.publishers.findFirst({ where: eq(publishers.slug, slug) });
     return existing!.id;
+  }
+
+  /**
+   * Refuse a slug another book holds.
+   *
+   * The column is unique, so the database would stop this anyway — but as a
+   * driver error, which reaches the operator as "something went wrong" with no
+   * mention of the field they just typed. This is the same check, early
+   * enough to name it.
+   */
+  private async assertSlugFree(slug: string): Promise<void> {
+    const taken = await this.dbService.db.query.books.findFirst({
+      where: eq(books.slug, slug),
+      columns: { id: true, title: true },
+    });
+
+    if (taken) {
+      throw new ResourceConflictError(
+        `The URL "${slug}" is already used by "${taken.title}" — pick another.`,
+        { slug, bookId: taken.id },
+      );
+    }
   }
 
   /** Appends a numeric suffix until the slug is free — titles repeat, URLs may not. */
