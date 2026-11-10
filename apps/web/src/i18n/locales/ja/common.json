@@ -244,6 +244,11 @@
       "each": "1冊 {{price}}",
       "quantity": "数量、{{title}}"
     },
+    "alsoAvailable": {
+      "title": "同じ荷物にもう一冊",
+      "add": "{{title}} を追加",
+      "all": "全{{count}}冊を見る →"
+    },
     "recap": {
       "title": "ご注文内容",
       "edit": "カートを編集",

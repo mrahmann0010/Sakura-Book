@@ -5,11 +5,10 @@ import { CheckoutView } from "@/components/checkout/checkout-view";
 import { InviteCheckoutView } from "@/components/checkout/invite-checkout-view";
 import { AppNav, PageShell } from "@/components/layout";
 import type { Locale } from "@/i18n/settings";
+import { offerableBooks } from "@/lib/also-available";
 import { ApiError } from "@/lib/api/client";
-import { listBooks } from "@/lib/api/catalog";
 import { getWaitlistInvite } from "@/lib/api/waitlist";
 import { routes } from "@/lib/routes";
-import { parseSearchParams } from "@/lib/catalog";
 
 /* A waitlist invite link — "your turn to order". Same bare shell as
    /checkout (no footer, nothing to navigate to but the wordmark): this is
@@ -53,7 +52,8 @@ export default async function WaitlistInvitePage({
      catalog is server-rendered: there is no client-side book list in this app,
      and adding one to a checkout page would be a network round trip in front
      of the only screen where hesitation costs a sale. */
-  const alsoAvailable = invite.mode === "LOCKED" ? await offerable(invite.bookId!) : [];
+  const alsoAvailable =
+    invite.mode === "LOCKED" ? await offerableBooks([invite.bookId!], ALSO_AVAILABLE_LIMIT) : [];
 
   return (
     <PageShell header={<AppNav brandHref={path.home} />}>
@@ -71,37 +71,4 @@ export default async function WaitlistInvitePage({
       )}
     </PageShell>
   );
-}
-
-/**
- * Titles the invited customer could add to this order, the reserved one aside.
- *
- * Only what the shop can actually ship today: `stockQuantity` on the public
- * contract is already net of every live invite, so a book held for somebody
- * else's link never appears here, and the stepper's ceiling is the same number
- * checkout will enforce. Coming-soon and pre-order titles are excluded by the
- * same filter — offering a customer a book that ships in March, on the page
- * where they are paying for one that ships today, is how a whole order ends up
- * waiting.
- *
- * A failure here is not a failure of the page. The invite is the thing the
- * customer came for, and losing the shelf to a slow catalog call must not cost
- * the sale, so this degrades to an empty list.
- */
-async function offerable(reservedBookId: string) {
-  const list = await listBooks(parseSearchParams({})).catch(() => null);
-
-  return (list?.items ?? [])
-    .filter(
-      (book) =>
-        book.id !== reservedBookId && book.availability === "in_stock" && book.stockQuantity > 0,
-    )
-    .slice(0, ALSO_AVAILABLE_LIMIT)
-    .map((book) => ({
-      id: book.id,
-      title: book.title,
-      author: book.authors.join(", "),
-      priceCents: book.priceCents,
-      maxQuantity: book.stockQuantity,
-    }));
 }

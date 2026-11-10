@@ -12,6 +12,7 @@ import { CheckoutProgress, PageHeader, RailLayout, Shell, StickyBar } from "@/co
 import { OrderPlaced } from "@/components/orders/order-placed";
 import { Button, Notice, Skeleton, Stepper, Toast } from "@/components/ui";
 import type { Locale } from "@/i18n/settings";
+import type { AlsoAvailableBook } from "@/lib/also-available";
 import { trackPurchase } from "@/lib/analytics";
 import { ApiError } from "@/lib/api/client";
 import { quoteCart } from "@/lib/api/cart";
@@ -69,16 +70,6 @@ import { ShippingFields } from "./shipping-fields";
    WaitlistInviteService.consume() in the same transaction that creates it —
    see CheckoutService.writeOrder.
    -------------------------------------------------------------------------- */
-
-/** One title the invited customer may add — see the page's `offerable()`. */
-export type AlsoAvailableBook = {
-  id: string;
-  title: string;
-  author: string;
-  priceCents: number;
-  /** Public stock, already net of every live invite. The stepper's ceiling. */
-  maxQuantity: number;
-};
 
 export function InviteCheckoutView({
   locale,
