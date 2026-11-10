@@ -23,7 +23,6 @@ import type { Locale } from "@/i18n/settings";
 import { trackPurchase } from "@/lib/analytics";
 import { ApiError } from "@/lib/api/client";
 import { placeOrder as placeOrderRequest } from "@/lib/api/orders";
-import { titlesInStock } from "@/lib/books";
 import {
   checkoutDefaults,
   checkoutSchema,
@@ -257,11 +256,15 @@ export function CheckoutView({
     return (
       <Shell className="py-14 lg:py-20">
         <PageHeader size="lg" title={t("checkout.title")} />
+        {/* `description` interpolates no count: this copy talks about the empty
+            cart, not about the shelf, and every locale's string for it is
+            count-free. It was being handed the old hardcoded `titlesInStock`
+            regardless, which went nowhere. */}
         <EmptyState
           className="mt-10"
           eyebrow={t("checkout.empty.eyebrow")}
           title={t("checkout.empty.title")}
-          description={t("checkout.empty.description", { count: titlesInStock })}
+          description={t("checkout.empty.description")}
           action={<LinkButton href={path.catalog}>{t("checkout.empty.action")}</LinkButton>}
         />
       </Shell>

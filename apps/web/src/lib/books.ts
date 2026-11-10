@@ -15,8 +15,6 @@ import type { BookSummary } from "@/components/domain";
        that means re-pointing the cart at the API (or at the checkout quote,
        which already prices server-side), and it touches checkout — a separate
        pass on purpose.
-     · `titlesInStock` is a constant the cart and checkout empty states quote.
-       The landing page no longer uses it; it reads `total` off the list.
      · `recentlyAdded` / `staffPicks` are still what /playground renders, which
        is the one page that should stay independent of a running API.
 
@@ -144,8 +142,11 @@ export const staffPicks: CatalogBook[] = [
 /** Everything on the shelves. The catalog page filters over this. */
 export const catalog: CatalogBook[] = [...recentlyAdded, ...staffPicks];
 
-/** Shown on the hero count line. */
-export const titlesInStock = 41;
+/* `titlesInStock = 41` used to sit here, quoted by the cart and checkout empty
+   states. It was a hand-written number with nothing behind it — not the length
+   of the array above, not anything the API had said — so the cart told the
+   customer 41 books were waiting whatever the shop actually held. The count is
+   now read from GET /books by hooks/use-titles-in-stock.ts. */
 
 const byId = new Map(catalog.map((book) => [book.id, book]));
 

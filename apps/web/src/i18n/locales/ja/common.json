@@ -157,6 +157,7 @@
       "eyebrow": "カート",
       "title": "カートは空です",
       "description": "棚には{{count}}冊が並んでいます。",
+      "descriptionUnknown": "棚にはたくさんの本が並んでいます。",
       "action": "本を見る"
     },
     "loading": "カートを読み込み中…"
