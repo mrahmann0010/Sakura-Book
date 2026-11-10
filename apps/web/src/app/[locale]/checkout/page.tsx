@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { CheckoutView } from "@/components/checkout/checkout-view";
 import { AppNav, PageShell } from "@/components/layout";
 import type { Locale } from "@/i18n/settings";
-import { offerableBooks } from "@/lib/also-available";
 import { routes } from "@/lib/routes";
 
 /* Checkout — Cart & Checkout Wireframe (1d/1e).
@@ -19,23 +18,13 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/* How many titles to fetch for the "same parcel" strip. The strip shows three;
-   the extras are headroom, because the cart is browser state the server cannot
-   see, and a shopper whose cart already holds the first two would otherwise be
-   offered a list with holes in it. */
-const ALSO_AVAILABLE_FETCH = 8;
-
 export default async function CheckoutPage({ params }: PageProps<"/[locale]/checkout">) {
   const { locale } = (await params) as { locale: Locale };
   const path = routes(locale);
 
-  /* Nothing is excluded here: what the order already holds lives in Redux, so
-     CheckoutView does that filtering once it has hydrated. */
-  const alsoAvailable = await offerableBooks([], ALSO_AVAILABLE_FETCH);
-
   return (
     <PageShell header={<AppNav brandHref={path.home} />}>
-      <CheckoutView locale={locale} alsoAvailable={alsoAvailable} />
+      <CheckoutView locale={locale} />
     </PageShell>
   );
 }

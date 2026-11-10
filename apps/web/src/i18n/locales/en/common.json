@@ -246,11 +246,7 @@
       "each": "{{price}} each",
       "quantity": "Quantity, {{title}}"
     },
-    "alsoAvailable": {
-      "title": "Add more to the same parcel",
-      "add": "Add {{title}}",
-      "all": "All {{count}} books →"
-    },
+    "browseMore": "Add more books to the same parcel",
     "recap": {
       "title": "Your order",
       "edit": "Edit cart",
