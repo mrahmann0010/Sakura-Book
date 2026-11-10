@@ -156,7 +156,17 @@ const adminBookFieldsSchema = z.object({
    */
   categorySlugs: z.array(z.string()).min(1, "Pick a skill and a JLPT level."),
 
-  /** Auto-generated from the title when omitted — see admin-books.service.ts. */
+  /**
+   * The book's URL path — `/books/<slug>`.
+   *
+   * Auto-generated from the title when omitted on create (see
+   * admin-books.service.ts), and editable afterwards: a book first entered as
+   * "N4" is reachable at `/books/n4`, which says nothing about what it is, and
+   * the only way to improve that used to be to re-create the row. Changing it
+   * *breaks the old URL* — nothing redirects — so the admin form says so and
+   * the service refuses a slug another book already holds rather than quietly
+   * suffixing it the way the title-derived one is.
+   */
   slug: z
     .string()
     .trim()
@@ -230,13 +240,17 @@ export type AdminBookCreateRequest = z.infer<typeof adminBookCreateRequestSchema
 export type AdminBookCreateInput = z.input<typeof adminBookCreateRequestSchema>;
 
 /**
- * Everything except `slug`, which cannot move once a book exists — the same
- * rule as `adminRegionUpdateSchema`, for the same reason: it is what a
- * customer's link and browser history point at.
+ * Every field, `slug` included.
+ *
+ * It used to be omitted here, on the rule that a slug cannot move once a book
+ * exists because it is what a customer's link and browser history point at.
+ * That is a real cost, but it was being paid by the wrong party: a book
+ * entered under a thin title kept a thin URL for good, and the shop's only
+ * remedy was to create a second row and deactivate the first — which loses the
+ * old URL *and* the reviews. The rename is allowed, the operator is told in
+ * the form that the old URL stops working, and that trade is theirs to make.
  */
-export const adminBookUpdateRequestSchema = adminBookFieldsSchema
-  .omit({ slug: true })
-  .partial()
+export const adminBookUpdateRequestSchema = adminBookFieldsSchema.partial()
   .refine((value) => Object.keys(value).length > 0, { message: "Change at least one field." })
   .refine(aboveCompareAtPrice, {
     message: "Compare-at price must be higher than the price.",

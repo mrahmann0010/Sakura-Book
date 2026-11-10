@@ -26,10 +26,12 @@ const PdfReader = dynamic(() => import("@/components/domain/pdf-reader").then((m
  * the fields the create schema defaults (stock, threshold, language, the
  * flags) may be left out and filled in server-side. See `AdminBookCreateInput`.
  */
-export type BookFormValues = Omit<AdminBookCreateInput, "slug">;
+export type BookFormValues = AdminBookCreateInput;
 
 type FormState = {
   title: string;
+  /** The URL path, `/books/<slug>`. Blank on create means "build it from the title". */
+  slug: string;
   subtitle: string;
   isbn10: string;
   isbn13: string;
@@ -62,6 +64,7 @@ type FormState = {
 
 const emptyForm: FormState = {
   title: "",
+  slug: "",
   subtitle: "",
   isbn10: "",
   isbn13: "",
@@ -94,6 +97,7 @@ const emptyForm: FormState = {
 function fromDetail(book: AdminBookDetail): FormState {
   return {
     title: book.title,
+    slug: book.slug,
     subtitle: book.subtitle ?? "",
     isbn10: book.isbn10 ?? "",
     isbn13: book.isbn13 ?? "",
@@ -163,7 +167,7 @@ const FIELD_LABELS: Record<string, string> = {
   pdfFileName: "PDF file name",
   metaTitle: "Meta title",
   metaDescription: "Meta description",
-  slug: "Slug",
+  slug: "URL slug",
 };
 
 /**
@@ -297,6 +301,10 @@ function summarise(byPath: Record<string, string>): string {
 function toRequest(form: FormState): BookFormValues {
   return {
     title: form.title.trim(),
+    /* Omitted when blank rather than sent as "": on create that is what asks
+       the server to derive it from the title, and on edit an omitted field
+       leaves the existing slug alone. Neither can be expressed by "". */
+    slug: optional(form.slug)?.toLowerCase(),
     subtitle: optional(form.subtitle),
     isbn10: optional(form.isbn10),
     isbn13: optional(form.isbn13),
@@ -356,6 +364,11 @@ export function BookForm({
   onSubmit: (values: BookFormValues) => Promise<void>;
 }) {
   const [form, setForm] = useState<FormState>(initial ? fromDetail(initial) : emptyForm);
+  /* Editing an existing book rather than creating one. Only the slug field and
+     the title's hint differ, so it is this rather than two components: on
+     create the slug may be left blank and the server derives it, and on edit
+     it is already set and renaming it costs the old URL. */
+  const editing = initial !== undefined;
   const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -611,11 +624,25 @@ export function BookForm({
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Input
           label="Title"
-          hint="Text · required. The URL slug is built from this."
+          hint={
+            editing ? "Text · required." : "Text · required. The URL is built from this by default."
+          }
           error={fieldErrors.title}
           required
           value={form.title}
           onChange={(event) => set("title", event.target.value)}
+        />
+        <Input
+          label="URL slug"
+          hint={
+            initial
+              ? `Lowercase words joined by hyphens. Changing this breaks the current link — /books/${initial.slug} will stop working.`
+              : "Lowercase words joined by hyphens · optional. Leave blank to build it from the title."
+          }
+          error={fieldErrors.slug}
+          placeholder="listening-n4"
+          value={form.slug}
+          onChange={(event) => set("slug", event.target.value)}
         />
         <Input
           label="Subtitle"

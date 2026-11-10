@@ -344,9 +344,39 @@ export function BookCard({
         </h3>
         {meta}
 
-        {/* Read last, after the price has made its case, and flush with the
-            cover's edges so a row of cards keeps one straight bottom line. */}
-        {footerAction ? <div className="relative z-10 mt-auto pt-4">{footerAction}</div> : null}
+        {/* Read last, after the price has made its case.
+
+            `sm:w-40` is the width cap — a fixed width, not `max-w`, and that
+            is load-bearing: this div is a flex item in the card's column, and
+            the `mx-auto` below makes an auto cross-axis margin, which
+            overrides `align-items: stretch` and collapses a `max-w` item onto
+            its content. That is the hugging layout, and it is the one this
+            cap exists to avoid — measured on the live shelf it gave 107px for
+            "এখনই কিনুন" against 109px for "শীঘ্রই আসছে", and a longer label
+            like "প্রি-অর্ডার করুন" would pull further away. A fixed width
+            keeps every card's button identical. The control inside is `block`, so
+            it filled the whole card — 237px of button for a 67px label on the
+            5-up desktop shelf, about 72% empty fill, five slabs across the
+            row with the lead one in clay. Capped, every card's button is
+            exactly 160px: narrow enough to read as a control rather than a
+            band, and uniform, which is what a cap buys over letting the label
+            hug — "এখনই কিনুন" and "শীঘ্রই আসছে" are different widths, and
+            side by side in one shelf that reads as untidy rather than tight.
+
+            `sm:mx-auto` centres what the cap leaves over. Left-aligned, the
+            narrowed button sat under the title with ~77px of dead card to its
+            right, which read as a button that had failed to reach the edge
+            rather than one sized on purpose. Centred, the gap is symmetrical
+            and the button reads as its own object. The text above stays
+            left-aligned — this is the one element in the card that is not
+            prose.
+
+            Below `sm` it stays full width: there the card is sideways
+            (`mobileRow`) or two-up, and a button that spans the text column
+            terminates the row the way a list does. */}
+        {footerAction ? (
+          <div className="relative z-10 mt-auto pt-4 sm:mx-auto sm:w-40">{footerAction}</div>
+        ) : null}
       </div>
     </article>
   );

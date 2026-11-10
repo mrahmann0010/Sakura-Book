@@ -125,4 +125,33 @@ describe("adminBookUpdateRequestSchema", () => {
   it("still rejects an emptied category list when the patch does mention it", () => {
     expect(adminBookUpdateRequestSchema.safeParse({ categorySlugs: [] }).success).toBe(false);
   });
+
+  /**
+   * The slug used to be `.omit()`ed here, so a book entered as "N4" was stuck
+   * at `/books/n4` for good. Renaming is now allowed — the form warns that the
+   * old URL stops working, and uniqueness is the service's job.
+   */
+  it("accepts a patch that renames the slug", () => {
+    const result = adminBookUpdateRequestSchema.safeParse({ slug: "listening-n4" });
+
+    expect(result.success).toBe(true);
+  });
+
+  it.each(["Listening N4", "listening n4", "listening_n4", "-listening-n4", "listening--n4"])(
+    "rejects %o as a slug",
+    (slug) => {
+      // Lowercase words joined by single hyphens, nothing else: these reach the
+      // URL verbatim, and a space or capital there is a link that breaks when
+      // it is pasted into a chat.
+      expect(adminBookUpdateRequestSchema.safeParse({ slug }).success).toBe(false);
+    },
+  );
+
+  it("lowercases and trims a slug rather than refusing it", () => {
+    // `.trim().toLowerCase()` run before the regex, so a pasted " N4 " is
+    // fixed instead of bounced.
+    expect(adminBookUpdateRequestSchema.parse({ slug: "  LISTENING-N4 " })).toEqual({
+      slug: "listening-n4",
+    });
+  });
 });
