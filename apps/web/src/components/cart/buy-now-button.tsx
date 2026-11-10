@@ -30,6 +30,7 @@ export function BuyNowButton({
   priceCents,
   soldOut = false,
   comingSoon = false,
+  preOrder = false,
   size = "sm",
   variant = "secondary",
   block = false,
@@ -46,6 +47,22 @@ export function BuyNowButton({
   priceCents?: number;
   soldOut?: boolean;
   comingSoon?: boolean;
+  /**
+   * Swaps the label to "Pre-order now" — nothing else. A `pre_order` book is
+   * a normal catalog book that ships later (see the `bookAvailability` enum):
+   * same cart, same checkout, same payment taken at the same moment, so there
+   * is no second code path here to justify, only an honest word. "Buy now"
+   * promises immediacy a book that ships in January does not have.
+   *
+   * Opt-in, and deliberately not derived from the flag inside this component,
+   * because the grid call sites must keep saying "Buy now": a catalog card
+   * already carries the pre-order badge and the ships-around caption, and a
+   * third repeat in a ~200px cell is the same crowding `BookCard`'s price
+   * line avoids — on a label 60% longer, inside an `sm` block button in a
+   * ~160pt card, where it would wrap. The detail page is full width and is
+   * the screen where the shopper commits, so it is the one that says it.
+   */
+  preOrder?: boolean;
   size?: "sm" | "md";
   /**
    * Defaults to `secondary`, because the usual context is a grid: a shelf of
@@ -108,7 +125,7 @@ export function BuyNowButton({
         router.push(routes(locale ?? "en").checkout);
       }}
     >
-      {t("actions.buyNow")}
+      {t(preOrder ? "actions.preOrder" : "actions.buyNow")}
       {title ? <span className="sr-only">{`, ${title}`}</span> : null}
     </Button>
   );
