@@ -23,6 +23,7 @@ import type { Locale } from "@/i18n/settings";
 import { trackPurchase } from "@/lib/analytics";
 import { ApiError } from "@/lib/api/client";
 import { placeOrder as placeOrderRequest } from "@/lib/api/orders";
+import type { AlsoAvailableBook } from "@/lib/also-available";
 import { titlesInStock } from "@/lib/books";
 import {
   checkoutDefaults,
@@ -34,6 +35,7 @@ import { summaryLines } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 
+import { AlsoAvailable } from "./also-available";
 import { CheckoutItems } from "./checkout-items";
 import { PaymentSection } from "./payment-section";
 import {
@@ -54,10 +56,16 @@ import { ShippingFields } from "./shipping-fields";
    shopper. The rail and the mobile recap stay read-only summaries.
    -------------------------------------------------------------------------- */
 
+/** How many titles the strip shows at once. Enough to catch "oh, that one
+    too", few enough that the link to the full shelf is still the way to
+    browse. The page fetches more than this so the list can refill. */
+const ALSO_AVAILABLE_SHOWN = 3;
+
 export function CheckoutView({
   locale,
   prefill,
   inviteToken,
+  alsoAvailable = [],
 }: {
   locale: Locale;
   /**
@@ -73,6 +81,15 @@ export function CheckoutView({
    * checkout, which has no invite to spend.
    */
   inviteToken?: string;
+  /**
+   * In-stock titles the shopper may add to this order without leaving the
+   * page. Fetched on the server — there is no client-side book list in this
+   * app, and a round trip in front of the only screen where hesitation costs
+   * a sale is the thing to avoid. Already filtered to what can ship today;
+   * what is in the cart is subtracted here, because the server cannot know
+   * it. Empty is a normal state, not a failure.
+   */
+  alsoAvailable?: AlsoAvailableBook[];
 }) {
   const { t } = useTranslation();
   const path = routes(locale);
@@ -307,6 +324,16 @@ export function CheckoutView({
     amount: formatMoney(line.lineTotal, money),
   }));
 
+  /* What is left to offer once the cart is taken out. The server sent more
+     than three for exactly this reason: it cannot know what is in the cart,
+     so adding a book must not leave a gap in the list — the next title takes
+     its place. `entries` rather than `cart.lines`: it changes in the same
+     tick as the dispatch, so a row disappears the moment it is tapped rather
+     than when the requote lands. */
+  const offered = alsoAvailable
+    .filter((book) => !cart.entries.some((entry) => entry.bookId === book.id))
+    .slice(0, ALSO_AVAILABLE_SHOWN);
+
   const editCart = (
     <Link href={path.cart} className="text-clay hover:text-clay-deep">
       {t("checkout.recap.edit")}
@@ -388,6 +415,33 @@ export function CheckoutView({
         >
           <PageHeader size="md" title={t("checkout.title")} />
 
+          {/* Above the books rather than below them, and above the form: the
+              point is being seen on arrival. A shopper who has started typing
+              an address has already decided what they are buying, so a shelf
+              found further down is a shelf found after the decision.
+              Collapsed, it is one row — the cost above the fold is a line of
+              text, and the titles only appear for someone who asked.
+
+              Delivery step only, for the reason CheckoutItems is: by the
+              payment step the total may already have been sent through
+              bKash, and nothing there may move it. */}
+          {step === "delivery" ? (
+            <AlsoAvailable
+              className="mt-6"
+              books={offered}
+              catalogHref={path.catalog}
+              totalTitles={titlesInStock}
+              money={money}
+              onAdd={(book) =>
+                cart.add(book.id, 1, { title: book.title, priceCents: book.priceCents })
+              }
+              /* Open for a one-book order and shut otherwise. "In the same
+                 parcel" is an argument aimed at someone who has one thing in
+                 the box; a shopper with four has already made it themselves. */
+              defaultOpen={cart.itemCount === 1}
+            />
+          ) : null}
+
           <form
             id="checkout"
             noValidate
@@ -404,11 +458,7 @@ export function CheckoutView({
             ) : null}
 
             <div className={step === "delivery" ? undefined : "hidden"}>
-              <ShippingFields
-                register={register}
-                errors={errors}
-                setValue={setValue}
-              />
+              <ShippingFields register={register} errors={errors} setValue={setValue} />
             </div>
 
             {step === "payment" ? (
@@ -448,9 +498,7 @@ export function CheckoutView({
                 displaying the last total it managed to get, the customer reads
                 it as the price, and the first sign anything is wrong is the
                 order being refused — on the step where they were paying. */}
-            {cart.quoteFailed ? (
-              <Notice tone="error">{t("checkout.quoteFailed")}</Notice>
-            ) : null}
+            {cart.quoteFailed ? <Notice tone="error">{t("checkout.quoteFailed")}</Notice> : null}
             {submitError ? <Notice tone="error">{submitError}</Notice> : null}
 
             {/* The lead carries the state, the body says what it means, and

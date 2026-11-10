@@ -246,6 +246,11 @@
       "each": "প্রতিটি {{price}}",
       "quantity": "সংখ্যা, {{title}}"
     },
+    "alsoAvailable": {
+      "title": "একই পার্সেলে আরও বই নিন",
+      "add": "{{title}} যোগ করুন",
+      "all": "সব {{count}}টি →"
+    },
     "recap": {
       "title": "আপনার অর্ডার",
       "edit": "কার্ট সম্পাদনা",
