@@ -27,6 +27,7 @@ export type { FieldFrameProps, FieldProps } from "./field";
 export {
   BagIcon,
   BookOpenIcon,
+  ChevronDownIcon,
   FacebookIcon,
   MailIcon,
   MapPinIcon,

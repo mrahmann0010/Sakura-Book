@@ -108,6 +108,25 @@ export function SampleArrowIcon(props: IconProps) {
   );
 }
 
+/**
+ * A disclosure chevron, pointing down when the thing it belongs to is shut.
+ *
+ * Replaces the `▾` character the collapsed order recap used to print: a text
+ * glyph takes its weight and its baseline from whichever font in the Bangla /
+ * Latin stack happens to resolve it, so it sat a little off-centre and a
+ * little too light next to a 13.5px label, and it could not be given the
+ * 1.5px stroke every other glyph in this file shares.
+ *
+ * The caller rotates it 180° to point up when open.
+ */
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m6 9.5 6 6 6-6" />
+    </Icon>
+  );
+}
+
 /** Where we are. A pin, for the one contact row that is a place and not a link. */
 export function MapPinIcon(props: IconProps) {
   return (

@@ -12,6 +12,7 @@
     "shopAll": "すべての本を見る",
     "addToCart": "カートに入れる",
     "buyNow": "今すぐ購入",
+    "preOrder": "予約注文する",
     "inCart": "カート内 · {{count}}",
     "removeFromCart": "カートから削除",
     "goToCart": "カートへ進む",
@@ -370,9 +371,11 @@
       "editors-pick": "編集部のおすすめ",
       "last-copy": "残り1冊",
       "signed": "サイン入り",
+      "new": "新刊",
       "coming-soon": "近日発売",
       "pre-order": "予約注文"
     },
+    "shipsAroundShort": "{{date}}発送予定",
     "preOrder": {
       "shipsAround": "予約注文受付中 — 発送予定 {{date}}"
     },

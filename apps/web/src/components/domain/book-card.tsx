@@ -7,7 +7,7 @@ import { formatMoney, intlLocale } from "@/lib/money";
 import { cn, type Variants } from "@/lib/utils";
 
 import { BookCover } from "./book-cover";
-import { flagLabels, type BookSummary } from "./types";
+import { cardCopy, flagLabels, type BookSummary } from "./types";
 
 /* --------------------------------------------------------------------------
    See ./README.md for the contexts this API was designed against. In short:
@@ -129,6 +129,8 @@ export function BookCard({
   priority = false,
 }: BookCardProps) {
   const flag = showFlag ? book.flag : undefined;
+  const labels = flagLabels(locale);
+  const copy = cardCopy(locale);
   /**
    * The price, or the word that stands in for it — `undefined` when the badge
    * is already carrying that word.
@@ -146,22 +148,22 @@ export function BookCard({
     book.flag === "coming-soon"
       ? flag === "coming-soon"
         ? undefined
-        : "Coming soon"
+        : copy.comingSoon
       : book.soldOut
-        ? "Out of stock"
+        ? copy.outOfStock
         : formatMoney(book.priceCents, intlLocale(locale));
 
-  /* "Ships around <Month year>" — the same fact the detail page's buy card
+  /* "Ships around <day Month>" — the same fact the detail page's buy card
      states in full sentence form (`book.preOrder.shipsAround`), shortened to
-     fit the caption row a grid card has for it. English only, like every
-     other word this component prints — `flagLabels` never went through i18n
-     either, and a card is not the place to start. */
+     fit the caption row a grid card has for it. */
   const shipDateLine =
     book.flag === "pre-order" && book.expectedShipDate
-      ? `Ships around ${new Intl.DateTimeFormat(intlLocale(locale), {
-          year: "numeric",
-          month: "long",
-        }).format(new Date(book.expectedShipDate))}`
+      ? copy.shipsAround(
+          new Intl.DateTimeFormat(intlLocale(locale), {
+            day: "numeric",
+            month: "long",
+          }).format(new Date(book.expectedShipDate)),
+        )
       : undefined;
 
   const title = book.href ? (
@@ -224,7 +226,7 @@ export function BookCard({
 
   if (variant === "panel") {
     const badge = flag ? (
-      <Badge tone={flag === "editors-pick" ? "accent" : "neutral"}>{flagLabels[flag]}</Badge>
+      <Badge tone={flag === "editors-pick" ? "accent" : "neutral"}>{labels[flag]}</Badge>
     ) : null;
 
     return (
@@ -326,7 +328,7 @@ export function BookCard({
                 flag === "editors-pick" ? "accent" : flag === "pre-order" ? "outline" : "neutral"
               }
             >
-              {flagLabels[flag]}
+              {labels[flag]}
             </Badge>
           </p>
         ) : null}

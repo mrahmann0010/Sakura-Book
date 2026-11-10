@@ -99,7 +99,7 @@ export function CartItem({
           <p className="text-caption text-muted mt-1">
             {t("book.preOrder.shipsAround", {
               date: new Intl.DateTimeFormat(undefined, {
-                year: "numeric",
+                day: "numeric",
                 month: "long",
               }).format(new Date(book.expectedShipDate)),
             })}

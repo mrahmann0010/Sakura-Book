@@ -12,6 +12,7 @@
     "shopAll": "সব বই দেখুন",
     "addToCart": "কার্টে দিন",
     "buyNow": "এখনই কিনুন",
+    "preOrder": "প্রি-অর্ডার করুন",
     "inCart": "কার্টে · {{count}}",
     "removeFromCart": "কার্ট থেকে সরান",
     "goToCart": "কার্টে যান",
@@ -372,9 +373,11 @@
       "editors-pick": "সম্পাদকের পছন্দ",
       "last-copy": "শেষ কপি",
       "signed": "স্বাক্ষরিত",
+      "new": "নতুন",
       "coming-soon": "শীঘ্রই আসছে",
       "pre-order": "প্রি-অর্ডার"
     },
+    "shipsAroundShort": "{{date}} তারিখে পাঠানো হবে",
     "preOrder": {
       "shipsAround": "প্রি-অর্ডার করুন — আনুমানিক {{date}} তারিখে পাঠানো হবে"
     },

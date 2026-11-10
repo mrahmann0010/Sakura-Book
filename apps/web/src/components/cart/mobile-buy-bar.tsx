@@ -37,13 +37,30 @@ export function MobileBuyBar({
          the other end of the same bar, and a second blur value would read as a
          second kind of surface. The sample reader sits above both at z-50. */
       className="bg-frost border-rule fixed inset-x-0 bottom-0 z-40 border-t [backdrop-filter:blur(12px)_saturate(180%)] lg:hidden"
-      /* The home indicator's strip on an iPhone. Without it the button's
-         bottom edge sits under the gesture bar, where a press is a swipe. */
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      /* Clearance for the home indicator's strip on an iPhone — but 16px less
+         than the full inset, and never less than 8px on a phone that reports
+         none.
+
+         The full 34px inset plus a 46px button plus padding came to ~105px,
+         or 12.5% of a 390×844 screen, held permanently over the one page the
+         reader came to read. At 18px the button's bottom edge is still clear
+         of the indicator itself; what it gives up is part of the margin
+         around it, so a press landing in the button's lowest few pixels can
+         register as the swipe-up-to-home gesture instead. Deliberate: the
+         button is 46px tall and centred in the bar, so that strip is the
+         least likely part of it to be hit, and the trade buys back 4% of the
+         viewport on every scroll.
+
+         Not `py` on the Shell below: the inset is the bottom padding, and
+         paying both is what made the old bar 12px taller than it read. */
+      style={{ paddingBottom: "max(env(safe-area-inset-bottom) - 16px, 8px)" }}
     >
-      <Shell className="flex items-center gap-4 py-3">
+      <Shell className="flex items-center gap-4 pt-1.5">
         <p className="flex shrink-0 flex-col leading-tight">
-          <span className="text-19 text-ink font-serif">{price}</span>
+          {/* 17 rather than 19: this is the second printing of a price the buy
+              card states in full, and in a bar this tight the button is what
+              the row is for. */}
+          <span className="text-17 text-ink font-serif">{price}</span>
           {compareAtPrice ? (
             <span className="text-11.5 text-muted line-through">{compareAtPrice}</span>
           ) : null}

@@ -141,8 +141,11 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
           ? t("book.stock.out")
           : view.expectedShipDate
             ? t("book.preOrder.shipsAround", {
+                /* Day and month, no year: a pre-order ships within months, so
+                   the year is noise — and "5 January" reads as a date a buyer
+                   can hold, where "January 2027" reads as a quarter. */
                 date: new Intl.DateTimeFormat(intlLocale(locale), {
-                  year: "numeric",
+                  day: "numeric",
                   month: "long",
                 }).format(new Date(view.expectedShipDate)),
               })
@@ -170,6 +173,11 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
       priceCents={book.priceCents}
       soldOut={view.soldOut}
       comingSoon={view.flag === "coming-soon"}
+      /* "Pre-order now" instead of "Buy now" — the same button and the same
+         checkout, just the word that matches the badge above it and the
+         "ships around" line beside it. The grid cards keep "Buy now"; see the
+         prop's own doc for why this page is the only one that changes. */
+      preOrder={view.flag === "pre-order"}
       size="md"
       variant="primary"
       block
@@ -288,10 +296,12 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
           over: once as empty cream at the top and again as content pushed off
           the bottom of the first screen.
 
-          `pb-28` clears MobileBuyBar, which is fixed and so takes no space in
+          `pb-20` clears MobileBuyBar, which is fixed and so takes no space in
           the flow: without it the bar covers the last rows of the gallery and
-          the footer's first line, permanently. */}
-      <Shell className="pt-3 pb-28 lg:py-14">
+          the footer's first line, permanently. It was `pb-28` against the
+          bar's old ~105px; the bar is ~71px now, so the rest was dead cream
+          below the last row. */}
+      <Shell className="pt-3 pb-20 lg:py-14">
         {/* The full trail is a desktop affordance. At 342px "বই · N5 · Kanji
             Redical Guide Book" wraps to two lines and spends ~45px above the
             title to tell a reader on a phone where they are — which they know,

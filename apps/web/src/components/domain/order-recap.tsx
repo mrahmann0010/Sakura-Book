@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 
-import { Card } from "@/components/ui";
+import { Card, ChevronDownIcon } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 import { OrderLine, SummaryCard, SummaryRow } from "./summary-card";
@@ -125,15 +125,18 @@ export function CollapsibleOrderRecap({
       >
         <span className="text-13.5 text-secondary flex items-center gap-2.5">
           {summaryLabel}
-          <span
-            aria-hidden
+          {/* 16 rather than the file's default 18: it qualifies a 13.5px
+              label, and the label is what says what the row does. Rotates to
+              point up when the recap is open, so the glyph states the next
+              press and not the current state — `aria-expanded` on the button
+              already carries the state for a screen reader. */}
+          <ChevronDownIcon
+            size={16}
             className={cn(
-              "text-muted text-10 transition-transform duration-150",
+              "text-muted shrink-0 transition-transform duration-150",
               open && "rotate-180",
             )}
-          >
-            ▾
-          </span>
+          />
         </span>
         <span className="text-15 text-ink font-semibold">{totalValue}</span>
       </button>
