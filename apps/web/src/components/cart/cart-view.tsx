@@ -8,8 +8,8 @@ import { PageHeader, Shell, RailLayout, StickyBar } from "@/components/layout";
 import { LinkButton, Notice, Skeleton, SkeletonText } from "@/components/ui";
 import { useCart } from "@/hooks/use-cart";
 import { useCartStepEvent } from "@/hooks/use-cart-step-event";
+import { useTitlesInStock } from "@/hooks/use-titles-in-stock";
 import type { Locale } from "@/i18n/settings";
-import { titlesInStock } from "@/lib/books";
 import { summaryLines } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
@@ -57,6 +57,11 @@ export function CartView({ locale }: { locale: Locale }) {
   const path = routes(locale);
   const cart = useCart();
 
+  /* Asked for unconditionally — hooks cannot sit behind the empty-cart branch
+     below, and the request is one count-only read that the shelf's own 60s
+     cache absorbs. */
+  const titlesInStock = useTitlesInStock();
+
   useCartStepEvent("view_cart", cart);
 
   /* Hydration is one wait, quoting is another: localStorage can hand back
@@ -78,7 +83,12 @@ export function CartView({ locale }: { locale: Locale }) {
           description={
             cart.rejected.length > 0
               ? t("cart.rejectedNotice", { count: cart.rejected.length })
-              : t("cart.empty.description", { count: titlesInStock })
+              : /* No number until there is a real one. The count arrives a
+                   beat after this paint, and on a failed read never does, so
+                   the copy has a form that invites without counting. */
+                titlesInStock === null
+                ? t("cart.empty.descriptionUnknown")
+                : t("cart.empty.description", { count: titlesInStock })
           }
           action={<LinkButton href={path.catalog}>{t("cart.empty.action")}</LinkButton>}
         />

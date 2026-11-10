@@ -159,6 +159,7 @@
       "eyebrow": "Cart",
       "title": "Your cart is empty",
       "description": "{{count}} titles are waiting on the shelf.",
+      "descriptionUnknown": "The whole shelf is waiting for you.",
       "action": "Browse books"
     },
     "loading": "Reading your cart…"
