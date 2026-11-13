@@ -83,9 +83,9 @@ export function isInFulfillmentScope(
  * Why a packer may not make this move, or null if they may.
  *
  * `entering` is every status the request would put the order into — the whole
- * route for an `advance`, as the service computes it — so marking a
- * PAYMENT_CONFIRMED order shipped (through PROCESSING) is allowed, while
- * anything that passes through a status outside the packer's two is not.
+ * route for an `advance`, as the service computes it. Anything that passes
+ * through a status outside the packer's two is refused, and so is shipping an
+ * order that was never marked packed — see the last check.
  *
  * A duplicate-receipt override is refused outright. It is only meaningful on
  * the way into PAYMENT_CONFIRMED, which a packer can never enter, so its
@@ -108,6 +108,14 @@ export function fulfillmentTransitionBlocker(
 
   if (paymentOverride) {
     return "Payment decisions are not made from the packing table.";
+  }
+
+  /* Packed before shipped. The Packing screen is where each book in a parcel
+     is checked off, and shipping an order that skipped it is how an unchecked
+     parcel reaches a customer. Staff can still walk both steps at once from
+     the order page; the packer's desk cannot. */
+  if (entering.includes("SHIPPED") && from !== "PROCESSING") {
+    return "Mark this order packed on the Packing screen before handing it to the courier.";
   }
 
   return null;

@@ -13,6 +13,7 @@ import { adminLogout, adminRefreshSession } from "@/lib/api/admin";
 import {
   ADMIN_AUTHED_KEY,
   ADMIN_ROLE_KEY,
+  DISPATCH_PATH,
   FULFILLMENT_HOME,
   isPathAllowedForRole,
 } from "@/lib/admin-auth";
@@ -63,6 +64,10 @@ const NAV_CLUSTERS = [
   [{ href: "", label: "Dashboard" }],
   [
     { href: "/orders", label: "Orders" },
+    // Before Processing because it comes first in the day: books are picked
+    // and each parcel checked here, then handed over on Processing. Shipping
+    // there only works on orders marked packed here.
+    { href: "/packing", label: "Packing" },
     // Its own entry, not a tab inside Orders: the triage queue and the packing
     // list are worked by different people at different points in the week, and
     // the one that filters by destination division only makes sense after the
@@ -112,15 +117,16 @@ const NAV_CLUSTERS = [
 type NavItem = { href: string; label: string };
 
 /**
- * The packing table's rail: the queue it works and the shelf it reads.
+ * The packing table's rail: packing, handing over, and the shelf it reads.
  *
- * One cluster of two rather than the owner's rail with entries removed —
+ * One cluster rather than the owner's rail with entries removed —
  * filtering the four clusters would leave Stock alone in a gap sized for a
  * group, which reads as a mistake rather than as a smaller desk.
  */
 const FULFILLMENT_NAV: readonly (readonly NavItem[])[] = [
   [
-    { href: FULFILLMENT_HOME, label: "Processing" },
+    { href: FULFILLMENT_HOME, label: "Packing" },
+    { href: DISPATCH_PATH, label: "Processing" },
     { href: "/stock", label: "Stock" },
   ],
 ];
@@ -187,7 +193,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   /**
    * A packer on a page outside the packing table — the dashboard they land on
-   * from an old bookmark, or a URL typed by hand — is sent to Processing
+   * from an old bookmark, or a URL typed by hand — is sent to Packing
    * instead of being shown a screen whose every request the API refuses.
    * `children` are held back meanwhile, so those requests are never made.
    */

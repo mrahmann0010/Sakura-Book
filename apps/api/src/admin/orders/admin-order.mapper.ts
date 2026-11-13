@@ -1,6 +1,7 @@
 import type {
   AdminOrderDetail,
   AdminOrderSummary,
+  AdminOrderSummaryLine,
   AdminOrderVerificationState,
   AdminPayment,
   PaymentMethod,
@@ -78,9 +79,16 @@ export function receiptUniquenessOf(
   return { state: "UNIQUE", claimedByOrderNumber: null };
 }
 
+/** What the queue knows about an order's lines: the counts and the titles. */
+export type OrderLineSummary = {
+  lineCount: number;
+  itemCount: number;
+  lines: AdminOrderSummaryLine[];
+};
+
 export function toAdminOrderSummary(
   row: OrderListRow,
-  counts: { lineCount: number; itemCount: number } | undefined,
+  counts: OrderLineSummary | undefined,
   receipt: ReceiptUniqueness,
   verification: AdminOrderVerificationState,
 ): AdminOrderSummary {
@@ -102,6 +110,7 @@ export function toAdminOrderSummary(
     // wrong place to discover that, so it renders as zero rather than throwing.
     lineCount: counts?.lineCount ?? 0,
     itemCount: counts?.itemCount ?? 0,
+    lines: counts?.lines ?? [],
     /**
      * A flag, not the note. The queue shows a marker so staff know to open the
      * order; sending every internal note in a fifty-row list would put

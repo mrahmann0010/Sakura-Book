@@ -199,6 +199,22 @@ describe("adminOrderFilters", () => {
   it("rejects a division that is not one of the eight", () => {
     expect(() => adminOrderQuerySchema.parse({ division: "kolkata" })).toThrow();
   });
+
+  it("finds orders containing a book with a subquery, never a join", () => {
+    // Same reason as the shipping dates: a join would count an order once per
+    // line, so a two-line order would appear twice on the packing queue.
+    const bookId = "6f1c2c9e-8a1f-4c1e-9d55-0b6a4b2f7e10";
+    const { sql, params } = render(adminOrderFilters(query({ bookId })));
+
+    expect(sql).toContain("exists");
+    expect(sql).toContain('"order_items"');
+    expect(sql).not.toContain("join");
+    expect(params).toContain(bookId);
+  });
+
+  it("rejects a book id that is not a uuid", () => {
+    expect(() => adminOrderQuerySchema.parse({ bookId: "n5-vocab" })).toThrow();
+  });
 });
 
 describe("adminOrderOrder", () => {
