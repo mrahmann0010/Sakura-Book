@@ -11,12 +11,13 @@ import type {
   AdminOrderQuery,
   AdminOrderTransitionRequest,
   AdminOrderVerifyPaymentResult,
+  AdminPickList,
   OrderStatus,
   AdminRecordRefundRequest,
   AdminReopenOrderRequest,
   AdminRevertPaymentRequest,
 } from "@sakura/contracts";
-import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { claimKeyFor, nextClaimKey, normaliseTrxId, type ClaimOutcome } from "@project-sakura/pay";
 import { InvalidInputError, ResourceNotFoundError } from "../../common/errors";
 import type { Env } from "../../config/env.schema";
@@ -47,6 +48,7 @@ import {
 import {
   heldClaimOf,
   receiptUniquenessOf,
+  type OrderLineSummary,
   toAdminOrderDetail,
   toAdminOrderSummary,
 } from "./admin-order.mapper";
@@ -172,7 +174,7 @@ export class AdminOrdersService {
        twenty-five orders and each badge needs a fact this row does not carry;
        asking per row would turn one table into seventy-five round trips. */
     const [counts, duplicated, verifications] = await Promise.all([
-      this.itemCounts(rows.map((row) => row.id)),
+      this.orderLines(rows.map((row) => row.id)),
       this.verificationLog.findDuplicatedReceipts(
         rows.flatMap((row) => (row.transactionIdNormalised ? [row.transactionIdNormalised] : [])),
       ),
@@ -239,7 +241,7 @@ export class AdminOrdersService {
       .orderBy(...adminOrderOrder(query.sort))
       .limit(EXPORT_LIMIT);
 
-    const counts = await this.itemCounts(rows.map((row) => row.id));
+    const counts = await this.orderLines(rows.map((row) => row.id));
 
     return toPathaoCsv(
       rows.map((row) => ({
@@ -257,6 +259,45 @@ export class AdminOrdersService {
       })),
       this.config.get("PATHAO_STORE_NAME", { infer: true }),
     );
+  }
+
+  /**
+   * Copies needed per title across every order the filters matched.
+   *
+   * The same scoped filters as `list()`, unpaginated, so the pick list always
+   * covers the queue it sits above — including for a packer, whose scope is
+   * ANDed in exactly as it is for the queue. Page and page size are ignored.
+   *
+   * Grouped by book id and title together: a removed book has a null id, and
+   * its snapshot title is the only way to keep two removed books apart.
+   */
+  async pickList(query: AdminOrderQuery, viewer: AccessClaims): Promise<AdminPickList> {
+    const where = this.scopedFilters(query, viewer);
+
+    const [entries, [{ totalOrders }]] = await Promise.all([
+      this.dbService.db
+        .select({
+          bookId: orderItems.bookId,
+          title: orderItems.bookTitleSnapshot,
+          copies: sql<number>`sum(${orderItems.quantity})::int`,
+          orders: sql<number>`count(distinct ${orderItems.orderId})::int`,
+        })
+        .from(orderItems)
+        .innerJoin(orders, eq(orderItems.orderId, orders.id))
+        .where(where)
+        .groupBy(orderItems.bookId, orderItems.bookTitleSnapshot)
+        .orderBy(desc(sql`sum(${orderItems.quantity})`), asc(orderItems.bookTitleSnapshot)),
+      this.dbService.db
+        .select({ totalOrders: sql<number>`count(*)::int` })
+        .from(orders)
+        .where(where),
+    ]);
+
+    return {
+      entries,
+      totalOrders,
+      totalCopies: entries.reduce((sum, entry) => sum + entry.copies, 0),
+    };
   }
 
   /**
@@ -1450,25 +1491,39 @@ export class AdminOrdersService {
     return filters ? and(filters, fulfillmentOrderScope()) : fulfillmentOrderScope();
   }
 
-  /** Line and copy counts per order, in one grouped query for the whole page. */
-  private async itemCounts(
-    orderIds: string[],
-  ): Promise<Map<string, { lineCount: number; itemCount: number }>> {
-    if (orderIds.length === 0) return new Map();
+  /**
+   * Each order's lines, titles and counts, in one query for the whole page.
+   *
+   * The lines themselves rather than a grouped count, because the queue now
+   * shows what is in each parcel. A page is at most a hundred orders of a few
+   * lines each, so this stays one small query; the counts are summed here
+   * from the same rows so the two can never disagree.
+   */
+  private async orderLines(orderIds: string[]): Promise<Map<string, OrderLineSummary>> {
+    const summaries = new Map<string, OrderLineSummary>();
+    if (orderIds.length === 0) return summaries;
 
     const rows = await this.dbService.db
       .select({
         orderId: orderItems.orderId,
-        lineCount: sql<number>`count(*)::int`,
-        itemCount: sql<number>`coalesce(sum(${orderItems.quantity}), 0)::int`,
+        bookId: orderItems.bookId,
+        title: orderItems.bookTitleSnapshot,
+        quantity: orderItems.quantity,
       })
       .from(orderItems)
       .where(inArray(orderItems.orderId, orderIds))
-      .groupBy(orderItems.orderId);
+      .orderBy(asc(orderItems.bookTitleSnapshot), asc(orderItems.id));
 
-    return new Map(
-      rows.map((row) => [row.orderId, { lineCount: row.lineCount, itemCount: row.itemCount }]),
-    );
+    for (const row of rows) {
+      const summary = summaries.get(row.orderId) ?? { lineCount: 0, itemCount: 0, lines: [] };
+
+      summary.lineCount += 1;
+      summary.itemCount += row.quantity;
+      summary.lines.push({ bookId: row.bookId, title: row.title, quantity: row.quantity });
+      summaries.set(row.orderId, summary);
+    }
+
+    return summaries;
   }
 }
 

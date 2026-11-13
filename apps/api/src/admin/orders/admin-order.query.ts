@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import { districtsFor, type AdminOrderQuery } from "@sakura/contracts";
-import { orderStatusHistory, orders } from "../../db/schema";
+import { orderItems, orderStatusHistory, orders } from "../../db/schema";
 import { ORDER_NUMBER_PREFIX } from "../../orders";
 
 /**
@@ -127,6 +127,19 @@ function shippedBetween(from: string | undefined, to: string | undefined): SQL {
   )})`;
 }
 
+/**
+ * Orders with at least one line for this book.
+ *
+ * `exists` for the same reason as `shippedBetween`: callers count the rows
+ * they select from `orders`, and a join would count an order once per line.
+ */
+function containsBook(bookId: string): SQL {
+  return sql`exists (select 1 from ${orderItems} where ${and(
+    eq(orderItems.orderId, orders.id),
+    eq(orderItems.bookId, bookId),
+  )})`;
+}
+
 export function adminOrderFilters(query: AdminOrderQuery): SQL | undefined {
   const conditions: SQL[] = [];
 
@@ -134,6 +147,7 @@ export function adminOrderFilters(query: AdminOrderQuery): SQL | undefined {
   if (query.paymentMethod) conditions.push(eq(orders.paymentMethod, query.paymentMethod));
   if (query.q) conditions.push(textMatch(query.q));
   if (query.division) conditions.push(divisionMatch(query.division));
+  if (query.bookId) conditions.push(containsBook(query.bookId));
 
   if (query.placedFrom) {
     conditions.push(gte(orders.createdAt, new Date(`${query.placedFrom}T00:00:00.000Z`)));

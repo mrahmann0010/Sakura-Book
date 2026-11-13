@@ -58,12 +58,18 @@ describe("isInFulfillmentScope", () => {
 });
 
 describe("fulfillmentTransitionBlocker", () => {
-  it("allows the two forward moves, one step or both at once", () => {
+  it("allows marking packed, then shipping a packed order", () => {
     expect(fulfillmentTransitionBlocker("PAYMENT_CONFIRMED", ["PROCESSING"], undefined)).toBeNull();
     expect(fulfillmentTransitionBlocker("PROCESSING", ["SHIPPED"], undefined)).toBeNull();
+  });
+
+  it("refuses shipping an order that was never marked packed", () => {
     expect(
       fulfillmentTransitionBlocker("PAYMENT_CONFIRMED", ["PROCESSING", "SHIPPED"], undefined),
-    ).toBeNull();
+    ).not.toBeNull();
+    expect(
+      fulfillmentTransitionBlocker("PAYMENT_CONFIRMED", ["SHIPPED"], undefined),
+    ).not.toBeNull();
   });
 
   it("refuses cancelling, refunding, delivering and going backward", () => {
@@ -116,6 +122,7 @@ describe("redaction", () => {
     totalCents: 120000,
     lineCount: 1,
     itemCount: 2,
+    lines: [{ bookId: null, title: "JLPT N5 Vocabulary", quantity: 2 }],
     hasInternalNote: false,
     receipt: { state: "DUPLICATE", claimedByOrderNumber: "NB-40001" },
     verification: {

@@ -103,6 +103,15 @@ export const adminOrderQuerySchema = pageQuerySchema({ defaultPageSize: 25 }).ex
   shippedFrom: z.iso.date().optional(),
   shippedTo: z.iso.date().optional(),
 
+  /**
+   * Only orders with at least one line for this book.
+   *
+   * For the packing screen's pick list: clicking a title narrows the queue to
+   * the parcels that need it — the question a short-stocked title or a fresh
+   * restock starts from.
+   */
+  bookId: z.string().uuid().optional(),
+
   sort: z.enum(adminOrderSorts).default("recent"),
 });
 
@@ -164,6 +173,15 @@ export const adminOrderVerificationStateSchema = z.object({
 
 export type AdminOrderVerificationState = z.infer<typeof adminOrderVerificationStateSchema>;
 
+export const adminOrderSummaryLineSchema = z.object({
+  /** Null when the book has since been removed from the catalog. */
+  bookId: z.string().uuid().nullable(),
+  title: z.string(),
+  quantity: z.number().int().positive(),
+});
+
+export type AdminOrderSummaryLine = z.infer<typeof adminOrderSummaryLineSchema>;
+
 export const adminOrderSummarySchema = z.object({
   orderNumber: z.string(),
   status: z.enum(orderStatuses),
@@ -187,6 +205,13 @@ export const adminOrderSummarySchema = z.object({
   /** Distinct titles, and total copies — enough to size a pick list at a glance. */
   lineCount: z.number().int().nonnegative(),
   itemCount: z.number().int().nonnegative(),
+  /**
+   * What is in the parcel: each title and how many copies.
+   *
+   * Titles and quantities only, read off the order's snapshot — enough to pack
+   * from, without the prices and covers the detail page carries.
+   */
+  lines: z.array(adminOrderSummaryLineSchema),
   hasInternalNote: z.boolean(),
 
   /**
@@ -215,6 +240,31 @@ export const adminOrderListSchema = paginated(adminOrderSummarySchema).extend({
 });
 
 export type AdminOrderList = z.infer<typeof adminOrderListSchema>;
+
+/**
+ * The pick list: copies needed per title across every order the filters
+ * matched, so the shelf can be cleared in one walk before packing starts.
+ *
+ * Grouped by book id and title together. A removed book has no id, so its
+ * snapshot title is the only thing left to group it by.
+ */
+export const adminPickListEntrySchema = z.object({
+  bookId: z.string().uuid().nullable(),
+  title: z.string(),
+  /** Copies across every matching order. */
+  copies: z.number().int().positive(),
+  /** How many of those orders want this title. */
+  orders: z.number().int().positive(),
+});
+
+export const adminPickListSchema = z.object({
+  entries: z.array(adminPickListEntrySchema),
+  totalOrders: z.number().int().nonnegative(),
+  totalCopies: z.number().int().nonnegative(),
+});
+
+export type AdminPickListEntry = z.infer<typeof adminPickListEntrySchema>;
+export type AdminPickList = z.infer<typeof adminPickListSchema>;
 
 /** A recorded payment attempt against an order. */
 export const adminPaymentSchema = z.object({
@@ -733,7 +783,8 @@ export const FULFILLMENT_ORDER_STATUSES = ["PAYMENT_CONFIRMED", "PROCESSING", "S
 export const FULFILLMENT_SHIPPED_WINDOW_DAYS = 3;
 
 /**
- * The only moves a packer may make: forward, one step or two.
+ * The only moves a packer may make: forward, one step at a time — packed,
+ * then shipped.
  *
  * No CANCELLED, no REFUNDED, no DELIVERED (the courier's fact, not the
  * packer's), and nothing backward. A packer who finds a problem leaves a note

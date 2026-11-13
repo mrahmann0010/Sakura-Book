@@ -16,19 +16,27 @@ export const ADMIN_ROLE_KEY = "sakura-admin-role";
 /**
  * The panel paths a FULFILLMENT account works in, relative to `/{locale}/admin`.
  *
- * Processing is the packer's home; an order's own page is where Processing
- * links to; Stock is read-only for them. Everything else in the panel is
- * behind a route the API will refuse, so the shell sends them home rather
- * than rendering a screen of errors.
+ * Packing is the packer's home: picking and checking parcels is most of the
+ * day. Processing is where packed parcels are handed to the courier; an
+ * order's own page is where both link to; Stock is read-only for them.
+ * Everything else in the panel is behind a route the API will refuse, so the
+ * shell sends them home rather than rendering a screen of errors.
  */
-export const FULFILLMENT_HOME = "/accepted-orders";
+export const FULFILLMENT_HOME = "/packing";
+
+/** The dispatch list. The route keeps its old name for existing bookmarks. */
+export const DISPATCH_PATH = "/accepted-orders";
+
+function isUnder(path: string, root: string): boolean {
+  return path === root || path.startsWith(`${root}/`);
+}
 
 export function isPathAllowedForRole(role: AdminRole | null, path: string): boolean {
   if (role !== "FULFILLMENT") return true;
 
   return (
-    path === FULFILLMENT_HOME ||
-    path.startsWith(`${FULFILLMENT_HOME}/`) ||
+    isUnder(path, FULFILLMENT_HOME) ||
+    isUnder(path, DISPATCH_PATH) ||
     path === "/stock" ||
     // One order's page, but not the Orders triage list above it.
     /^\/orders\/[^/]+$/.test(path)

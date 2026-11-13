@@ -68,11 +68,10 @@ const TABS = [
   {
     key: "processing",
     label: "Processing",
-    /* Both statuses, because both mean the same thing to the person at the
-       packing table: paid for, still here. PROCESSING is the one an order
-       reaches when somebody has started on it, but the shop picks and hands
-       over in one session, so splitting them into two tabs would charge a
-       second tick for what is usually one motion. */
+    /* Both statuses, so the whole of what is still here shows in one list:
+       PAYMENT_CONFIRMED is paid and waiting to be packed, PROCESSING is packed
+       on the Packing screen and waiting for the courier. Only the packed ones
+       can be ticked — see the Ship column. */
     statuses: ["PAYMENT_CONFIRMED", "PROCESSING"],
     /* Ticking a row here ships it. Only on this tab: the Shipped tab is a
        record of what has gone, and nothing there has a next step that a
@@ -621,14 +620,29 @@ export default function AdminAcceptedOrdersPage() {
                           and SHIPPED has no way back through the machine, so a
                           control that could be cleared would be lying about
                           what it can undo. */}
-                    <input
-                      type="checkbox"
-                      checked={shipping.has(order.orderNumber)}
-                      disabled={shipping.has(order.orderNumber)}
-                      onChange={() => void ship(order)}
-                      aria-label={`Mark ${order.orderNumber} as shipped`}
-                      className="accent-clay size-4 cursor-pointer disabled:cursor-wait"
-                    />
+                    {/* Packed orders only. An order still at PAYMENT_CONFIRMED
+                          has not had its books checked off on the Packing
+                          screen, and shipping it from here is how an unchecked
+                          parcel reaches a customer. */}
+                    {order.status === "PROCESSING" ? (
+                      <input
+                        type="checkbox"
+                        checked={shipping.has(order.orderNumber)}
+                        disabled={shipping.has(order.orderNumber)}
+                        onChange={() => void ship(order)}
+                        aria-label={`Mark ${order.orderNumber} as shipped`}
+                        className="accent-clay size-4 cursor-pointer disabled:cursor-wait"
+                      />
+                    ) : (
+                      <input
+                        type="checkbox"
+                        checked={false}
+                        disabled
+                        aria-label={`${order.orderNumber} is not packed yet`}
+                        title="Pack this order on the Packing screen first"
+                        className="size-4 cursor-not-allowed opacity-40"
+                      />
+                    )}
                   </td>
                 ) : null}
                 <td className="text-ink px-4 py-3 font-mono">{order.orderNumber}</td>
@@ -647,7 +661,22 @@ export default function AdminAcceptedOrdersPage() {
                 <td className="text-ink px-4 py-3">
                   {formatMoney(order.totalCents, "en-GB", order.currency)}
                 </td>
-                <td className="text-secondary px-4 py-3">{order.status}</td>
+                <td className="px-4 py-3">
+                  {order.status === "PAYMENT_CONFIRMED" ? (
+                    <Link
+                      href={`/${locale}/admin/packing`}
+                      className="text-clay hover:text-clay-deep"
+                    >
+                      To pack
+                    </Link>
+                  ) : order.status === "PROCESSING" ? (
+                    <span className="text-ink">Packed</span>
+                  ) : (
+                    <span className="text-secondary">
+                      {order.status === "DELIVERED" ? "Delivered" : "Shipped"}
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-right">
                   <Link
                     href={`/${locale}/admin/orders/${order.orderNumber}`}

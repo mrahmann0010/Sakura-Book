@@ -56,7 +56,7 @@ export const ROLE_INFO: Record<AdminRole, RoleInfo> = {
     summary: "Packs paid orders and hands them to the courier.",
     can: [
       "See orders only after payment is verified, plus the last 3 days of shipped ones",
-      "Mark orders Processing, then Shipped",
+      "Check off each book and mark orders packed, then ship packed orders",
       "See name, phone, address, books, and the cash-on-delivery amount",
       "Download the courier CSV, leave internal notes, view stock levels",
     ],

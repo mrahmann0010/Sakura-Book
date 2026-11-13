@@ -26,6 +26,7 @@ import {
   type AdminOrderDetail,
   type AdminOrderList,
   type AdminOrderVerifyPaymentResult,
+  type AdminPickList,
 } from "@sakura/contracts";
 import type { Request, Response } from "express";
 import { createZodDto } from "nestjs-zod";
@@ -56,8 +57,8 @@ class AdminEditOrderContactDto extends createZodDto(adminEditOrderContactRequest
  * to ship anything unless the owner is at a keyboard. The exception is the
  * refund, below.
  *
- * FULFILLMENT accounts reach five routes here, each marked
- * `@AllowFulfillment()`: the queue, the courier CSV, one order, a forward
+ * FULFILLMENT accounts reach six routes here, each marked
+ * `@AllowFulfillment()`: the queue, the pick list, the courier CSV, one order, a forward
  * transition, and the note. Which orders and fields they get through those is
  * decided in the service (see fulfillment-scope.ts), not here — and payment
  * checks, confirmations, reopening and refunds stay closed to them by the
@@ -121,6 +122,20 @@ export class AdminOrdersController {
     response.setHeader("content-disposition", `attachment; filename="pathao-${stamp}.csv"`);
 
     return csv;
+  }
+
+  /**
+   * Copies needed per title across the filtered orders — the packing screen's
+   * pick list. Above `:orderNumber` for the same routing reason as the export.
+   */
+  @Get("pick-list")
+  @AllowFulfillment()
+  @ApiOperation({ summary: "Copies needed per title across the filtered orders." })
+  async pickList(
+    @Query() query: AdminOrderQueryDto,
+    @CurrentAdmin() admin: AccessClaims,
+  ): Promise<AdminPickList> {
+    return this.adminOrdersService.pickList(query, admin);
   }
 
   @Get(":orderNumber")

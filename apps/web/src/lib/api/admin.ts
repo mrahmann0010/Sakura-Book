@@ -21,6 +21,7 @@ import {
   adminLoginRequestSchema,
   adminOrderDetailSchema,
   adminOrderListSchema,
+  adminPickListSchema,
   adminOrderTransitionRequestSchema,
   adminOrderVerifyPaymentResultSchema,
   adminPaymentNumbersSchema,
@@ -71,6 +72,7 @@ import {
   type AdminLoginRequest,
   type AdminOrderDetail,
   type AdminOrderList,
+  type AdminPickList,
   type AdminOrderQuery,
   type AdminOrderTransitionRequest,
   type AdminOrderVerifyPaymentResult,
@@ -431,6 +433,7 @@ function orderSearch(query: Partial<AdminOrderQuery>): string {
   if (query.placedTo) search.set("placedTo", query.placedTo);
   if (query.shippedFrom) search.set("shippedFrom", query.shippedFrom);
   if (query.shippedTo) search.set("shippedTo", query.shippedTo);
+  if (query.bookId) search.set("bookId", query.bookId);
   if (query.sort) search.set("sort", query.sort);
   if (query.page) search.set("page", String(query.page));
   if (query.pageSize) search.set("pageSize", String(query.pageSize));
@@ -441,6 +444,13 @@ function orderSearch(query: Partial<AdminOrderQuery>): string {
 
 export function listAdminOrders(query: Partial<AdminOrderQuery> = {}): Promise<AdminOrderList> {
   return adminFetch(`/admin/orders${orderSearch(query)}`, adminOrderListSchema);
+}
+
+/** Copies needed per title across the filtered orders — the packing pick list. */
+export function getAdminPickList(
+  filters: Omit<Partial<AdminOrderQuery>, "page" | "pageSize"> = {},
+): Promise<AdminPickList> {
+  return adminFetch(`/admin/orders/pick-list${orderSearch(filters)}`, adminPickListSchema);
 }
 
 /**
