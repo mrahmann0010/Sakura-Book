@@ -546,6 +546,44 @@ export default function AdminAcceptedOrdersPage() {
         >
           Pathao Export
         </Button>
+
+        {/* The paper version of this tab: every matching order (not just this
+              page) on one printable sheet with boxes to tick by hand. Opens in
+              a new tab so the list here keeps its place. Processing tab only —
+              the Shipped tab has nothing left to tick. */}
+        {activeTab.shippable ? (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={items.length === 0 || !bounds}
+            onClick={() => {
+              const params = new URLSearchParams();
+              if (division) params.set("division", division);
+              if (q.trim()) params.set("q", q.trim());
+              if (bounds?.from) params.set("placedFrom", bounds.from);
+              if (bounds?.to) params.set("placedTo", bounds.to);
+              const qs = params.toString();
+              window.open(
+                `/${locale}/admin/accepted-orders/checklist${qs ? `?${qs}` : ""}`,
+                "_blank",
+                "noopener",
+              );
+            }}
+            leading={
+              <svg
+                viewBox="0 0 20 20"
+                className="size-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <path d="M5.5 7V3.5h9V7M5.5 14H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-1.5M5.5 11.5h9v5h-9z" />
+              </svg>
+            }
+          >
+            Print checklist
+          </Button>
+        ) : null}
       </div>
 
       {error ? <p className="text-13.5 text-clay-deep">{error}</p> : null}
