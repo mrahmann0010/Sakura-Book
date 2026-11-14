@@ -254,6 +254,8 @@
       "quantity": "数量、{{title}}"
     },
     "browseMore": "同じ荷物にもう一冊追加する",
+    "removed": "「{{title}}」を削除しました。",
+    "undo": "元に戻す",
     "coupon": {
       "legend": "クーポンコード",
       "label": "クーポンコード",
@@ -284,6 +286,8 @@
       "pickerAdd": "追加",
       "pickerAdded": "追加済み ✓",
       "pickerSoldOut": "在庫切れ",
+      "pickerPreOrder": "予約注文",
+      "pickerComingSoon": "近日発売",
       "pickerEmpty": "該当する本がありません。",
       "pickerFailed": "現在、本を読み込めませんでした。",
       "pickerRetry": "再試行",

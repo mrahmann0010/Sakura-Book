@@ -257,6 +257,8 @@
       "quantity": "সংখ্যা, {{title}}"
     },
     "browseMore": "একই পার্সেলে আরও বই নিন",
+    "removed": "“{{title}}” বাদ দেওয়া হয়েছে।",
+    "undo": "ফিরিয়ে আনুন",
     "coupon": {
       "legend": "কুপন কোড",
       "label": "কুপন কোড",
@@ -287,6 +289,8 @@
       "pickerAdd": "যোগ করুন",
       "pickerAdded": "যোগ হয়েছে ✓",
       "pickerSoldOut": "স্টক শেষ",
+      "pickerPreOrder": "প্রি-অর্ডার",
+      "pickerComingSoon": "শীঘ্রই আসছে",
       "pickerEmpty": "এমন কোনো বই পাওয়া যায়নি।",
       "pickerFailed": "এই মুহূর্তে বইগুলো লোড করা যায়নি।",
       "pickerRetry": "আবার চেষ্টা করুন",
