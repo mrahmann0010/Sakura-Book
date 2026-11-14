@@ -16,7 +16,7 @@ export const LOCALE_HEADER = "x-locale";
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|pdfjs|coupon-guide|favicon.ico|icon.svg|robots.txt|sitemap.xml).*)",
+    "/((?!api|_next/static|_next/image|pdfjs|favicon.ico|icon.svg|robots.txt|sitemap.xml).*)",
   ],
 };
 
@@ -31,9 +31,6 @@ export const config = {
  * sample either never appears or freezes the tab, with nothing in the console
  * pointing back at this file.
  *
- * `coupon-guide/` is a standalone Bangla how-to page (with its screenshots)
- * that is linked from SMS and WhatsApp, so its URL has to stay exactly as sent.
- *
  * Checked here rather than left to the `matcher` above, which also names it.
  * On Next 16.3 the matcher's exclusions are not applied to public/ files at
  * runtime — `/file.svg` is redirected today despite the same list — so the
@@ -41,7 +38,7 @@ export const config = {
  * intent and saves the invocation wherever it is honoured, and this is the
  * check that actually runs.
  */
-const UNPREFIXED_PATHS = ["/pdfjs/", "/coupon-guide/"];
+const UNPREFIXED_PATHS = ["/pdfjs/"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
