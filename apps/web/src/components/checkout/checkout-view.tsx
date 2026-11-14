@@ -235,6 +235,46 @@ export function CheckoutView({
   const zoneChosen = Boolean(zone);
   const cart = useCart(zone || undefined, (couponMode && appliedCode) || undefined);
 
+  /* Whether this visit has had books in it. Set during render rather than in
+     an effect (React's pattern for deriving from changing data), so the very
+     render that empties the cart already knows it was emptied *here*. That is
+     what tells "arrived with nothing" (the empty page) apart from "removed the
+     last book" — where the checkout stays mounted, so the typed address and
+     the area pickers' own state are all still there for Undo. */
+  const [hadItems, setHadItems] = useState(false);
+  if (!hadItems && !cart.isEmpty) setHadItems(true);
+  const emptied = cart.isEmpty && hadItems;
+
+  /* The book just removed, for a few seconds of Undo. Any book can be
+     removed now, the last one included, so a slip has to cost one tap. */
+  const [undo, setUndo] = useState<{ bookId: string; quantity: number; title: string } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!undo) return;
+    const timer = setTimeout(() => setUndo(null), 6000);
+    return () => clearTimeout(timer);
+  }, [undo]);
+
+  function removeLine(bookId: string) {
+    /* Read before the dispatch: afterwards the entry is gone. */
+    const entry = cart.entries.find((candidate) => candidate.bookId === bookId);
+    const line = cart.lines.find((candidate) => candidate.book.id === bookId);
+    cart.remove(bookId);
+    if (entry) setUndo({ bookId, quantity: entry.quantity, title: line?.book.title ?? "" });
+  }
+
+  function undoRemove() {
+    if (!undo) return;
+    /* Skipped if the book is already back (re-added from the picker in the
+       meantime): adding again would double it rather than restore it. */
+    if (!cart.entries.some((entry) => entry.bookId === undo.bookId)) {
+      cart.add(undo.bookId, undo.quantity);
+    }
+    setUndo(null);
+  }
+
   useCartStepEvent("begin_checkout", cart);
 
   const shortages = mergeShortages(
@@ -365,34 +405,43 @@ export function CheckoutView({
     return <OrderPlaced order={placedOrder.order} email={placedOrder.email} locale={locale} />;
   }
 
-  if (cart.isEmpty) {
+  /* The empty page's message and its way forward — shown on its own when the
+     checkout is opened with nothing in the cart, and in place of the form
+     when the last book is removed here. */
+  const emptyState = (
+    <>
+      {/* `description` interpolates no count: this copy talks about the empty
+          cart, not about the shelf, and every locale's string for it is
+          count-free. It was being handed the old hardcoded `titlesInStock`
+          regardless, which went nowhere. */}
+      {/* Coupon mode is usually opened with an empty cart — the link was
+          sent before anything was chosen — so it says what to do next
+          rather than that something is missing. */}
+      <EmptyState
+        className="mt-10"
+        eyebrow={t("checkout.empty.eyebrow")}
+        title={couponMode ? t("checkout.coupon.emptyTitle") : t("checkout.empty.title")}
+        description={
+          couponMode ? t("checkout.coupon.emptyDescription") : t("checkout.empty.description")
+        }
+        action={
+          couponMode ? (
+            <Button type="button" onClick={() => setPickerOpen(true)}>
+              {t("checkout.coupon.chooseBooks")}
+            </Button>
+          ) : (
+            <LinkButton href={path.catalog}>{t("checkout.empty.action")}</LinkButton>
+          )
+        }
+      />
+    </>
+  );
+
+  if (cart.isEmpty && !hadItems) {
     return withPicker(
       <Shell className="py-14 lg:py-20">
         <PageHeader size="lg" title={t("checkout.title")} />
-        {/* `description` interpolates no count: this copy talks about the empty
-            cart, not about the shelf, and every locale's string for it is
-            count-free. It was being handed the old hardcoded `titlesInStock`
-            regardless, which went nowhere. */}
-        {/* Coupon mode is usually opened with an empty cart — the link was
-            sent before anything was chosen — so it says what to do next
-            rather than that something is missing. */}
-        <EmptyState
-          className="mt-10"
-          eyebrow={t("checkout.empty.eyebrow")}
-          title={couponMode ? t("checkout.coupon.emptyTitle") : t("checkout.empty.title")}
-          description={
-            couponMode ? t("checkout.coupon.emptyDescription") : t("checkout.empty.description")
-          }
-          action={
-            couponMode ? (
-              <Button type="button" onClick={() => setPickerOpen(true)}>
-                {t("checkout.coupon.chooseBooks")}
-              </Button>
-            ) : (
-              <LinkButton href={path.catalog}>{t("checkout.empty.action")}</LinkButton>
-            )
-          }
-        />
+        {emptyState}
       </Shell>,
     );
   }
@@ -473,57 +522,68 @@ export function CheckoutView({
   return withPicker(
     <>
       <Shell className="py-10 lg:py-16">
-        <CheckoutProgress
-          label={t("checkout.steps.label")}
-          current={1}
-          steps={[
-            { id: "cart", label: t("checkout.steps.cart"), href: path.cart },
-            { id: "checkout", label: t("checkout.steps.checkout") },
-            { id: "confirmation", label: t("checkout.steps.confirmation") },
-          ]}
-        />
-
-        {/* Mobile keeps the recap collapsed above the form: the form is the job
-            here, and the recap is reassurance the shopper asks for. */}
-        <CollapsibleOrderRecap
-          className="mt-6 lg:hidden"
-          summaryLabel={t("checkout.recap.mobile", { count: cart.itemCount })}
-          totalValue={total}
-        >
-          <div className="flex flex-col gap-3.5">
-            {recapLines.map((line) => (
-              <SummaryRow
-                key={line.book.id}
-                label={`${line.book.title} × ${line.quantity}`}
-                value={line.amount}
-              />
-            ))}
-            {rows.map((row) => (
-              <SummaryRow key={row.key} label={row.label} value={row.value} tone={row.tone} />
-            ))}
-            <SummaryRow tone="total" label={t("cart.summary.total")} value={total} />
-            <p className="text-13 mt-2">{editCart}</p>
+        {/* The last book was removed here. The empty message takes the
+            form's place, and the form is hidden rather than unmounted: Undo,
+            or a book added back, returns it exactly as it was left. */}
+        {emptied ? (
+          <div>
+            <PageHeader size="lg" title={t("checkout.title")} />
+            {emptyState}
           </div>
-        </CollapsibleOrderRecap>
+        ) : null}
 
-        <RailLayout
-          className="mt-10"
-          stickyRail
-          rail={
-            <OrderRecap
-              className="hidden lg:block"
-              title={t("checkout.recap.title")}
-              editAction={editCart}
-              lines={recapLines}
-              rows={rows}
-              totalLabel={t("cart.summary.total")}
-              totalValue={total}
-            />
-          }
-        >
-          <PageHeader size="md" title={t("checkout.title")} />
+        <div className={emptied ? "hidden" : undefined}>
+          <CheckoutProgress
+            label={t("checkout.steps.label")}
+            current={1}
+            steps={[
+              { id: "cart", label: t("checkout.steps.cart"), href: path.cart },
+              { id: "checkout", label: t("checkout.steps.checkout") },
+              { id: "confirmation", label: t("checkout.steps.confirmation") },
+            ]}
+          />
 
-          {/* One way back to the shelf, not a shelf of its own. Buy Now lands
+          {/* Mobile keeps the recap collapsed above the form: the form is the job
+            here, and the recap is reassurance the shopper asks for. */}
+          <CollapsibleOrderRecap
+            className="mt-6 lg:hidden"
+            summaryLabel={t("checkout.recap.mobile", { count: cart.itemCount })}
+            totalValue={total}
+          >
+            <div className="flex flex-col gap-3.5">
+              {recapLines.map((line) => (
+                <SummaryRow
+                  key={line.book.id}
+                  label={`${line.book.title} × ${line.quantity}`}
+                  value={line.amount}
+                />
+              ))}
+              {rows.map((row) => (
+                <SummaryRow key={row.key} label={row.label} value={row.value} tone={row.tone} />
+              ))}
+              <SummaryRow tone="total" label={t("cart.summary.total")} value={total} />
+              <p className="text-13 mt-2">{editCart}</p>
+            </div>
+          </CollapsibleOrderRecap>
+
+          <RailLayout
+            className="mt-10"
+            stickyRail
+            rail={
+              <OrderRecap
+                className="hidden lg:block"
+                title={t("checkout.recap.title")}
+                editAction={editCart}
+                lines={recapLines}
+                rows={rows}
+                totalLabel={t("cart.summary.total")}
+                totalValue={total}
+              />
+            }
+          >
+            <PageHeader size="md" title={t("checkout.title")} />
+
+            {/* One way back to the shelf, not a shelf of its own. Buy Now lands
               here, so a shopper who wants a second book needs a route to the
               catalog that is not the browser's back button — this is it, and
               choosing there rather than from a strip of three means the whole
@@ -538,151 +598,158 @@ export function CheckoutView({
               as the page's own hairlines. Not `primary` — filled clay belongs
               to "Next", and two solid slabs on one screen would make the way
               out of checkout compete with the way through it. */}
-          {couponMode && step === "delivery" ? (
-            <button
-              type="button"
-              onClick={() => setPickerOpen(true)}
-              className={cn(
-                button({ variant: "soft", size: "md", block: true }),
-                "mt-6 justify-between",
-              )}
-            >
-              {t("checkout.coupon.addMore")}
-              <span aria-hidden="true">+</span>
-            </button>
-          ) : step === "delivery" ? (
-            <Link
-              href={path.catalog}
-              className={cn(
-                button({ variant: "soft", size: "md", block: true }),
-                "mt-6 justify-between",
-              )}
-            >
-              {t("checkout.browseMore")}
-              <span aria-hidden="true">&rarr;</span>
-            </Link>
-          ) : null}
+            {couponMode && step === "delivery" ? (
+              <button
+                type="button"
+                onClick={() => setPickerOpen(true)}
+                className={cn(
+                  button({ variant: "soft", size: "md", block: true }),
+                  "mt-6 justify-between",
+                )}
+              >
+                {t("checkout.coupon.addMore")}
+                <span aria-hidden="true">+</span>
+              </button>
+            ) : step === "delivery" ? (
+              <Link
+                href={path.catalog}
+                className={cn(
+                  button({ variant: "soft", size: "md", block: true }),
+                  "mt-6 justify-between",
+                )}
+              >
+                {t("checkout.browseMore")}
+                <span aria-hidden="true">&rarr;</span>
+              </Link>
+            ) : null}
 
-          <form
-            id="checkout"
-            noValidate
-            onSubmit={handleSubmit(placeOrder, onInvalid)}
-            className="mt-9 flex flex-col gap-10"
-          >
-            {/* Above the books, on either step. A refusal sends the shopper
+            <form
+              id="checkout"
+              noValidate
+              onSubmit={handleSubmit(placeOrder, onInvalid)}
+              className="mt-9 flex flex-col gap-10"
+            >
+              {/* Above the books, on either step. A refusal sends the shopper
                 back to delivery, but a requote can also land mid-payment —
                 there the buttons are the only quantity control. */}
-            <StockShortageNotice
-              shortages={shortages}
-              onReduce={cart.setQuantity}
-              onRemove={cart.remove}
-            />
-
-            {step === "delivery" ? (
-              <CheckoutItems
-                lines={cart.lines}
-                money={money}
-                onQuantityChange={cart.setQuantity}
-                onRemove={cart.remove}
+              <StockShortageNotice
+                shortages={shortages}
+                onReduce={cart.setQuantity}
+                onRemove={removeLine}
               />
-            ) : null}
 
-            {/* Delivery step only, like the stepper above it: by the payment
+              {step === "delivery" ? (
+                <CheckoutItems
+                  lines={cart.lines}
+                  money={money}
+                  onQuantityChange={cart.setQuantity}
+                  onRemove={removeLine}
+                />
+              ) : null}
+
+              {/* Delivery step only, like the stepper above it: by the payment
                 step the total may already have been sent, and nothing there
                 may move it. */}
-            {couponMode && step === "delivery" ? (
-              <CouponField
-                appliedCode={appliedCode}
-                coupon={cart.coupon}
-                rejection={cart.couponRejection}
-                /* Not while a failed quote sits there: `priced` stays false
+              {couponMode && step === "delivery" ? (
+                <CouponField
+                  appliedCode={appliedCode}
+                  coupon={cart.coupon}
+                  rejection={cart.couponRejection}
+                  /* Not while a failed quote sits there: `priced` stays false
                    until a quote succeeds, and the page already says the
                    price could not be checked. */
-                checking={appliedCode !== null && !cart.priced && !cart.quoteFailed}
-                money={money}
-                onApply={setAppliedCode}
-                onRemove={() => setAppliedCode(null)}
-              />
-            ) : null}
-
-            <div className={step === "delivery" ? undefined : "hidden"}>
-              <ShippingFields register={register} errors={errors} setValue={setValue} />
-            </div>
-
-            {step === "payment" ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setStep("delivery")}
-                  className="text-caption text-secondary hover:text-ink -mt-6 underline underline-offset-2"
-                >
-                  {t("checkout.back")}
-                </button>
-
-                <PaymentSection
-                  register={register}
-                  setValue={setValue}
-                  errors={errors}
-                  method={method}
-                  amount={total}
-                  breakdown={rows.map((row) => (
-                    <SummaryRow key={row.key} label={row.label} value={row.value} tone={row.tone} />
-                  ))}
-                  onMethodChange={(next) =>
-                    setValue("method", next, { shouldValidate: true, shouldDirty: true })
-                  }
+                  checking={appliedCode !== null && !cart.priced && !cart.quoteFailed}
+                  money={money}
+                  onApply={setAppliedCode}
+                  onRemove={() => setAppliedCode(null)}
                 />
-              </>
-            ) : null}
+              ) : null}
 
-            {/* Errors are already stated under each field; this only points at
+              <div className={step === "delivery" ? undefined : "hidden"}>
+                <ShippingFields register={register} errors={errors} setValue={setValue} />
+              </div>
+
+              {step === "payment" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setStep("delivery")}
+                    className="text-caption text-secondary hover:text-ink -mt-6 underline underline-offset-2"
+                  >
+                    {t("checkout.back")}
+                  </button>
+
+                  <PaymentSection
+                    register={register}
+                    setValue={setValue}
+                    errors={errors}
+                    method={method}
+                    amount={total}
+                    breakdown={rows.map((row) => (
+                      <SummaryRow
+                        key={row.key}
+                        label={row.label}
+                        value={row.value}
+                        tone={row.tone}
+                      />
+                    ))}
+                    onMethodChange={(next) =>
+                      setValue("method", next, { shouldValidate: true, shouldDirty: true })
+                    }
+                  />
+                </>
+              ) : null}
+
+              {/* Errors are already stated under each field; this only points at
                 them, and only once a submit has actually failed. */}
-            {isSubmitted && !isValid ? (
-              <Notice tone="error">{t("checkout.errorSummary")}</Notice>
-            ) : null}
+              {isSubmitted && !isValid ? (
+                <Notice tone="error">{t("checkout.errorSummary")}</Notice>
+              ) : null}
 
-            {/* A quote that could not be taken is shown here rather than left
+              {/* A quote that could not be taken is shown here rather than left
                 silent. The alternative is what it replaces: the rail keeps
                 displaying the last total it managed to get, the customer reads
                 it as the price, and the first sign anything is wrong is the
                 order being refused — on the step where they were paying. */}
-            {cart.quoteFailed ? <Notice tone="error">{t("checkout.quoteFailed")}</Notice> : null}
-            {submitError ? <Notice tone="error">{submitError}</Notice> : null}
+              {cart.quoteFailed ? <Notice tone="error">{t("checkout.quoteFailed")}</Notice> : null}
+              {submitError ? <Notice tone="error">{submitError}</Notice> : null}
 
-            {/* The lead carries the state, the body says what it means, and
+              {/* The lead carries the state, the body says what it means, and
                 the link is the way out — this refusal is the one where the
                 shopper most likely already has what they came for. */}
-            {reusedForOrder ? (
-              <Notice tone="error" lead={t("checkout.transactionIdReusedLead")}>
-                {t("checkout.transactionIdReused", { orderNumber: reusedForOrder })}{" "}
-                <Link
-                  href={path.order(reusedForOrder)}
-                  className="text-clay hover:text-clay-deep font-semibold"
-                >
-                  {t("checkout.transactionIdReusedTrack")}
-                </Link>
-              </Notice>
-            ) : null}
-
-            <div className="hidden lg:block">
-              {primaryAction}
-              {step === "payment" ? (
-                <p className="text-caption text-secondary mt-2.5">{t("checkout.reassurance")}</p>
+              {reusedForOrder ? (
+                <Notice tone="error" lead={t("checkout.transactionIdReusedLead")}>
+                  {t("checkout.transactionIdReused", { orderNumber: reusedForOrder })}{" "}
+                  <Link
+                    href={path.order(reusedForOrder)}
+                    className="text-clay hover:text-clay-deep font-semibold"
+                  >
+                    {t("checkout.transactionIdReusedTrack")}
+                  </Link>
+                </Notice>
               ) : null}
-            </div>
-          </form>
-        </RailLayout>
+
+              <div className="hidden lg:block">
+                {primaryAction}
+                {step === "payment" ? (
+                  <p className="text-caption text-secondary mt-2.5">{t("checkout.reassurance")}</p>
+                ) : null}
+              </div>
+            </form>
+          </RailLayout>
+        </div>
       </Shell>
 
-      <StickyBar
-        /* The total only earns its line once there is one. Before a zone
+      {emptied ? null : (
+        <StickyBar
+          /* The total only earns its line once there is one. Before a zone
            the figure is "—", so on the address step the bar was spending a
            row, a gap and a hairline to say nothing while sitting on top of
            the form being typed into. It collapses to just the button there,
            and grows as the order becomes known. */
-        label={deliveryKnown ? t("cart.summary.total") : undefined}
-        value={deliveryKnown ? total : undefined}
-        /* The same rows the desktop rail draws, from the same derivation — but
+          label={deliveryKnown ? t("cart.summary.total") : undefined}
+          value={deliveryKnown ? total : undefined}
+          /* The same rows the desktop rail draws, from the same derivation — but
            only on the payment step. On a phone the docked bar sits on top of
            whatever is being typed, and three extra rows plus a hairline left
            the address form almost no room to work in. There is also nothing
@@ -690,23 +757,44 @@ export function CheckoutView({
            on the delivery step the breakdown costs a third of the screen to
            say "not known". By the payment step it is priced, and it is the
            figure being typed into a banking app. */
-        breakdown={
-          step === "payment"
-            ? rows.map((row) => (
-                <SummaryRow key={row.key} label={row.label} value={row.value} tone={row.tone} />
-              ))
-            : undefined
-        }
-        action={primaryAction}
-      />
+          breakdown={
+            step === "payment"
+              ? rows.map((row) => (
+                  <SummaryRow key={row.key} label={row.label} value={row.value} tone={row.tone} />
+                ))
+              : undefined
+          }
+          action={primaryAction}
+        />
+      )}
 
       {/* Above the docked bar rather than under it: the bar is the thing the
           shopper just tapped, and a message hidden behind it would be the
           same silence this replaces. */}
-      {toast ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 pb-40 lg:pb-8">
-          <div className="shell flex justify-center">
-            <Toast className="max-w-measure pointer-events-auto shadow-lg">{toast}</Toast>
+      {toast || undo ? (
+        <div
+          className={cn(
+            "pointer-events-none fixed inset-x-0 bottom-0 z-40 lg:pb-8",
+            /* No docked bar to clear once the cart is emptied. */
+            emptied ? "pb-8" : "pb-40",
+          )}
+        >
+          <div className="shell flex flex-col items-center gap-2">
+            {toast ? (
+              <Toast className="max-w-measure pointer-events-auto shadow-lg">{toast}</Toast>
+            ) : null}
+            {undo ? (
+              <Toast className="max-w-measure pointer-events-auto shadow-lg">
+                {t("checkout.removed", { title: undo.title })}{" "}
+                <button
+                  type="button"
+                  onClick={undoRemove}
+                  className="ml-2 font-semibold underline underline-offset-2"
+                >
+                  {t("checkout.undo")}
+                </button>
+              </Toast>
+            ) : null}
           </div>
         </div>
       ) : null}

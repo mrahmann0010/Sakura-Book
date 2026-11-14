@@ -36,10 +36,10 @@ export function CheckoutItems({
 }) {
   const { t } = useTranslation();
 
-  /* Removing the last book would empty the cart mid-checkout and drop the
-     shopper onto the empty state with a half-filled address. One line left
-     means the stepper's floor of 1 is the only way down. */
-  const removable = lines.length > 1;
+  /* Every line is removable, the last one included. Emptying the cart here
+     does not throw the shopper out: CheckoutView keeps the form mounted
+     behind its empty message and offers Undo, so a slip costs one tap and
+     the typed address survives it. */
 
   return (
     <section aria-label={t("checkout.items.legend")}>
@@ -85,17 +85,15 @@ export function CheckoutItems({
                     label={t("checkout.items.quantity", { title: line.book.title })}
                     engaged
                   />
-                  {removable ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onRemove(line.book.id)}
-                      className="text-caption hover:text-clay hover:bg-transparent"
-                    >
-                      {t("cart.removeItem")}
-                      <span className="sr-only">{`, ${line.book.title}`}</span>
-                    </Button>
-                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onRemove(line.book.id)}
+                    className="text-caption hover:text-clay hover:bg-transparent"
+                  >
+                    {t("cart.removeItem")}
+                    <span className="sr-only">{`, ${line.book.title}`}</span>
+                  </Button>
                 </div>
 
                 {atStockLimit ? (

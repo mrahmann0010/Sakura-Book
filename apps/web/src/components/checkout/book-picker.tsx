@@ -20,8 +20,12 @@ import { fileUrl } from "@/lib/storage-url";
    them instead, in a sheet over the checkout, and adding a book is the same
    cart dispatch the catalog's own button makes.
 
-   Shelf titles only. Coming-soon titles cannot be ordered, and pre-orders
-   are retired on the storefront.
+   Every active title the catalog lists, by the catalog's own rules (see
+   toBookSummary in lib/book-view.ts): `in_stock` and `pre_order` are both
+   ordinary orderable books through the same cart and checkout — `pre_order`
+   just ships later, and is not the retired pre-order stream. `coming_soon`
+   is listed but cannot be added, and anything with no copies left is sold
+   out.
    -------------------------------------------------------------------------- */
 
 /** The whole shelf in one page — the shop carries dozens of titles. */
@@ -54,14 +58,14 @@ export function BookPicker({
 
   const inCart = new Set(entries.map((entry) => entry.bookId));
   const needle = search.trim().toLowerCase();
-  const books = (data?.items ?? [])
-    .filter((book) => book.availability === "in_stock")
-    .filter(
-      (book) =>
-        !needle ||
-        book.title.toLowerCase().includes(needle) ||
-        book.authors.some((author) => author.toLowerCase().includes(needle)),
-    );
+  /* No availability filter: the API already returns only active titles,
+     orderable ones first. Which of them can be added is decided per row. */
+  const books = (data?.items ?? []).filter(
+    (book) =>
+      !needle ||
+      book.title.toLowerCase().includes(needle) ||
+      book.authors.some((author) => author.toLowerCase().includes(needle)),
+  );
 
   return (
     <Modal
@@ -112,7 +116,11 @@ export function BookPicker({
           <ul className="hairline">
             {books.map((book) => {
               const added = inCart.has(book.id);
-              const soldOut = book.stockQuantity === 0;
+              const comingSoon = book.availability === "coming_soon";
+              /* Same rule as the catalog card: zero copies is sold out for
+                 any title that could otherwise be ordered. */
+              const soldOut = !comingSoon && book.stockQuantity === 0;
+              const preOrder = book.availability === "pre_order";
 
               return (
                 <li
@@ -132,6 +140,7 @@ export function BookPicker({
                       <p className="text-15 text-ink font-serif leading-[1.3]">{book.title}</p>
                       <p className="text-caption text-secondary mt-1">
                         {formatMoney(book.priceCents, money)}
+                        {preOrder ? ` · ${t("checkout.coupon.pickerPreOrder")}` : null}
                       </p>
                     </div>
 
@@ -139,14 +148,18 @@ export function BookPicker({
                       type="button"
                       size="sm"
                       variant={added ? "ghost" : "secondary"}
-                      disabled={soldOut || added}
-                      onClick={() => onAdd(book.id, { title: book.title, priceCents: book.priceCents })}
+                      disabled={comingSoon || soldOut || added}
+                      onClick={() =>
+                        onAdd(book.id, { title: book.title, priceCents: book.priceCents })
+                      }
                     >
-                      {soldOut
-                        ? t("checkout.coupon.pickerSoldOut")
-                        : added
-                          ? t("checkout.coupon.pickerAdded")
-                          : t("checkout.coupon.pickerAdd")}
+                      {comingSoon
+                        ? t("checkout.coupon.pickerComingSoon")
+                        : soldOut
+                          ? t("checkout.coupon.pickerSoldOut")
+                          : added
+                            ? t("checkout.coupon.pickerAdded")
+                            : t("checkout.coupon.pickerAdd")}
                     </Button>
                   </div>
                 </li>

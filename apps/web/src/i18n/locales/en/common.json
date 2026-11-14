@@ -257,6 +257,8 @@
       "quantity": "Quantity, {{title}}"
     },
     "browseMore": "Add more books to the same parcel",
+    "removed": "Removed “{{title}}”.",
+    "undo": "Undo",
     "coupon": {
       "legend": "Coupon code",
       "label": "Coupon code",
@@ -287,6 +289,8 @@
       "pickerAdd": "Add",
       "pickerAdded": "Added ✓",
       "pickerSoldOut": "Sold out",
+      "pickerPreOrder": "Pre-order",
+      "pickerComingSoon": "Coming soon",
       "pickerEmpty": "No books match that.",
       "pickerFailed": "We couldn't load the books just now.",
       "pickerRetry": "Try again",
