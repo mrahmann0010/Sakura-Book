@@ -1,4 +1,13 @@
 import {
+  adminCouponCreateRequestSchema,
+  adminCouponListSchema,
+  adminCouponSchema,
+  adminCouponUpdateRequestSchema,
+  type AdminCoupon,
+  type AdminCouponCreateRequest,
+  type AdminCouponList,
+  type AdminCouponQuery,
+  type AdminCouponUpdateRequest,
   adminBookCreateRequestSchema,
   adminCreateStaffRequestSchema,
   adminStaffCredentialResultSchema,
@@ -1155,6 +1164,39 @@ export function updateAdminReview(
 
 export async function deleteAdminReview(id: string): Promise<void> {
   await adminFetch(`/admin/reviews/${encodeURIComponent(id)}`, z.void(), { method: "DELETE" });
+}
+
+/* --------------------------------------------------------------------------
+   Coupons — issuing and managing discount codes. ADMIN only.
+   -------------------------------------------------------------------------- */
+
+export function listAdminCoupons(query: AdminCouponQuery = {}): Promise<AdminCouponList> {
+  const search = new URLSearchParams();
+  if (query.state) search.set("state", query.state);
+  if (query.q) search.set("q", query.q);
+
+  const qs = search.toString();
+  return adminFetch(`/admin/coupons${qs ? `?${qs}` : ""}`, adminCouponListSchema);
+}
+
+export function createAdminCoupon(request: AdminCouponCreateRequest): Promise<AdminCoupon> {
+  const validated = validate(adminCouponCreateRequestSchema, request);
+  return adminFetch("/admin/coupons", adminCouponSchema, { method: "POST", body: validated });
+}
+
+export function updateAdminCoupon(
+  id: string,
+  request: AdminCouponUpdateRequest,
+): Promise<AdminCoupon> {
+  const validated = validate(adminCouponUpdateRequestSchema, request);
+  return adminFetch(`/admin/coupons/${encodeURIComponent(id)}`, adminCouponSchema, {
+    method: "PATCH",
+    body: validated,
+  });
+}
+
+export async function deleteAdminCoupon(id: string): Promise<void> {
+  await adminFetch(`/admin/coupons/${encodeURIComponent(id)}`, z.void(), { method: "DELETE" });
 }
 
 export type { AdminBookQuery };

@@ -79,7 +79,7 @@ export type UseCart = Cart & {
   clear: () => void;
 };
 
-export function useCart(zone?: string): UseCart {
+export function useCart(zone?: string, couponCode?: string): UseCart {
   const dispatch = useAppDispatch();
   const items = useAppSelector(selectCartItems);
   const rehydrated = useAppSelector(selectCartHydrated);
@@ -101,8 +101,10 @@ export function useCart(zone?: string): UseCart {
     isPlaceholderData,
     isError,
   } = useQuery({
-    queryKey: ["cart-quote", items, zone],
-    queryFn: () => quoteCart(items, { zone }),
+    /* The code joins the key only when there is one, so every page without a
+       coupon box keeps sharing the exact key it always had. */
+    queryKey: couponCode ? ["cart-quote", items, zone, couponCode] : ["cart-quote", items, zone],
+    queryFn: () => quoteCart(items, { zone, couponCode }),
     enabled: hydrated && items.length > 0,
     placeholderData: keepPreviousData,
     staleTime: 0,

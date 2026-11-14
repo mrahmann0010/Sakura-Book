@@ -82,6 +82,8 @@ export type CartTotals = {
   delivery: number;
   /** The waived amount, shown as a credit row. Zero when nothing is waived. */
   deliveryCredit: number;
+  /** Coupon discount off the subtotal, as the server priced it. Zero without one. */
+  discount: number;
   total: number;
 };
 
@@ -97,6 +99,13 @@ export type Cart = CartTotals & {
    * promise only once it has a number, rather than guessing at one.
    */
   freeDeliveryThreshold: number | null;
+  /** The code the quote applied, or null when none was sent or it was refused. */
+  coupon: { code: string; discountCents: number } | null;
+  /**
+   * Why a sent code was not applied — one of COUPON_REJECTION_REASONS. Null
+   * when no code was sent, or when it applied.
+   */
+  couponRejection: string | null;
 };
 
 /** Before the first quote lands, and for a cart with nothing in it. */
@@ -104,6 +113,8 @@ export const emptyCart: Cart = {
   lines: [],
   isEmpty: true,
   freeDeliveryThreshold: null,
+  coupon: null,
+  couponRejection: null,
   ...zeroTotals(),
 };
 
@@ -149,8 +160,11 @@ export function cartFromQuote(quote: CartQuote): Cart {
     deliveryBase: quote.deliveryBaseCents,
     delivery: quote.deliveryCents,
     deliveryCredit: quote.deliveryCreditCents,
+    discount: quote.coupon?.discountCents ?? 0,
     total: quote.totalCents,
     freeDeliveryThreshold: quote.freeDeliveryThresholdCents,
+    coupon: quote.coupon ?? null,
+    couponRejection: quote.couponRejection ?? null,
   };
 }
 
@@ -172,6 +186,7 @@ export function zeroTotals(): CartTotals {
     deliveryBase: 0,
     delivery: 0,
     deliveryCredit: 0,
+    discount: 0,
     total: 0,
   };
 }
@@ -206,6 +221,12 @@ export function summaryLines(
     deliveryFree: string | null;
     /** Shown in place of a figure while the address is still unknown. */
     deliveryUnknown?: string;
+    /**
+     * The coupon row's label, e.g. "Discount (EID2026)". Only pages that take
+     * a coupon pass it; the row is drawn when this is given and there is a
+     * discount to show.
+     */
+    discount?: string;
   },
   locale = "en-GB",
 ): SummaryLine[] {
@@ -229,6 +250,15 @@ export function summaryLines(
       key: "delivery-credit",
       label: labels.deliveryFree,
       value: formatCredit(totals.deliveryCredit, locale),
+      tone: "credit",
+    });
+  }
+
+  if (totals.discount > 0 && labels.discount) {
+    lines.push({
+      key: "discount",
+      label: labels.discount,
+      value: formatCredit(totals.discount, locale),
       tone: "credit",
     });
   }

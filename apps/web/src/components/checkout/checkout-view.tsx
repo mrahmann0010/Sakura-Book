@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useForm, useWatch, type FieldErrors } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import type { CartItem, Order } from "@sakura/contracts";
@@ -44,6 +44,8 @@ import { cn } from "@/lib/utils";
 import { button } from "@/lib/variants";
 
 import { CheckoutItems } from "./checkout-items";
+import { BookPicker } from "./book-picker";
+import { CouponField } from "./coupon-field";
 import { PaymentSection } from "./payment-section";
 import {
   PaymentVerificationModal,
@@ -67,6 +69,7 @@ export function CheckoutView({
   locale,
   prefill,
   inviteToken,
+  allowCoupon = false,
 }: {
   locale: Locale;
   /**
@@ -82,9 +85,27 @@ export function CheckoutView({
    * checkout, which has no invite to spend.
    */
   inviteToken?: string;
+  /**
+   * TEMPORARY: set only by the coupon link (/checkout/coupon). Shows the
+   * coupon box, and picks books in a sheet on this page instead of sending
+   * the customer to the catalog. /checkout leaves it off, unchanged.
+   */
+  allowCoupon?: boolean;
 }) {
   const { t } = useTranslation();
   const path = routes(locale);
+
+  /* TEMPORARY coupon mode — the coupon link only. Adds the coupon box and
+     the in-page book picker; everything else is the regular checkout. */
+  const couponMode = allowCoupon;
+  /* The coupon checkout's book picker. Books are chosen here rather than in
+     the catalog, so the customer never leaves the page that has the box. */
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  /* The code the shopper last applied, accepted or not — sent with every
+     quote so the server says whether it applies. Whether it *did* is read off
+     the quote (`cart.coupon`), never from here. */
+  const [appliedCode, setAppliedCode] = useState<string | null>(null);
 
   const [placedOrder, setPlacedOrder] = useState<{ order: Order; email: string } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -212,7 +233,7 @@ export function CheckoutView({
      flat placeholder rate, which the rail labels as pending. */
   const zone = useWatch({ control, name: "zone" });
   const zoneChosen = Boolean(zone);
-  const cart = useCart(zone || undefined);
+  const cart = useCart(zone || undefined, (couponMode && appliedCode) || undefined);
 
   useCartStepEvent("begin_checkout", cart);
 
@@ -235,7 +256,16 @@ export function CheckoutView({
 
     try {
       const order = await placeOrderRequest(
-        { items: cart.entries, customer: values, ...(inviteToken ? { inviteToken } : {}) },
+        {
+          items: cart.entries,
+          customer: values,
+          ...(inviteToken ? { inviteToken } : {}),
+          /* Only a code the quote actually applied. A refused one is left
+             off, so the order goes through at the price on screen rather
+             than being refused for a code the shopper was already told
+             does not apply. */
+          ...(couponMode && cart.coupon ? { couponCode: cart.coupon.code } : {}),
+        },
         crypto.randomUUID(),
       );
 
@@ -273,6 +303,19 @@ export function CheckoutView({
         return;
       }
 
+      /* The code ran out or was switched off between the quote and the
+         order. Back to the step with the coupon box; the requote will show
+         why it no longer applies, and the shopper can remove it and go on. */
+      if (
+        err instanceof ApiError &&
+        (err.code === "COUPON_UNAVAILABLE" || err.code === "COUPON_NOT_APPLICABLE")
+      ) {
+        setStep("delivery");
+        setToast(t("checkout.coupon.changed"));
+        void queryClient.invalidateQueries({ queryKey: ["cart-quote"] });
+        return;
+      }
+
       /* A reused transaction ID has its own copy and a link. Everything else
          gets the generic sentence: the server's message is staff-facing
          English with internal ids in it, and the shopper reads in Bengali. */
@@ -291,7 +334,29 @@ export function CheckoutView({
     cart.clear();
   }
 
-  if (!cart.hydrated || cart.quoting) return <CheckoutSkeleton />;
+  /* Rendered beside every state below, always as the second child of a
+     fragment, so React keeps the same sheet mounted while the page behind it
+     moves from empty to priced — adding the first book must not close it. */
+  const picker = couponMode ? (
+    <BookPicker
+      open={pickerOpen}
+      onClose={() => setPickerOpen(false)}
+      entries={cart.entries}
+      money={intlLocale(locale)}
+      onAdd={(bookId, item) => cart.add(bookId, 1, item)}
+    />
+  ) : null;
+  const withPicker = (node: ReactNode) => (
+    <>
+      {node}
+      {picker}
+    </>
+  );
+
+  /* Not while the picker is open: the first book added starts the first
+     quote, and swapping the page for a skeleton then would unmount the sheet
+     the customer is still choosing from. The empty state stays up instead. */
+  if (!cart.hydrated || (cart.quoting && !pickerOpen)) return withPicker(<CheckoutSkeleton />);
 
   /* The order is in. The cart is now empty by design, so this state has to be
      checked before the empty-cart guard below or placing an order would bounce
@@ -301,21 +366,34 @@ export function CheckoutView({
   }
 
   if (cart.isEmpty) {
-    return (
+    return withPicker(
       <Shell className="py-14 lg:py-20">
         <PageHeader size="lg" title={t("checkout.title")} />
         {/* `description` interpolates no count: this copy talks about the empty
             cart, not about the shelf, and every locale's string for it is
             count-free. It was being handed the old hardcoded `titlesInStock`
             regardless, which went nowhere. */}
+        {/* Coupon mode is usually opened with an empty cart — the link was
+            sent before anything was chosen — so it says what to do next
+            rather than that something is missing. */}
         <EmptyState
           className="mt-10"
           eyebrow={t("checkout.empty.eyebrow")}
-          title={t("checkout.empty.title")}
-          description={t("checkout.empty.description")}
-          action={<LinkButton href={path.catalog}>{t("checkout.empty.action")}</LinkButton>}
+          title={couponMode ? t("checkout.coupon.emptyTitle") : t("checkout.empty.title")}
+          description={
+            couponMode ? t("checkout.coupon.emptyDescription") : t("checkout.empty.description")
+          }
+          action={
+            couponMode ? (
+              <Button type="button" onClick={() => setPickerOpen(true)}>
+                {t("checkout.coupon.chooseBooks")}
+              </Button>
+            ) : (
+              <LinkButton href={path.catalog}>{t("checkout.empty.action")}</LinkButton>
+            )
+          }
         />
-      </Shell>
+      </Shell>,
     );
   }
 
@@ -348,6 +426,10 @@ export function CheckoutView({
               threshold: formatMoney(cart.freeDeliveryThreshold, money),
             }),
       deliveryUnknown: deliveryKnown ? undefined : t("cart.summary.deliveryPending"),
+      discount:
+        couponMode && cart.coupon
+          ? t("checkout.coupon.summaryRow", { code: cart.coupon.code })
+          : undefined,
     },
     money,
   );
@@ -388,7 +470,7 @@ export function CheckoutView({
       </Button>
     );
 
-  return (
+  return withPicker(
     <>
       <Shell className="py-10 lg:py-16">
         <CheckoutProgress
@@ -456,7 +538,19 @@ export function CheckoutView({
               as the page's own hairlines. Not `primary` — filled clay belongs
               to "Next", and two solid slabs on one screen would make the way
               out of checkout compete with the way through it. */}
-          {step === "delivery" ? (
+          {couponMode && step === "delivery" ? (
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className={cn(
+                button({ variant: "soft", size: "md", block: true }),
+                "mt-6 justify-between",
+              )}
+            >
+              {t("checkout.coupon.addMore")}
+              <span aria-hidden="true">+</span>
+            </button>
+          ) : step === "delivery" ? (
             <Link
               href={path.catalog}
               className={cn(
@@ -490,6 +584,24 @@ export function CheckoutView({
                 money={money}
                 onQuantityChange={cart.setQuantity}
                 onRemove={cart.remove}
+              />
+            ) : null}
+
+            {/* Delivery step only, like the stepper above it: by the payment
+                step the total may already have been sent, and nothing there
+                may move it. */}
+            {couponMode && step === "delivery" ? (
+              <CouponField
+                appliedCode={appliedCode}
+                coupon={cart.coupon}
+                rejection={cart.couponRejection}
+                /* Not while a failed quote sits there: `priced` stays false
+                   until a quote succeeds, and the page already says the
+                   price could not be checked. */
+                checking={appliedCode !== null && !cart.priced && !cart.quoteFailed}
+                money={money}
+                onApply={setAppliedCode}
+                onRemove={() => setAppliedCode(null)}
               />
             ) : null}
 
@@ -600,7 +712,7 @@ export function CheckoutView({
       ) : null}
 
       <PaymentVerificationModal status={verification} onSeeOrder={seeOrder} />
-    </>
+    </>,
   );
 }
 
