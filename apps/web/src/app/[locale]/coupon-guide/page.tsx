@@ -3,6 +3,7 @@ import Image, { type StaticImageData } from "next/image";
 import type { ReactNode } from "react";
 
 import { AppNav, PageHeader, PageShell, Shell } from "@/components/layout";
+import { LinkButton } from "@/components/ui";
 import type { Locale } from "@/i18n/settings";
 
 import { CopyField } from "./copy-field";
@@ -21,7 +22,7 @@ import step3 from "./step-3.jpg";
    -------------------------------------------------------------------------- */
 
 const couponCode = "MOCK-12-26";
-const checkoutUrl = "https://books.nihonovaacademy.com/bn/checkout/coupon";
+const checkoutDisplay = "books.nihonovaacademy.com/bn/checkout/coupon";
 const whatsappNumber = "01350-302733";
 const whatsappHref = "https://wa.me/8801350302733";
 
@@ -102,25 +103,12 @@ export default async function CouponGuidePage({ params }: PageProps<"/[locale]/c
   return (
     <PageShell header={<AppNav brandHref={`/${locale}`} />}>
       <Shell className="flex flex-col gap-14 py-14 lg:gap-20 lg:py-20">
-        <div className="gap-gutter grid items-end lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-          <PageHeader
-            eyebrow="Nihonova Books · কুপন গাইড"
-            title="কুপন দিয়ে কীভাবে অর্ডার করবেন"
-            description="তিনটি ধাপ: বই বেছে নিন, কুপন কোড বসান, তারপর ডেলিভারির তথ্য দিয়ে পেমেন্ট করুন।"
-            size="md"
-          />
-
-          <div className="border-rule bg-surface rounded-container flex min-w-0 flex-col gap-5 border p-5">
-            <CopyField
-              label="চেকআউট লিংক"
-              value={checkoutUrl}
-              display="books.nihonovaacademy.com/bn/checkout/coupon"
-              href={`/${locale}/checkout/coupon`}
-            />
-            <CopyField label="কুপন কোড" value={couponCode} mono />
-            <p className="text-caption text-muted">কোডটি হুবহু লিখুন, মাঝের হাইফেনসহ।</p>
-          </div>
-        </div>
+        <PageHeader
+          eyebrow="Nihonova Books · কুপন গাইড"
+          title="কুপন দিয়ে কীভাবে অর্ডার করবেন"
+          description="নিচের ধাপগুলো অনুসরণ করুন: বই বেছে নিন, কুপন কোড বসান, তারপর ডেলিভারির তথ্য দিয়ে পেমেন্ট করুন।"
+          size="md"
+        />
 
         <ol className="grid grid-cols-[repeat(auto-fit,minmax(min(18rem,100%),1fr))] gap-x-8 gap-y-12">
           {steps.map((step) => (
@@ -147,6 +135,22 @@ export default async function CouponGuidePage({ params }: PageProps<"/[locale]/c
             </li>
           ))}
         </ol>
+
+        <section className="border-rule bg-surface rounded-container flex max-w-xl min-w-0 flex-col gap-5 border p-5 sm:p-6">
+          <h2 className="text-ink font-serif text-2xl leading-snug">
+            এখন কোডটি কপি করে লিংক থেকে অর্ডার করুন
+          </h2>
+          <div className="flex flex-col gap-2">
+            <CopyField label="কুপন কোড" value={couponCode} mono />
+            <p className="text-caption text-muted">কোডটি হুবহু লিখুন, মাঝের হাইফেনসহ।</p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <LinkButton href={`/${locale}/checkout/coupon`} size="lg" block>
+              অর্ডার করতে এখানে চাপুন →
+            </LinkButton>
+            <p className="text-caption text-muted wrap-anywhere text-center">{checkoutDisplay}</p>
+          </div>
+        </section>
 
         <footer className="border-rule flex flex-col gap-5 border-t pt-8">
           <div className="max-w-lg">
