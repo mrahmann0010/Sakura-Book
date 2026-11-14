@@ -1,12 +1,14 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useForm, useWatch, type FieldErrors } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import type { Order } from "@sakura/contracts";
+import type { CartItem, Order } from "@sakura/contracts";
 
+import { StockShortageNotice } from "@/components/cart/stock-shortage-notice";
 import {
   CollapsibleOrderRecap,
   EmptyState,
@@ -30,6 +32,12 @@ import {
   type AcceptedPaymentMethod,
 } from "@/lib/checkout";
 import { summaryLines } from "@/lib/cart";
+import {
+  mergeShortages,
+  shortagesFromCart,
+  shortagesFromError,
+  type StockShortage,
+} from "@/lib/stock-shortage";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -86,6 +94,17 @@ export function CheckoutView({
      order failed, and the useful answer is a link to it rather than a
      sentence saying no. */
   const [reusedForOrder, setReusedForOrder] = useState<string | null>(null);
+  /* What the order endpoint refused for want of stock, pinned to the cart it
+     refused. The quote is requoted straight after and normally says the same
+     thing on its own; this covers the round-trip before it lands, and the
+     race where the quote still sees copies the decrement could not take. Any
+     edit to the cart produces a new `entries` array, which retires it — the
+     shopper has answered it, and the next attempt will say if they have not. */
+  const [refusal, setRefusal] = useState<{
+    entries: CartItem[];
+    shortages: StockShortage[];
+  } | null>(null);
+  const queryClient = useQueryClient();
   const [verification, setVerification] = useState<PaymentVerificationStatus | null>(null);
   /* Holds the just-placed order between the modal resolving and the shopper
      clicking "See order info" — the modal's result is the only thing on
@@ -153,6 +172,14 @@ export function CheckoutView({
   }
 
   async function goToPayment() {
+    /* Stock first: an order with a short line cannot be placed, and the
+       payment step is where the shopper sends the money for it. Better they
+       fix the quantity here than pay for three and be refused. */
+    if (shortages.length > 0) {
+      setToast(t("cart.stock.blocked"));
+      return;
+    }
+
     /* Validated one field at a time rather than as an array: `trigger(fields)`
        answers only whether all of them passed, and the toast has to name the
        ones that did not. Reading `errors` straight after would race the
@@ -189,9 +216,21 @@ export function CheckoutView({
 
   useCartStepEvent("begin_checkout", cart);
 
+  const shortages = mergeShortages(
+    shortagesFromCart(cart.lines, cart.rejected, cart.entries),
+    refusal?.entries === cart.entries ? refusal.shortages : [],
+  );
+
   async function placeOrder(values: CheckoutValues) {
     setSubmitError(null);
     setReusedForOrder(null);
+
+    if (shortages.length > 0) {
+      setStep("delivery");
+      setToast(t("cart.stock.blocked"));
+      return;
+    }
+
     setVerification("verifying");
 
     try {
@@ -222,16 +261,25 @@ export function CheckoutView({
     } catch (err) {
       setVerification(null);
 
-      /* The one API refusal with its own copy. Everything else falls through
-         to the server's message, which is staff-facing English — acceptable
-         for the rare failures, wrong for the one a shopper hits by honest
-         mistake and reads in Bengali. */
+      /* Out of stock: back to the step that has the stepper, with the short
+         lines named and a one-tap fix each. The quote is refetched so the
+         counts on screen are the ones that just refused the order rather
+         than the ones from when the page loaded. */
+      const refused = shortagesFromError(err, cart.lines, cart.entries);
+      if (refused) {
+        setRefusal({ entries: cart.entries, shortages: refused });
+        setStep("delivery");
+        void queryClient.invalidateQueries({ queryKey: ["cart-quote"] });
+        return;
+      }
+
+      /* A reused transaction ID has its own copy and a link. Everything else
+         gets the generic sentence: the server's message is staff-facing
+         English with internal ids in it, and the shopper reads in Bengali. */
       const claimedBy = reusedOrderNumberOf(err);
 
       setReusedForOrder(claimedBy);
-      setSubmitError(
-        claimedBy ? null : err instanceof ApiError ? err.message : t("checkout.submitError"),
-      );
+      setSubmitError(claimedBy ? null : t("checkout.submitError"));
     }
   }
 
@@ -427,6 +475,15 @@ export function CheckoutView({
             onSubmit={handleSubmit(placeOrder, onInvalid)}
             className="mt-9 flex flex-col gap-10"
           >
+            {/* Above the books, on either step. A refusal sends the shopper
+                back to delivery, but a requote can also land mid-payment —
+                there the buttons are the only quantity control. */}
+            <StockShortageNotice
+              shortages={shortages}
+              onReduce={cart.setQuantity}
+              onRemove={cart.remove}
+            />
+
             {step === "delivery" ? (
               <CheckoutItems
                 lines={cart.lines}

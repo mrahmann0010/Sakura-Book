@@ -14,7 +14,6 @@ import { Button, Notice, Skeleton, Stepper, Toast } from "@/components/ui";
 import type { Locale } from "@/i18n/settings";
 import type { AlsoAvailableBook } from "@/lib/also-available";
 import { trackPurchase } from "@/lib/analytics";
-import { ApiError } from "@/lib/api/client";
 import { quoteCart } from "@/lib/api/cart";
 import { placeOrder as placeOrderRequest } from "@/lib/api/orders";
 import {
@@ -25,6 +24,7 @@ import {
 } from "@/lib/checkout";
 import { cartFromQuote, emptyCart, summaryLines } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
+import { shortagesFromError } from "@/lib/stock-shortage";
 
 import { PaymentSection } from "./payment-section";
 import {
@@ -228,7 +228,27 @@ export function InviteCheckoutView({
       setVerification(settled.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");
     } catch (err) {
       setVerification(null);
-      setSubmitError(err instanceof ApiError ? err.message : t("checkout.submitError"));
+      /* Never the server's message: staff-facing English with internal ids
+         ("Book 2ff1c06a-…: requested 3, 1 available"). The invite holds its
+         own book, so a stock refusal here is about one of the extra titles —
+         said in the shopper's language, with the count to step down to. */
+      const refused = shortagesFromError(err, cart.lines, items);
+      setSubmitError(
+        refused
+          ? refused
+              .map((shortage) => {
+                const title = shortage.title ?? t("cart.stock.unknownTitle");
+                return shortage.available > 0
+                  ? t("cart.stock.short", {
+                      title,
+                      requested: shortage.requested,
+                      available: shortage.available,
+                    })
+                  : t("cart.stock.soldOut", { title });
+              })
+              .join(" ")
+          : t("checkout.submitError"),
+      );
     }
   }
 

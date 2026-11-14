@@ -132,6 +132,15 @@
     "rejectedNotice_one": "{{count}} book in your cart is no longer available and was left out.",
     "quoteFailed": "We couldn't price your cart just now. The totals below may be out of date — check your connection and refresh.",
     "rejectedNotice_other": "{{count}} books in your cart are no longer available and were left out.",
+    "stock": {
+      "lead": "Not enough copies left.",
+      "short": "{{title}}: you asked for {{requested}}, but only {{available}} left.",
+      "soldOut": "{{title}} is sold out.",
+      "reduce_one": "Change to {{count}} copy",
+      "reduce_other": "Change to {{count}} copies",
+      "unknownTitle": "A book in your cart",
+      "blocked": "Change the books marked above before continuing — there aren't enough copies left."
+    },
     "summary": {
       "title": "Summary",
       "subtotal_one": "Subtotal · {{count}} book",

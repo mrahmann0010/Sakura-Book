@@ -60,6 +60,14 @@ export type CartLine = {
    * that has run short can still be stepped down rather than locking up.
    */
   maxQuantity: number;
+  /**
+   * Copies this shopper can actually have, straight off the quote — or null
+   * for a pre-order, which has no stock to run short of. Unlike `maxQuantity`
+   * this is not raised to meet the quantity, so `quantity > available` is how
+   * a page tells that a line will be refused at checkout. See
+   * lib/stock-shortage.ts.
+   */
+  available: number | null;
 };
 
 export type CartTotals = {
@@ -129,6 +137,7 @@ export function cartFromQuote(quote: CartQuote): Cart {
       line.availability === "pre_order"
         ? MAX_LINE_QUANTITY
         : Math.max(line.quantity, Math.min(line.stockQuantity, MAX_LINE_QUANTITY)),
+    available: line.availability === "pre_order" ? null : line.stockQuantity,
   }));
 
   return {

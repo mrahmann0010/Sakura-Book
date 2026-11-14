@@ -13,6 +13,9 @@ import type { Locale } from "@/i18n/settings";
 import { summaryLines } from "@/lib/cart";
 import { formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
+import { shortagesFromCart } from "@/lib/stock-shortage";
+
+import { StockShortageNotice } from "./stock-shortage-notice";
 
 /* --------------------------------------------------------------------------
    The cart page's one job: change what you are buying.
@@ -198,11 +201,15 @@ export function CartView({ locale }: { locale: Locale }) {
         >
           <h2 className="sr-only">{t("cart.items")}</h2>
 
-          {cart.rejected.length > 0 ? (
-            <Notice tone="error" className="mb-6">
-              {t("cart.rejectedNotice", { count: cart.rejected.length })}
-            </Notice>
-          ) : null}
+          {/* Rejected lines included: they were never "left out" — the entry
+              stays in the cart and goes to checkout with the rest, where the
+              order is refused for it. Named here with a way to drop it. */}
+          <StockShortageNotice
+            className="mb-6"
+            shortages={shortagesFromCart(cart.lines, cart.rejected, cart.entries)}
+            onReduce={cart.setQuantity}
+            onRemove={cart.remove}
+          />
 
           {/* A quote that failed leaves the last one on screen — prices and
               stock included — with nothing to say it is no longer current. */}
