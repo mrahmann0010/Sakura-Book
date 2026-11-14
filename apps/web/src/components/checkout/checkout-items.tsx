@@ -48,9 +48,15 @@ export function CheckoutItems({
       <ul className="hairline mt-4">
         {lines.map((line) => {
           /* Said only when stock is the reason + stopped working. At the line
-             cap itself there are plenty left, and "only 99 left" is not true. */
+             cap itself there are plenty left, and "only 99 left" is not true.
+             Read off `available`, not `maxQuantity`: the ceiling is raised to
+             meet a line that has run short, and saying "only 3 left" of a
+             title with 1 is how the stepper used to cover for it. A line past
+             its stock is the notice's to explain, with the buttons to fix it. */
           const atStockLimit =
-            line.maxQuantity < MAX_LINE_QUANTITY && line.quantity >= line.maxQuantity;
+            line.available !== null &&
+            line.available < MAX_LINE_QUANTITY &&
+            line.quantity === line.available;
 
           return (
             <li
@@ -94,7 +100,7 @@ export function CheckoutItems({
 
                 {atStockLimit ? (
                   <p aria-live="polite" className="text-caption text-muted mt-2">
-                    {t("book.stock.low", { count: line.maxQuantity })}
+                    {t("book.stock.low", { count: line.available })}
                   </p>
                 ) : null}
               </div>

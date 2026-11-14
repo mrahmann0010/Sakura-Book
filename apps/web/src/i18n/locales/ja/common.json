@@ -129,6 +129,14 @@
     "removingLine": "「{{title}}」を削除しました。",
     "addBack": "カートに戻す",
     "rejectedNotice_other": "カート内の{{count}}点はもう購入できないため除外されました。",
+    "stock": {
+      "lead": "在庫が足りません。",
+      "short": "{{title}}：{{requested}}冊のご注文ですが、残りは{{available}}冊です。",
+      "soldOut": "{{title}}は在庫切れです。",
+      "reduce_other": "{{count}}冊に変更",
+      "unknownTitle": "カート内の書籍",
+      "blocked": "在庫が足りません。続ける前に、上に表示された書籍を変更してください。"
+    },
     "quoteFailed": "現在、カートの金額を計算できませんでした。以下の合計は最新ではない可能性があります。接続を確認して更新してください。",
     "summary": {
       "title": "ご注文内容",
