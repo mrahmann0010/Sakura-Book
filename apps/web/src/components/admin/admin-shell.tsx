@@ -104,6 +104,10 @@ const NAV_CLUSTERS = [
   ],
   [
     { href: "/reviews", label: "Reviews" },
+    // ADMIN only: a coupon changes what a customer pays, and the API refuses
+    // the whole /admin/coupons surface to STAFF. Hidden rather than shown and
+    // left to fail, so the rail never offers a screen that only errors.
+    { href: "/coupons", label: "Coupons", adminOnly: true },
     { href: "/sms", label: "Send SMS" },
     // Last, and one entry rather than four: payments, shipping, the reopening
     // date, and the notify page's book list are all configuration, edited a
@@ -114,7 +118,7 @@ const NAV_CLUSTERS = [
   ],
 ] as const;
 
-type NavItem = { href: string; label: string };
+type NavItem = { href: string; label: string; adminOnly?: boolean };
 
 /**
  * The packing table's rail: packing, handing over, and the shelf it reads.
@@ -132,7 +136,11 @@ const FULFILLMENT_NAV: readonly (readonly NavItem[])[] = [
 ];
 
 function navFor(role: AdminRole | null): readonly (readonly NavItem[])[] {
-  return role === "FULFILLMENT" ? FULFILLMENT_NAV : NAV_CLUSTERS;
+  if (role === "FULFILLMENT") return FULFILLMENT_NAV;
+  if (role === "ADMIN") return NAV_CLUSTERS;
+  return NAV_CLUSTERS.map((cluster) =>
+    (cluster as readonly NavItem[]).filter((item) => !item.adminOnly),
+  );
 }
 
 /**

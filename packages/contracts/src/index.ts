@@ -44,4 +44,5 @@ export * from "./admin-stock";
 export * from "./admin-waitlist-allocation";
 export * from "./review";
 export * from "./admin-review";
+export * from "./admin-coupon";
 export * from "./admin-sms";
