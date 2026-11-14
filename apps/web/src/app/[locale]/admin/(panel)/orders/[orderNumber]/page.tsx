@@ -540,10 +540,12 @@ export default function AdminOrderDetailPage() {
                 {order.shipping.secondaryPhone ? (
                   <Row label="Secondary phone" value={order.shipping.secondaryPhone} />
                 ) : null}
-                <Row
-                  label="Address"
-                  value={`${order.shipping.address}, ${order.shipping.city}, ${order.shipping.region}`}
-                />
+                {/* `address` already ends with the district (and division) line
+                    checkout composes, so `city` is not appended again, and
+                    `region` is a tier slug for postage, not part of an address.
+                    The line break between the typed detail and that line is
+                    kept by `whitespace-pre-line` on the row. */}
+                <Row label="Address" value={order.shipping.address} multiline />
                 {order.customerNote ? (
                   <Row label="Customer note" value={order.customerNote} />
                 ) : null}
@@ -1265,11 +1267,19 @@ function contactFormOf(order: AdminOrderDetail): ContactForm {
  */
 const CLOSED_STATUSES: OrderStatus[] = ["DELIVERED", "CANCELLED", "REFUNDED"];
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({
+  label,
+  value,
+  multiline = false,
+}: {
+  label: string;
+  value: string;
+  multiline?: boolean;
+}) {
   return (
     <div className="flex justify-between gap-4">
       <dt className="text-muted">{label}</dt>
-      <dd className="text-ink text-right">{value}</dd>
+      <dd className={`text-ink text-right${multiline ? " whitespace-pre-line" : ""}`}>{value}</dd>
     </div>
   );
 }
