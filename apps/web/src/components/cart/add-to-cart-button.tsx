@@ -7,27 +7,33 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui";
 import { useCart } from "@/hooks/use-cart";
 import { useMounted } from "@/hooks/use-mounted";
+import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { button } from "@/lib/variants";
 import { useAppSelector } from "@/store/hooks";
 import { selectQuantityOf } from "@/store/slices/cart-slice";
 
+import { announceAddedToCart } from "./cart-toast";
+
 /**
- * The one control that puts a book in the cart, so the cart and checkout pages
- * have something to work on.
+ * Puts a book in the cart and leaves the shopper where they are — the
+ * catalog and home cards' only purchase control, and the book page's second
+ * one under Buy now.
  *
- * Once the book is in, the button becomes a link to the cart page — quantity
- * and removal are edited there, not scattered across every card in the
- * catalogue.
+ * Once the book is in, the button becomes a link to the cart page reading
+ * "In cart · N". Quantity and removal are edited there (or at checkout), not
+ * scattered across every card in the catalogue — and a second press can no
+ * longer quietly add a second copy.
  */
 export function AddToCartButton({
   bookId,
   title,
   priceCents,
+  coverUrl,
   soldOut = false,
   comingSoon = false,
   size = "sm",
-  variant,
+  variant = "secondary",
   block = false,
 }: {
   bookId: string;
@@ -39,17 +45,19 @@ export function AddToCartButton({
   title?: string;
   /** Minor units, for the GA4 `add_to_cart` event only — see `BuyNowButton`. */
   priceCents?: number;
+  /** Shown as a thumbnail in the "Added to cart" toast, with `title`. */
+  coverUrl?: string;
   soldOut?: boolean;
   /** Not yet released — same disabled shape as `soldOut`, different words. */
   comingSoon?: boolean;
   size?: "sm" | "md";
   /**
-   * Defaults to the page-primary clay. The catalog passes `secondary`: a grid
-   * of primaries spends the accent a dozen times over, against §2.
+   * Defaults to `secondary`: a grid of primaries spends the accent a dozen
+   * times over, against principle 02. A page passes `primary` for the one
+   * button it wants pressed.
    */
   variant?: "primary" | "secondary";
-  /** Full-width — the detail page's buy card, where the button is the card's
-      one job and should read as wide as the price line above it. */
+  /** Full-width — grid cells and the book page's buy card. */
   block?: boolean;
 }) {
   const { t } = useTranslation();
@@ -83,23 +91,34 @@ export function AddToCartButton({
      2.5.3 and breaks voice control ("click add to cart" matches nothing). */
   if (inCart) {
     return (
+      /* Always secondary, whatever the caller asked for: the book is already
+         bought as far as this button is concerned, and the accent belongs to
+         whatever the shopper has not done yet. The label is the same on touch
+         and hover — it used to swap to "Go to cart" on hover only, which a
+         phone never shows, leaving a link that did not look like one. */
       <Link
-        href={`/${locale ?? "en"}/cart`}
-        className={cn(button({ variant: variant ?? "secondary", size, block }), "group")}
+        href={routes(locale ?? "en").cart}
+        className={cn(button({ variant: "secondary", size, block }))}
       >
-        <span className="group-hover:hidden">{t("actions.inCart", { count: quantity })}</span>
-        <span className="hidden group-hover:inline">{t("actions.goToCart")}</span>
-        {title ? <span className="sr-only">{`, ${title}`}</span> : null}
+        {t("actions.inCart", { count: quantity })}
+        <span aria-hidden>→</span>
+        <span className="sr-only">
+          {title ? `, ${title}. ` : ". "}
+          {t("actions.goToCart")}
+        </span>
       </Link>
     );
   }
 
   return (
     <Button
-      variant={variant ?? "primary"}
+      variant={variant}
       size={size}
       block={block}
-      onClick={() => add(bookId, 1, { title, priceCents })}
+      onClick={() => {
+        add(bookId, 1, { title, priceCents });
+        announceAddedToCart({ title, coverUrl });
+      }}
     >
       {t("actions.addToCart")}
       {title ? <span className="sr-only">{`, ${title}`}</span> : null}

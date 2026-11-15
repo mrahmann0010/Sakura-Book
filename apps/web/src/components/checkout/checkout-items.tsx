@@ -12,10 +12,11 @@ import { formatMoney } from "@/lib/money";
    The books being bought, editable, at the top of checkout's delivery step.
 
    Checkout used to show the cart read-only and send edits back to /cart. That
-   stopped working once Buy Now became the only purchase button: it adds one
-   copy and lands here, so a shopper who wanted two never saw a page where
-   that was possible. Quantity is now changed where the order is placed, the
-   way most checkouts do it.
+   stopped working for Buy now: it adds one copy and lands here, skipping the
+   cart page, so a shopper who wanted two never saw a page where that was
+   possible. Quantity is changed where the order is placed, the way most
+   checkouts do it — kept even with Add to cart and /cart back, so the Buy
+   now path never needs a detour.
 
    Delivery step only. On the payment step the shopper may already have sent
    the total through bKash, and a stepper there could change it after the

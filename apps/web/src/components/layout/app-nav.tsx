@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 
+import { CartToastHost } from "@/components/cart/cart-toast";
 import { CountBadge } from "@/components/ui";
 import { useCartCount } from "@/hooks/use-cart";
 
@@ -83,27 +84,32 @@ export function AppNav({ brandHref }: { brandHref?: string } = {}) {
   }, [locale, count, bump]);
 
   return (
-    <FloatingNav
-      items={items}
-      brandHref={brandHref ?? `/${locale ?? "en"}`}
-      actions={
-        <>
-          {/* 32px pucks on a phone, the standard 36 from the tablet floor —
+    <>
+      {/* Here because every storefront page renders AppNav and admin does not —
+        so the "Added to cart" toast exists exactly where a book can be added. */}
+      <CartToastHost locale={locale ?? "en"} />
+      <FloatingNav
+        items={items}
+        brandHref={brandHref ?? `/${locale ?? "en"}`}
+        actions={
+          <>
+            {/* 32px pucks on a phone, the standard 36 from the tablet floor —
               the two icons sit beside four nav items down there and the bar
               must not scroll. */}
-          <ThemeToggle className="size-8 sm:size-9" />
-          <LanguageSwitcher />
-          {/* Tablet and up only — below that the cart is a nav item instead,
+            <ThemeToggle className="size-8 sm:size-9" />
+            <LanguageSwitcher />
+            {/* Tablet and up only — below that the cart is a nav item instead,
               so this would be the same destination twice in one bar. */}
-          <Link
-            href={`/${locale ?? "en"}/cart`}
-            className="text-13.5 text-ink rounded-pill focus-visible:rounded-pill hidden items-center gap-2 px-2 py-2 sm:flex sm:px-3"
-          >
-            <span>Cart</span>
-            <CountBadge count={count} className={bump ? "animate-bump" : undefined} />
-          </Link>
-        </>
-      }
-    />
+            <Link
+              href={`/${locale ?? "en"}/cart`}
+              className="text-13.5 text-ink rounded-pill focus-visible:rounded-pill hidden items-center gap-2 px-2 py-2 sm:flex sm:px-3"
+            >
+              <span>Cart</span>
+              <CountBadge count={count} className={bump ? "animate-bump" : undefined} />
+            </Link>
+          </>
+        }
+      />
+    </>
   );
 }

@@ -11,14 +11,13 @@ import { useAppSelector } from "@/store/hooks";
 import { selectQuantityOf } from "@/store/slices/cart-slice";
 
 /**
- * The one purchase control the app shows now — `AddToCartButton` is commented
- * out at every call site (§ below) because a cart the shopper has to visit
- * and review before paying was one step too many for this audience. This
- * button adds the book to the cart, same as that one did, then goes straight
- * to checkout instead of leaving the shopper on the page. It still shares the
- * cart rather than a separate order path — whatever else is already in there
- * checks out alongside this book — so "bypassing the cart" only means
- * skipping the `/cart` page, not the state itself.
+ * The book page's express path, beside `AddToCartButton` (the grid cards
+ * carry Add to cart only). This button adds the book to the cart, same as
+ * that one does, then goes straight to checkout instead of leaving the
+ * shopper on the page. It deliberately shares the cart rather than a
+ * separate order path — whatever else is already in there checks out
+ * alongside this book, and checkout lists every line — so "bypassing the
+ * cart" only means skipping the `/cart` page, not the state itself.
  *
  * If the book is already in the cart this skips `add` and just navigates, so
  * a shopper who somehow has cart state (an old session, another tab) is never
