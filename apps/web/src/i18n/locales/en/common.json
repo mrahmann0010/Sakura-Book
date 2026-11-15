@@ -171,7 +171,11 @@
       "descriptionUnknown": "The whole shelf is waiting for you.",
       "action": "Browse books"
     },
-    "loading": "Reading your cart…"
+    "loading": "Reading your cart…",
+    "toast": {
+      "added": "Added to cart",
+      "view": "View cart"
+    }
   },
   "checkout": {
     "title": "Checkout",

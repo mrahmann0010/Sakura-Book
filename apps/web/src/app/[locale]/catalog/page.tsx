@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
-// import { AddToCartButton } from "@/components/cart/add-to-cart-button";
-import { BuyNowButton } from "@/components/cart/buy-now-button";
+import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import {
   BookCard,
   BookGrid,
@@ -152,18 +151,13 @@ async function CatalogResults({
             locale={locale}
             priority={index === 0}
             footerAction={
-              /* <AddToCartButton
-                bookId={book.id}
-                title={book.title}
-                soldOut={book.soldOut}
-                comingSoon={book.flag === "coming-soon"}
-                variant="secondary"
-                block
-              /> */
-              <BuyNowButton
+              /* Add to cart only — Buy now lives on the book page. Two
+                 buttons do not fit a ~160pt phone cell. */
+              <AddToCartButton
                 bookId={book.id}
                 title={book.title}
                 priceCents={book.priceCents}
+                coverUrl={book.coverUrl}
                 soldOut={book.soldOut}
                 comingSoon={book.flag === "coming-soon"}
                 block

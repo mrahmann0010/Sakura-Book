@@ -337,6 +337,9 @@
   /* The one confirmation beat principle 04 licenses: a book was just added.
      Reuses --duration-slide rather than a new constant. */
   --animate-bump: bump var(--duration-slide) var(--ease-standard);
+  /* The "Added to cart" toast dropping in under the nav — the same beat, so
+     the badge bump and the toast arrive together. */
+  --animate-toast-in: toast-in var(--duration-slide) var(--ease-out-soft) both;
 
   /* The hero's one-time entrance beat — title first, subtitle a step behind.
      `both` holds the pre-animation (opacity 0) state until the animation
@@ -483,6 +486,17 @@
   }
   100% {
     transform: scale(1);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

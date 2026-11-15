@@ -168,7 +168,11 @@
       "descriptionUnknown": "棚にはたくさんの本が並んでいます。",
       "action": "本を見る"
     },
-    "loading": "カートを読み込み中…"
+    "loading": "カートを読み込み中…",
+    "toast": {
+      "added": "カートに追加しました",
+      "view": "カートを見る"
+    }
   },
   "checkout": {
     "title": "ご注文手続き",

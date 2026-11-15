@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ViewItemTracker } from "@/components/analytics";
-// import { AddToCartButton } from "@/components/cart/add-to-cart-button";
+import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { BuyNowButton } from "@/components/cart/buy-now-button";
 import { MobileBuyBar } from "@/components/cart/mobile-buy-bar";
 import { BookCover, BookMeta, CoverPreview } from "@/components/domain";
@@ -189,15 +189,40 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
     />
   );
 
-  /* Add to cart is commented out, not deleted — the audience doesn't shop
-     from a cart, so Buy Now is the only purchase control now. */
-  /* <AddToCartButton
-    bookId={book.id}
-    soldOut={view.soldOut}
-    comingSoon={view.flag === "coming-soon"}
-    size="md"
-    block
-  /> */
+  /* The second purchase control: keep shopping with this book in the cart.
+     Secondary, under Buy now, so the page still has one clay button. Not
+     rendered when the book cannot be bought — Buy now already shows the
+     disabled "Out of stock" / "Coming soon", and saying it twice is noise. */
+  const buyable = !view.soldOut && view.flag !== "coming-soon";
+  const addAction = buyable ? (
+    <AddToCartButton
+      bookId={book.id}
+      title={book.title}
+      priceCents={book.priceCents}
+      coverUrl={view.coverUrl}
+      size="md"
+      block
+    />
+  ) : null;
+
+  /* The phone's docked bar has a price beside it and no room for the bag
+     glyph, so Buy now drops it there; otherwise the same two controls. */
+  const mobileActions = (
+    <div className={buyable ? "grid grid-cols-2 gap-2" : undefined}>
+      {addAction}
+      <BuyNowButton
+        bookId={book.id}
+        title={book.title}
+        priceCents={book.priceCents}
+        soldOut={view.soldOut}
+        comingSoon={view.flag === "coming-soon"}
+        preOrder={view.flag === "pre-order"}
+        size="md"
+        variant="primary"
+        block
+      />
+    </div>
+  );
 
   /* The buy card, for the sticky rail at `lg:` only.
 
@@ -212,7 +237,10 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
     <Card className="p-6">
       {priceRow}
       {stockRow}
-      <div className="mt-5">{buyAction}</div>
+      <div className="mt-5 flex flex-col gap-3">
+        {buyAction}
+        {addAction}
+      </div>
     </Card>
   );
 
@@ -452,7 +480,7 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
       <MobileBuyBar
         price={money(book.priceCents)}
         compareAtPrice={compareAtPrice}
-        action={buyAction}
+        action={mobileActions}
       />
     </PageShell>
   );

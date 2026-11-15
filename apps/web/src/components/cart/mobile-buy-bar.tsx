@@ -24,7 +24,7 @@ export function MobileBuyBar({
   price,
   /** Struck-through, and only when the caller has established it is genuinely higher. */
   compareAtPrice,
-  /** The BuyNowButton, built by the page that knows the book. */
+  /** The purchase controls (Add to cart + Buy now), built by the page that knows the book. */
   action,
 }: {
   price: string;
