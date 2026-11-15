@@ -223,7 +223,13 @@ export function CartView({ locale }: { locale: Locale }) {
             {visibleLines.map((line) => (
               <CartItem
                 key={line.book.id}
-                book={line.book}
+                /* The quote's href is `/books/<slug>` — cartFromQuote has no
+                   locale to prefix it with. Prefixed here, or the link would
+                   bounce through the locale-detection redirect. */
+                book={{
+                  ...line.book,
+                  href: line.book.href ? `/${locale}${line.book.href}` : undefined,
+                }}
                 quantity={line.quantity}
                 lineTotal={formatMoney(line.lineTotal, money)}
                 onQuantityChange={(quantity) => cart.setQuantity(line.book.id, quantity)}

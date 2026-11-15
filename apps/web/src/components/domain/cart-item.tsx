@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -64,12 +65,7 @@ export function CartItem({
           </p>
 
           <div className="mt-4 flex flex-wrap items-center gap-3.5">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={onUndoRemove}
-              className="text-caption"
-            >
+            <Button variant="secondary" size="sm" onClick={onUndoRemove} className="text-caption">
               {t("cart.addBack")}
               <span className="sr-only">{`, ${book.title}`}</span>
             </Button>
@@ -81,12 +77,44 @@ export function CartItem({
     );
   }
 
+  const cover = (
+    <BookCover src={book.coverUrl} title={book.title} author={book.author} radius="md" />
+  );
+
   return (
     <div className={cn("grid-line-lg border-rule py-card items-start gap-6 border-b", className)}>
-      <BookCover src={book.coverUrl} title={book.title} author={book.author} radius="md" />
+      {/* Cover and title open the book's page when `book.href` is set — a
+          plain navigation, the same one a catalog card makes, so Back returns
+          here with the cart untouched. The stepper and Remove stay outside the
+          links, so neither can be mis-tapped into leaving the cart. The cover
+          link is hidden from the tab order and screen readers: the title
+          beside it is the same destination, and one stop per book is enough. */}
+      {book.href ? (
+        <Link
+          href={book.href}
+          tabIndex={-1}
+          aria-hidden
+          className="block transition-transform duration-200 hover:-translate-y-0.5"
+        >
+          {cover}
+        </Link>
+      ) : (
+        cover
+      )}
 
       <div className="min-w-0">
-        <h3 className="text-19 text-ink font-serif leading-[1.25]">{book.title}</h3>
+        <h3 className="text-19 text-ink font-serif leading-[1.25]">
+          {book.href ? (
+            <Link
+              href={book.href}
+              className="hover:text-clay decoration-1 underline-offset-4 transition-colors hover:underline"
+            >
+              {book.title}
+            </Link>
+          ) : (
+            book.title
+          )}
+        </h3>
         <p className="text-caption text-secondary mt-1.5">
           {book.author}
           {book.format ? <> · {book.format}</> : null}
