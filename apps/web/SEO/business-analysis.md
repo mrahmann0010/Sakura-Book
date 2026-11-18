@@ -21,13 +21,27 @@ general bookstore and not a digital-content platform.
 | bKash / Rocket / Nagad payment | `components/domain/mobile-money-payment.tsx` |
 | Catalogue is **five titles** as of this writing | live `/sitemap.xml`, 21 URLs = 7 pages × 3 locales |
 
-Live catalogue (from the production sitemap):
+Live catalogue, measured from production JSON-LD on 18 November 2026:
 
-1. `kanji-redical-guide-book` — "কাঞ্জি মুখস্থ নয়" (kanji by radicals)
-2. `nihonova-jlpt-n5-grammer` — "Nihonova JLPT N5 Grammer"
-3. `listening-n5` — "নিহোনোভা লিসেনিং - N5"
-4. `listening-n4` — "নিহোনোভা লিসেনিং - N4"
-5. `nihonova-spoken-japanese` — "Nihonova Spoken Japanese"
+| Slug | Title | Price | Stock | Pages |
+| --- | --- | --- | --- | --- |
+| `kanji-redical-guide-book` | কাঞ্জি মুখস্থ নয় | ৳349 | **In stock** | 194 |
+| `listening-n4` | নিহোনোভা লিসেনিং - N4 | ৳330 | **In stock** | 214 |
+| `listening-n5` | নিহোনোভা লিসেনিং - N5 | ৳320 | **In stock** | 216 |
+| `nihonova-jlpt-n5-grammer` | Nihonova JLPT N5 Grammer | ৳299 | Out of stock | 180 |
+| `nihonova-spoken-japanese` | Nihonova Spoken Japanese | ৳199 | Out of stock | 100 |
+
+**Three of five titles are buyable**, and those three are also the pages the
+owner reports as currently receiving traffic — which is what you would expect,
+and what makes them the right place to spend indexing effort
+(`indexing-priority.md`).
+
+**Price positioning: mid-market.** ৳199–৳349 sits between Rokomari's N5 titles
+(৳150–৳300) and BooKVandar's Sharif's N5 Bangla (৳480). An earlier draft of
+this analysis assumed a premium position and advised defending it; the numbers
+say otherwise. See `technical-seo-audit.md` TEC-25.
+
+**No title carries an ISBN** (TEC-24).
 
 > **Two of those five slugs are misspelled**: `redical` (radical) and `grammer`
 > (grammar). See `technical-seo-audit.md` — this is a ranking problem, not only

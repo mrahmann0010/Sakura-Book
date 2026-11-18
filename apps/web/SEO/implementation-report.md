@@ -117,7 +117,8 @@ Ordered by impact. Full detail in `technical-seo-audit.md`.
 
 1. **TEC-03** Misspelled slugs — needs a redirect migration. *High.*
 2. **TEC-02** `ja` locale duplicate — needs your decision. *High.*
-3. **TEC-21** N3/N2/N1/vocabulary/reading facet pages render empty shelves. One array (`indexableFacets`) controls it. *Medium.*
+3. **TEC-23** Over-tagging makes `?genre=n3`, `?genre=n2`, `?genre=n1` and `?genre=kanji` return the same two books. Admin data, no deploy. *High.* (This supersedes **TEC-21**, which predicted empty shelves and was wrong — see the audit.)
+3b. **TEC-24** No title carries an ISBN. *Medium.*
 4. **No content.** Still the largest gap by far — `content-roadmap.md`. *High, long-lead.*
 5. **No `updatedAt` on the book contract**, so the sitemap cannot send a real `lastmod`. *Low.*
 6. **TEC-20** Formulaic image alt text. *Low.*
