@@ -5,14 +5,16 @@ import { AddToCartButton } from "@/components/cart/add-to-cart-button";
 import { BookCard, BookGrid, BookGridSkeleton, HowItWorks, ProofPoints } from "@/components/domain";
 import type { BookSummary } from "@/components/domain";
 import { AppNav, PageShell, Shell, SiteFooter } from "@/components/layout";
+import { JsonLd } from "@/components/seo";
 import { LinkButton } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
 import { listBooks } from "@/lib/api/catalog";
-import { footerColumns } from "@/lib/books";
+import { localizedFooterColumns } from "@/lib/books";
 import { toBookSummaries } from "@/lib/book-view";
 import { routes } from "@/lib/routes";
 import { localeAlternates } from "@/lib/site";
+import { graph, organizationJsonLd, webSiteJsonLd } from "@/lib/structured-data";
 
 /* Landing page, per the Landing Wireframe (sheet 05, option 1a/1b): a brief
    centred hero, then straight into the books: one shelf, the catalogue CTA
@@ -335,11 +337,20 @@ export default async function Home({ params }: PageProps<"/[locale]">) {
       footer={
         <SiteFooter
           blurb={t("footer.blurb")}
-          columns={footerColumns}
+          columns={localizedFooterColumns(locale)}
           note={`© ${new Date().getFullYear()} Nihonova Books`}
         />
       }
     >
+      {/* Organization + WebSite, emitted on the landing page only.
+
+          Both are site-wide facts, and the landing page is the one page a
+          crawler is certain to fetch and the one Google attributes a knowledge
+          panel and a sitelinks search box to. Repeating them on every page
+          would be the same two nodes re-asserted a few hundred times for no
+          additional signal — the layout is deliberately not where this goes. */}
+      <JsonLd data={graph(organizationJsonLd(), webSiteJsonLd(locale))} />
+
       {/* Hero — tagline set word by word, then the subtitle, then the rule. */}
       <Hero tagline={t("home.hero.tagline")} subhead={t("home.hero.subhead")} />
 

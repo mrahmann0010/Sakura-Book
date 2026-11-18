@@ -11,7 +11,20 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/api/", "/*/cart", "/*/checkout", "/*/orders", "/*/playground", "/*/admin"],
+      disallow: [
+        "/api/",
+        "/*/cart",
+        "/*/checkout",
+        "/*/orders",
+        "/*/playground",
+        "/*/admin",
+        /* One-shot waitlist tokens. Every URL under it is unique, single-use
+           and already `noindex` on the page — but a token in an index or in a
+           crawler's log is a claim on a copy of a book that was reserved for
+           one named person, so the cheaper half of the pair matters here more
+           than it does for the cart. */
+        "/*/invite",
+      ],
     },
     sitemap: `${siteUrl()}/sitemap.xml`,
     host: siteUrl(),

@@ -15,18 +15,21 @@ import {
   Shell,
   SiteFooter,
 } from "@/components/layout";
+import { JsonLd } from "@/components/seo";
 import { Badge, Card } from "@/components/ui";
 import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
 import { getBook } from "@/lib/api/catalog";
 import { ApiError } from "@/lib/api/client";
-import { footerColumns } from "@/lib/books";
+import { localizedFooterColumns } from "@/lib/books";
 import { languageName, toBookSummary } from "@/lib/book-view";
 import { toSearchParams } from "@/lib/catalog";
 import { CURRENCY, formatMoney, intlLocale } from "@/lib/money";
 import { routes } from "@/lib/routes";
+import { bookSeoTitle, metaDescription } from "@/lib/seo";
 import { localeAlternates, siteUrl } from "@/lib/site";
 import { absoluteFileUrl, fileUrl } from "@/lib/storage-url";
+import { breadcrumbJsonLd, graph } from "@/lib/structured-data";
 
 /* Book detail, per the Detail Wireframe: 320px cover · content · 300px buy
    rail. The cards in the catalogue have always linked here; until now nothing
@@ -61,11 +64,20 @@ export async function generateMetadata({
   const { locale, slug } = (await params) as { locale: Locale; slug: string };
   const book = await loadBook(slug);
 
-  const description = book.description.slice(0, 160);
+  /* `metaDescription`, not `.slice(0, 160)`: the raw slice cut the live kanji
+     book's snippet mid-word and carried the description's paragraph breaks
+     into an attribute. See lib/seo.ts. */
+  const description = metaDescription(book.description);
   const ogImage = absoluteFileUrl(book.coverImageUrl);
 
+  /* The book's own title, plus the level and skill it is tagged with. The
+     shop's titles are editorial — "কাঞ্জি মুখস্থ নয়" is a cover line, not a
+     search phrase — so the <title> was going out with none of the words a
+     learner types. Only `og:title` keeps the bare title: a share card is read
+     by someone who already has context, and "JLPT N5 Kanji Book" appended to
+     it reads as a listing rather than a book. */
   return {
-    title: book.title,
+    title: bookSeoTitle(book.title, book.categories, locale),
     description,
     alternates: localeAlternates(locale, `/books/${slug}`),
     openGraph: {
@@ -250,9 +262,34 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
      price the page does not show — the one rule structured data has. */
   const jsonLdImage = absoluteFileUrl(book.coverImageUrl);
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Book",
+  /* The crumb trail, lifted out of the JSX below so the markup and the drawn
+     breadcrumbs are built from one array rather than two that can drift. The
+     drawn trail is `lg:` only — a phone gets a single back link — but the
+     markup is not a viewport decision: the trail is a fact about where the
+     page sits, and it is the same fact at 342px. */
+  const crumbs = [
+    { href: routes(locale).catalog, label: t("nav.catalog", { defaultValue: "Books" }) },
+    ...(book.categories[0]
+      ? [
+          {
+            href: `${routes(locale).catalog}${toSearchParams({
+              genres: [book.categories[0].slug],
+            })}`,
+            label: book.categories[0].name,
+          },
+        ]
+      : []),
+    { label: book.title },
+  ];
+
+  const bookJsonLd = {
+    /* Two types, not one. `Book` is what the thing is; `Product` is what makes
+       Google show the price and the availability beside the result — its
+       product snippet feature reads `Product`, and a `Book` with an `offers`
+       property is not eligible for it. Both are accurate: this page is a book
+       and it is a thing for sale, which is exactly the case multi-typing is
+       for. */
+    "@type": ["Book", "Product"],
     name: book.title,
     ...(book.subtitle ? { alternateName: book.subtitle } : {}),
     description: book.description,
@@ -293,7 +330,7 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
       footer={
         <SiteFooter
           blurb={t("footer.blurb")}
-          columns={footerColumns}
+          columns={localizedFooterColumns(locale)}
           note={`© ${new Date().getFullYear()} Nihonova Books`}
         />
       }
@@ -310,12 +347,11 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
           and does so invisibly. One render, one event. */}
       <ViewItemTracker id={book.id} title={book.title} priceCents={book.priceCents} />
 
-      <script
-        type="application/ld+json"
-        /* Serialised, not spread into props: this is a <script> body, and JSON
-           is the only thing that may go in it. */
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      {/* One `@graph`, not two scripts: the book and the trail it sits in are
+          facts about the same page, and emitting them separately gives a
+          crawler two documents to reconcile. `JsonLd` owns the serialisation —
+          see components/seo/json-ld.tsx for why that is one place. */}
+      <JsonLd data={graph(bookJsonLd, breadcrumbJsonLd(crumbs))} />
 
       {/* `pt-3` on a phone, against `py-14` at `lg:`. The floating nav already
           reserves its own 60px height in the document (see FloatingNav's
@@ -347,26 +383,15 @@ export default async function BookDetail({ params }: PageProps<"/[locale]/books/
         </div>
 
         <div className="hidden lg:block">
-          <Breadcrumbs
-            items={[
-              { href: routes(locale).catalog, label: t("nav.catalog", { defaultValue: "Books" }) },
-              /* The first category is the one the crumb trail uses. It links back
-               into the catalogue as a filter rather than to a category page,
-               because the filtered catalogue *is* the category page — one
-               view, one URL shape, one thing to keep working. */
-              ...(book.categories[0]
-                ? [
-                    {
-                      href: `${routes(locale).catalog}${toSearchParams({
-                        genres: [book.categories[0].slug],
-                      })}`,
-                      label: book.categories[0].name,
-                    },
-                  ]
-                : []),
-              { label: book.title },
-            ]}
-          />
+          {/* `crumbs`, built above and shared with the BreadcrumbList markup.
+              The first category is the one the trail uses. It links back into
+              the catalogue as a filter rather than to a category page, because
+              the filtered catalogue *is* the category page — one view, one URL
+              shape, one thing to keep working. Single-facet views are now
+              indexable and self-canonical (see the catalog's
+              `generateMetadata`), which is what makes this crumb a link worth
+              following rather than a link into a noindex slice. */}
+          <Breadcrumbs items={crumbs} />
         </div>
 
         <DetailLayout

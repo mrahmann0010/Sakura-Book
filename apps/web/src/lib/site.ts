@@ -24,10 +24,15 @@ export function siteUrl(): string {
 
 /**
  * Canonical + hreflang for one locale-agnostic path (`""`, `"/catalog"`,
- * `"/books/the-slug"` — no locale prefix, no query string).
+ * `"/books/the-slug"` — no locale prefix).
  *
- * Query strings are deliberately not accepted: `?q=`/`?page=` views are
- * filtered slices of the same shelf, and their canonical is the clean URL.
+ * A query string is allowed in exactly one case, and the caller is responsible
+ * for knowing it is that case: a single-category view of the catalogue
+ * (`"/catalog?genre=n5"`), which is a category page with copy of its own and
+ * a canonical of its own — see `indexableFacet` in lib/seo.ts. Everything
+ * else parameterised — `?q=`, `?page=`, two or more facets — is a filtered
+ * slice of the same shelf whose canonical is the clean URL, and passing one
+ * here would mint a canonical for a page that must not have one.
  */
 export function localeAlternates(locale: Locale, path: string = "") {
   const languages = Object.fromEntries(

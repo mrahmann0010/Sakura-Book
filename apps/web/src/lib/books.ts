@@ -1,4 +1,5 @@
 import type { BookSummary } from "@/components/domain";
+import { localizeLinks } from "@/lib/routes";
 
 /* Placeholder catalogue.
 
@@ -173,6 +174,25 @@ export const footerColumns = [
       { href: "/catalog", label: "Books" },
     ],
   },
+  /* The crawl path into the level shelves.
+     Those shelves are `/catalog?genre=n5`, which the filter rail reaches by
+     pushing to the router — a click, not an anchor. A crawler does not click,
+     so until this column existed the level pages were URLs nothing on the site
+     linked to: indexable (see lib/seo.ts) and undiscoverable, which is the
+     same as absent. Site-wide in the footer rather than on the catalogue
+     alone, so every page is one hop from every level.
+     Labels stay Latin in all three locales: "N5" is a proper noun, and the
+     rest of this table is untranslated for the same reason. */
+  {
+    heading: "By level",
+    links: [
+      { href: "/catalog?genre=n5", label: "JLPT N5" },
+      { href: "/catalog?genre=n4", label: "JLPT N4" },
+      { href: "/catalog?genre=n3", label: "JLPT N3" },
+      { href: "/catalog?genre=n2", label: "JLPT N2" },
+      { href: "/catalog?genre=n1", label: "JLPT N1" },
+    ],
+  },
   {
     heading: "Orders",
     links: [
@@ -196,3 +216,26 @@ export const footerColumns = [
     ],
   },
 ];
+
+/**
+ * `footerColumns` with every internal href locale-prefixed.
+ *
+ * `footerColumns` holds bare paths (`/catalog`, `/terms`) because one table
+ * serves three locales, and eleven of the fourteen pages that render a footer
+ * remembered to map `localizeLinks` over it themselves. Three did not: home,
+ * catalog and book detail — which are precisely the three pages that are
+ * indexed and carry the organic traffic. On those, every footer link pointed
+ * at an unprefixed path, which `proxy.ts` then redirected to the *default*
+ * locale: an English visitor clicking "Terms & conditions" landed on the
+ * Bangla page, and a crawler spent a redirect hop on every footer link of
+ * every book page it fetched.
+ *
+ * So the mapping stops being something a call site can forget. Call sites that
+ * already inline it are correct and are left alone; new ones should use this.
+ */
+export function localizedFooterColumns(locale: string) {
+  return footerColumns.map((column) => ({
+    ...column,
+    links: localizeLinks(column.links, locale),
+  }));
+}
