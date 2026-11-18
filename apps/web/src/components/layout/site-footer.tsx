@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { Wordmark } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -34,7 +34,20 @@ export function SiteFooter({
 }: SiteFooterProps) {
   return (
     <footer className={cn("shell pb-14", className)}>
-      <div className="gap-gutter rounded-container bg-tint grid p-8 sm:grid-cols-2 sm:p-12 lg:grid-cols-[2fr_1fr_1fr_1fr] lg:p-14">
+      {/* The brand cell takes two tracks, then one per column — written as a
+          `repeat()` over `columns.length` rather than a hardcoded `1fr 1fr 1fr`
+          so the prop's own doc ("the grid takes any number") is actually true.
+          It was not: a fourth column — the "By level" crawl path added by the
+          SEO pass — had no track to land in and wrapped onto a second row
+          under the blurb at `lg:` only, which is the width nobody checks. */}
+      <div
+        className="gap-gutter rounded-container bg-tint grid p-8 sm:grid-cols-2 sm:p-12 lg:grid-cols-[2fr_repeat(var(--footer-columns),1fr)] lg:p-14"
+        /* The count has to reach CSS as a custom property: the track list is
+           inside a `lg:` variant, and an inline `gridTemplateColumns` would
+           apply at every width — overriding the `sm:grid-cols-2` stack this
+           footer uses on a phone. */
+        style={{ "--footer-columns": columns.length } as CSSProperties}
+      >
         <div>
           <Wordmark as="p">{brand}</Wordmark>
           {blurb ? (

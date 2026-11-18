@@ -67,5 +67,17 @@ export function proxy(request: NextRequest) {
      there. */
   const url = request.nextUrl.clone();
   url.pathname = `/${defaultLocale}${pathname}`;
-  return NextResponse.redirect(url);
+  /* 308, not the 307 `redirect()` defaults to.
+     This mapping is a permanent fact about the site's URL shape — every path
+     lives under a locale prefix and always will — not a situational detour. A
+     307 tells a crawler the target may move back, so it keeps requesting the
+     bare path and holds the ranking signals there instead of consolidating
+     them onto the prefixed URL; a 308 says the prefixed URL is the address and
+     the old one need not be asked again. Both preserve the method and body,
+     so nothing about a POST changes.
+
+     The bare origin `/` is the one that matters most: it is what gets linked,
+     printed and typed, and it was passing its authority through a redirect
+     Google treats as provisional. */
+  return NextResponse.redirect(url, 308);
 }

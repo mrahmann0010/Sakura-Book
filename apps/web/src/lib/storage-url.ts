@@ -93,11 +93,30 @@ export function fileUrl(url: string | null | undefined): string | null {
  * `og:image` and the JSON-LD `image` are read by crawlers and by scrapers
  * building a link preview off the raw HTML, with no document base to resolve
  * against — a relative path there is a missing image in every share card. A
- * CDN URL is already absolute and is returned unchanged; only the rewritten
- * legacy form gets the origin prefixed.
+ * CDN URL is already absolute and is returned unchanged; anything else is
+ * resolved against this shop's own origin.
+ *
+ * "Anything else" used to mean only a path with a leading slash — the shape
+ * the legacy rewrite produces. A stored value like `covers/a.png`, with no
+ * leading slash, fell through and was returned relative, which is the one
+ * thing this function exists to prevent: `og:image` gets a second chance from
+ * Next's `metadataBase`, but the JSON-LD `image` is a plain string nobody
+ * resolves, so it reached the markup unusable. No production row has that
+ * shape today — the API stores full CDN URLs — and a function whose whole
+ * contract is "absolute" should not depend on that staying true.
  */
 export function absoluteFileUrl(url: string | null | undefined): string | null {
   const resolved = fileUrl(url);
   if (!resolved) return null;
-  return resolved.startsWith("/") ? `${siteUrl()}${resolved}` : resolved;
+
+  try {
+    /* `new URL` with a base is the resolution rule itself rather than a
+       re-implementation of it: an already-absolute URL ignores the base, a
+       rooted path takes the origin, and a bare relative path resolves against
+       it. `data:` URIs parse as absolute and come back unchanged. */
+    return new URL(resolved, `${siteUrl()}/`).toString();
+  } catch {
+    /* Unparseable — return what we had rather than dropping the image. */
+    return resolved;
+  }
 }
