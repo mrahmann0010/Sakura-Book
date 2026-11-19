@@ -3,15 +3,79 @@
 Status: **Steps 0A, 0B, 1 in review (PR #100)** · Last updated: 2026-11-19 · Base branch: `deployment`
 
 How Sakura Book takes COD orders with no advance payment, with every COD order
-approved by an admin before it is packed. This file has five parts:
+approved by staff before it is packed. This file has seven parts:
 
-- the process
-- the decisions
-- the state design
-- the implementation plan
-- the progress log
+- §0 where things stand (read this first)
+- §1 the process
+- §2 the decisions
+- §3 the state design
+- §4 the implementation plan, step by step, with checkboxes
+- §5 the progress log
+- §6 open questions
 
-Update the checkboxes and the log as work lands.
+Update §0, the checkboxes and the log as work lands.
+
+---
+
+## 0. Where things stand
+
+### Built (PR #100 → `deployment`, not merged yet)
+
+One PR, 9 commits, branch `feat/cod-approval-flow`. Branches `feat/cod-payment-status` (0A) and `feat/cod-revenue-by-payment` (0B) are folded into it.
+
+| Step | What it does | Key files |
+|---|---|---|
+| 0A | `orders.payment_status` (`UNPAID / PAID / COLLECTED / REMITTED / REFUNDED`), written only by `OrdersService.transition`. Migration **0047** adds and backfills it. | `apps/api/src/orders/payment-status.ts`, `orders.service.ts` |
+| 0B | Dashboard "collected" and the Payments page count money received (`MONEY_RECEIVED_STATUSES`), COD dated by delivery. Payment badge in admin. | `admin-dashboard.service.ts`, `admin-payments.service.ts`, `components/admin/payment-safety.tsx` |
+| 1 | COD back in checkout (after bKash/Rocket/Nagad) with a required tick; Messenger confirmation card with a copyable Bangla message; approve/deny in admin; SMS on approve. Migration **0048**. | `admin/orders/admin-cod.service.ts`, `admin/orders/cod-approval.ts`, `components/checkout/payment-section.tsx`, `components/orders/confirm-cod-order.tsx`, `lib/contact.ts` |
+
+**Merging PR #100 turns COD on for every customer.** Deploy steps:
+- run migrations 0047 and 0048
+- make sure the `SMS_GATEWAY_*` settings are set in production
+
+### Running COD now (manual parts until Step 2/3)
+
+| Not built yet | Do this meanwhile |
+|---|---|
+| 48 h auto-cancel | Check **Orders → COD to confirm** daily. Deny orders older than 48 h with no message (reason: "No confirmation within 48 hours"). Stock returns. Until then they hold stock. |
+| Waiting-order badge | The count shows on the COD tab itself. |
+| Duplicate / repeat-refuser flags | Search the order list by phone before approving. |
+| Recording Pathao payouts | Track outside the app as today. Delivered COD orders show "With courier". |
+
+### Still to check after deploy (couldn't be tested locally)
+- [ ] On a real phone, tap **Confirm on Messenger**: it opens the Nihonova chat; note whether the draft message is filled in.
+- [ ] With the SMS gateway on, approve an order and check the text arrives.
+
+### Remaining work, in order
+
+1. **Step 2: housekeeping** (§4)
+   - 48 h expiry worker (the important one: checkout already promises it)
+   - make 48 h a shop setting
+   - queue badge
+   - duplicate-phone flag
+   - per-phone history badge
+2. **Step 3: COD money tracking** (§4)
+   - mark remitted (single/bulk)
+   - COD payment row on remittance
+   - cash-with-Pathao report
+   - later: Pathao payout import
+3. **Step 0C: cleanup** (§4): rename `PAYMENT_CONFIRMED` → `CONFIRMED`, move refunds into payment status. Nothing user-visible.
+4. **Returns (needs a decision, §6):** a `RETURNED` status for refused parcels, with stock back only when the parcel is in hand.
+
+### Decisions waiting on the owner
+- **Who approves:** currently STAFF + ADMIN. Owner originally said "admin". ADMIN-only is a one-line `@Roles("ADMIN")` on the two routes in `admin-orders.controller.ts`.
+- **Refused parcels:** see §6.
+- **COD confirmation email:** see §6.
+
+### Testing locally (how Step 1 was verified)
+A throwaway Postgres 18, so nothing touches the real database:
+1. `initdb --locale=C`; start with `LC_ALL=en_US.UTF-8` on port 55432.
+2. Apply `apps/api/drizzle/*.sql` with `psql`.
+3. In the worktree, create `apps/api/.env` with only `DATABASE_URL=postgres://postgres@localhost:55432/t`, `DATABASE_SSL=disable`, `PORT=4100`, `WEB_ORIGIN=http://localhost:3100`. Delete it afterwards.
+4. Seed: `npx tsx src/db/seed/seed.ts --sample --admin-email=…` (with `ADMIN_BOOTSTRAP_PASSWORD`).
+5. Run `npx nest start` and `NEXT_PUBLIC_API_URL=http://localhost:4100 npx next dev -p 3100`.
+
+API routes are under `/api/v1`.
 
 ---
 
@@ -22,11 +86,11 @@ Update the checkboxes and the log as work lands.
 
    The live total sits next to the box. The order can't be placed without the tick, and the tick is saved with a timestamp.
 2. **The order is created as `PENDING`.** Stock is taken now (current checkout behaviour).
-3. **The customer sees a COD confirmation screen**, not the normal thank-you page:
-   - order number and total
-   - "অর্ডারটি নিশ্চিত করতে আমাদের Facebook পেজে মেসেজ দিন" (to confirm the order, message our Facebook page)
-   - a large **Message us on Facebook** button (m.me link with the order number pre-filled)
-   - "৪৮ ঘণ্টার মধ্যে নিশ্চিত না করলে অর্ডারটি বাতিল হয়ে যাবে" (the order is cancelled if not confirmed within 48 hours)
+3. **The customer sees a COD confirmation screen**, not the bKash payment modal:
+   - "One more step: message us to confirm your order", with the order number and the 48 h deadline
+   - a copyable Bangla message: "আমি আমার ক্যাশ অন ডেলিভারি অর্ডার {order} নিশ্চিত করতে চাই। অনুগ্রহ করে অনুমোদন দিন।"
+   - a **Confirm on Messenger** button (`m.me/nihonovaacademy`, the same message pre-typed)
+   - the tracking page shows the same card until the order is approved or denied
 4. **The customer messages the page.** Confirmation is the customer's job. The shop does not chase.
 5. **The admin checks the order:**
    - the order matches the conversation (books, phone, address)
@@ -34,7 +98,7 @@ Update the checkboxes and the log as work lands.
 6. **The admin decides:**
    - **Approve** → the order moves to the packer as usual.
    - **Deny** → cancelled, with a reason (suspicious / duplicate / customer declined). Stock returns.
-7. **No contact within 48 h** → cancelled automatically with the reason "expired". Stock returns.
+7. **No contact within 48 h** → cancelled with the reason "expired". Stock returns. *(Manual Deny until the Step 2 worker exists.)*
 8. **Delivered** → payment status `COLLECTED` (Pathao has the cash) → `REMITTED` when Pathao pays the shop.
 
 ## 2. Decisions
@@ -45,13 +109,15 @@ Update the checkboxes and the log as work lands.
 | 2 | Who starts the confirmation? | **The customer**, via the Facebook page. The shop does not call. | Owner |
 | 3 | How is an order vetted? | Order details plus the customer's social profile. Suspicious orders are denied. | Owner |
 | 4 | Commitment step | A required tick box with the exact total, saved with a timestamp. | Owner |
-| 5 | Who approves? | The **admin** role for now. Packers can't. | Owner |
+| 5 | Who approves? | Owner said "admin". **Built as STAFF + ADMIN** (same as confirming bKash); packers can't. ADMIN-only is a one-line change. | Owner to confirm |
 | 6 | Record how/why | **Yes.** Confirmation channel and note on approve, reason on deny. | Owner |
 | 7 | Customer sees the waiting state | **Yes.** Tracking page shows "নিশ্চিতকরণের অপেক্ষায়" (waiting for confirmation). SMS on approve. | Owner |
 | 8 | When is stock taken? | **At order placement** (unchanged). Returned on deny or expiry. Can be revisited later. | Owner |
-| 9 | Unconfirmed order expiry | **48 h**, stored in shop settings so it can change without a deploy. | Owner |
+| 9 | Unconfirmed order expiry | **48 h**. A code constant (`COD_CONFIRMATION_HOURS`) for now; becomes a shop setting in Step 2. | Owner |
 | 10 | Customer can cancel a waiting COD order? | **No**, not for now. Only the admin or the expiry cancels. | Owner |
 | 11 | Order state model | **Separate payment status from order status** (§3). Done in the expand → migrate → contract order. | Owner |
+| 12 | Payment option order | **bKash, Rocket, Nagad, Cash on delivery**, then Card (disabled). | Owner |
+| 13 | Confirmation message | A fixed **Bangla** message with a Copy button, also pre-typed in Messenger. Bangla on every site language. | Owner |
 
 ## 3. State design
 
@@ -255,7 +321,11 @@ Goal: the process in §1, end to end.
 - **Who approves:** STAFF and ADMIN, not ADMIN only. Approving is the same job as confirming a bKash transfer, which STAFF already do. Packers can't. A one-line change makes it ADMIN-only if you prefer.
 
 ### Step 2: housekeeping
-- [ ] **Expiry worker:** cancels COD orders still `PENDING` after `codConfirmationHours`, with the reason "expired". Stock returns. Same pattern as `claim-retry.worker.ts`. Must be idempotent and safe to run on more than one instance.
+- [ ] **Expiry worker:** cancels COD orders still `PENDING` after `codConfirmationHours`, with the reason "expired". Stock returns.
+  - Same pattern as `claim-retry.worker.ts` (lease with `FOR UPDATE SKIP LOCKED`), so it is idempotent and safe on more than one instance.
+  - Go through `OrdersService.transition(…, "CANCELLED")` so stock and the waitlist are handled.
+  - Write an audit entry (e.g. a new `COD_EXPIRED` action), and decide whether an expired order may be reopened.
+- [ ] **Setting:** `codConfirmationHours` on `shop_settings` (default 48), shown in admin settings. Replaces the `COD_CONFIRMATION_HOURS` constant in the customer copy (it must come from the API then).
 - [ ] **Queue badge:** count of COD orders awaiting confirmation, in the admin nav
 - [ ] **Duplicate flag:** another open COD order from the same phone number
 - [ ] **History badge per phone:** delivered / cancelled / denied counts
