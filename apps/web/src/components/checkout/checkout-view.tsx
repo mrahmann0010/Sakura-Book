@@ -1,6 +1,5 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
@@ -53,6 +52,7 @@ import {
 } from "./payment-verification-modal";
 import { waitForPayment } from "./wait-for-payment";
 import { ShippingFields } from "./shipping-fields";
+import { localizedZodResolver } from "@/lib/localized-resolver";
 
 /* --------------------------------------------------------------------------
    The checkout page's one job: say where the books go and how they are paid
@@ -156,7 +156,7 @@ export function CheckoutView({
     trigger,
     formState: { errors, isSubmitting, isSubmitted, isValid },
   } = useForm<CheckoutValues>({
-    resolver: zodResolver(checkoutSchema),
+    resolver: localizedZodResolver<CheckoutValues>(checkoutSchema, t),
     defaultValues: { ...checkoutDefaults, ...prefill },
     mode: "onBlur",
   });
@@ -326,7 +326,7 @@ export function CheckoutView({
          resolves on it straight away. See waitForPayment. */
       const settled = await waitForPayment(order);
 
-      setPendingOrder({ order: settled, email: values.email });
+      setPendingOrder({ order: settled, email: values.email ?? "" });
       setVerification(settled.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");
     } catch (err) {
       setVerification(null);
@@ -515,7 +515,7 @@ export function CheckoutView({
         loading={isSubmitting}
         loadingLabel={t("checkout.placing")}
       >
-        {t("checkout.place")}
+        {deliveryKnown ? t("checkout.placeWithTotal", { total }) : t("checkout.place")}
       </Button>
     );
 
@@ -742,28 +742,21 @@ export function CheckoutView({
 
       {emptied ? null : (
         <StickyBar
-          /* The total only earns its line once there is one. Before a zone
-           the figure is "—", so on the address step the bar was spending a
-           row, a gap and a hairline to say nothing while sitting on top of
-           the form being typed into. It collapses to just the button there,
-           and grows as the order becomes known. */
+          /* One row: step and total on the left, the action on the right. The
+             breakdown folds behind the total — the payment step already prints
+             it beside the transfer fields — and the figure appears only once a
+             zone prices delivery; before that it would read "—". */
+          step={step === "delivery" ? t("checkout.stepDelivery") : t("checkout.stepPayment")}
           label={deliveryKnown ? t("cart.summary.total") : undefined}
           value={deliveryKnown ? total : undefined}
-          /* The same rows the desktop rail draws, from the same derivation — but
-           only on the payment step. On a phone the docked bar sits on top of
-           whatever is being typed, and three extra rows plus a hairline left
-           the address form almost no room to work in. There is also nothing
-           to read yet: delivery has no figure until a zone is chosen, so
-           on the delivery step the breakdown costs a third of the screen to
-           say "not known". By the payment step it is priced, and it is the
-           figure being typed into a banking app. */
           breakdown={
-            step === "payment"
+            deliveryKnown
               ? rows.map((row) => (
                   <SummaryRow key={row.key} label={row.label} value={row.value} tone={row.tone} />
                 ))
               : undefined
           }
+          breakdownToggle={t("checkout.barDetails")}
           action={primaryAction}
         />
       )}
@@ -776,7 +769,7 @@ export function CheckoutView({
           className={cn(
             "pointer-events-none fixed inset-x-0 bottom-0 z-40 lg:pb-8",
             /* No docked bar to clear once the cart is emptied. */
-            emptied ? "pb-8" : "pb-40",
+            emptied ? "pb-8" : "pb-28",
           )}
         >
           <div className="shell flex flex-col items-center gap-2">

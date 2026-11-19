@@ -6,7 +6,7 @@ import type {
   OrderLookupRequest,
   OrderPaymentStatusRequest,
 } from "@sakura/contracts";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, or, sql, type SQL } from "drizzle-orm";
 import { ResourceNotFoundError } from "../common/errors";
 import { DbService } from "../db/db.service";
 import type { Executor, Transaction } from "../db/db.types";
@@ -310,7 +310,7 @@ export class OrdersService {
     // Authenticate before opening a transaction. The lookup is the same query
     // and the same failure mode, so it is reused rather than re-expressed —
     // two implementations of "is this your order?" is one too many.
-    const existing = await this.findByCredentials(orderNumber, request.email);
+    const existing = await this.findByCredentials(orderNumber, request);
 
     if (!existing) {
       this.logger.debug(`Order cancel miss for ${orderNumber}`);
@@ -506,7 +506,7 @@ export class OrdersService {
    */
   async paymentStatus(request: OrderPaymentStatusRequest): Promise<Order> {
     const orderNumber = request.orderNumber.trim().toUpperCase();
-    const existing = await this.findByCredentials(orderNumber, request.email);
+    const existing = await this.findByCredentials(orderNumber, request);
     const order = existing ? await this.byNumber(orderNumber) : undefined;
 
     if (!order) throw new ResourceNotFoundError("Order", orderNumber);
@@ -514,17 +514,32 @@ export class OrdersService {
     return order;
   }
 
-  /** The order behind a number *and* a matching email, or nothing. */
+  /**
+   * The order behind a number *and* a matching email or phone, or nothing.
+   *
+   * Email is optional at checkout and stored as "" when skipped, so a blank
+   * factor never matches anything — otherwise every email-less order would
+   * open to its order number alone. Phone compares on digits, as lookup does.
+   */
   private async findByCredentials(
     orderNumber: string,
-    email: string,
+    credentials: { email?: string; phone?: string },
   ): Promise<{ id: string } | undefined> {
+    const email = credentials.email?.trim() ?? "";
+    const phoneDigits = (credentials.phone ?? "").replace(/[^0-9]/g, "");
+    const factors: SQL[] = [];
+
+    if (email) factors.push(sql`lower(${orders.customerEmail}) = lower(${email})`);
+    if (phoneDigits.length >= 6) {
+      factors.push(
+        sql`regexp_replace(${orders.customerPhone}, '[^0-9]', '', 'g') = ${phoneDigits}`,
+      );
+    }
+    if (factors.length === 0) return undefined;
+
     return this.dbService.db.query.orders.findFirst({
-      where: (row, { and: both, eq: equals }) =>
-        both(
-          equals(row.orderNumber, orderNumber),
-          sql`lower(${row.customerEmail}) = lower(${email.trim()})`,
-        ),
+      where: (row, { and: both, eq: equals, or: either }) =>
+        both(equals(row.orderNumber, orderNumber), either(...factors)),
       columns: { id: true },
     });
   }

@@ -42,6 +42,8 @@ export class OrderConfirmationListener {
       // The order existed moments ago to fire this event; a missing row here
       // means something else already logged the real problem.
       if (!order) return;
+      // Email is optional at checkout — nobody to send it to.
+      if (!order.customerEmail) return;
 
       const { subject, html } = orderConfirmationEmail(order);
 

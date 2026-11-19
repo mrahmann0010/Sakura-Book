@@ -21,7 +21,7 @@ export type { CheckboxProps } from "./checkbox";
 export { CopyButton } from "./copy-button";
 export type { CopyButtonProps } from "./copy-button";
 
-export { Field, FieldFrame } from "./field";
+export { Field, FieldFrame, FieldLabel } from "./field";
 export type { FieldFrameProps, FieldProps } from "./field";
 
 export {

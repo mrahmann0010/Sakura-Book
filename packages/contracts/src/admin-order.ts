@@ -736,7 +736,15 @@ export type AdminEditPaymentDetailsResult = z.infer<typeof adminEditPaymentDetai
  */
 export const adminEditOrderContactRequestSchema = z.object({
   fullName: z.string().trim().min(1, "Add the name the parcel is addressed to.").max(120),
-  email: z.string().trim().email("Use an address like name@example.com."),
+  /** Optional, as at checkout: empty means the customer gave no email. */
+  email: z
+    .string()
+    .trim()
+    .refine(
+      (value) => value === "" || z.string().email().safeParse(value).success,
+      "Use an address like name@example.com.",
+    )
+    .optional(),
   phone: z.string().trim().min(1, "Add a number the courier can reach.").max(32),
   /** Empty means "there is no second number" — normalised to null on the way in. */
   secondaryPhone: z.string().trim().max(32).optional(),

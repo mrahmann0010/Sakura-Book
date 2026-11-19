@@ -1249,7 +1249,7 @@ export class AdminOrdersService {
 
     const next = {
       customerName: request.fullName,
-      customerEmail: request.email,
+      customerEmail: request.email?.trim() ?? "",
       customerPhone: request.phone,
       // Empty normalises to null, so "no second number" has one representation
       // — the same rule the column's own comment states.

@@ -67,3 +67,38 @@ export function Field({ label, hint, error, className, children }: FieldProps) {
     </div>
   );
 }
+
+/**
+ * A label with its requirement shown the standard way: a clay asterisk for a
+ * field that must be filled, a quiet sentence-case pill for one that may be
+ * skipped. The asterisk is hidden from screen readers — the control carries
+ * `aria-required` instead — while the pill's words are read with the label.
+ */
+export function FieldLabel({
+  children,
+  required,
+  optional,
+}: {
+  children: ReactNode;
+  required?: boolean;
+  /** Pill copy for a field that may be left empty. */
+  optional?: ReactNode;
+}) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span>
+        {children}
+        {required ? (
+          <span aria-hidden="true" className="text-clay ml-0.5">
+            *
+          </span>
+        ) : null}
+      </span>
+      {optional ? (
+        <span className="border-rule text-secondary rounded-full border px-2 py-px text-[11px] leading-4 font-normal tracking-normal normal-case">
+          {optional}
+        </span>
+      ) : null}
+    </span>
+  );
+}

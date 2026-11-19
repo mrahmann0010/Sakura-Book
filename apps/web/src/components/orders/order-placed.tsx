@@ -24,7 +24,8 @@ import { OrderReceipt } from "./order-receipt";
    receipt, purely because nobody updated it twice.
 
    `email` is the address the confirmation was sent to, which is the form's
-   value rather than anything on the order.
+   value rather than anything on the order. Empty when the shopper skipped
+   email, which is optional — then nothing was sent, and the copy says so.
    -------------------------------------------------------------------------- */
 
 export function OrderPlaced({
@@ -46,7 +47,11 @@ export function OrderPlaced({
         <h1 className="text-36 lg:text-44 text-ink mt-4 font-serif leading-tight">
           {t("checkout.placed.title")}
         </h1>
-        <p className="text-body mt-5">{t("checkout.placed.description", { email })}</p>
+        <p className="text-body mt-5">
+          {email.trim()
+            ? t("checkout.placed.description", { email })
+            : t("checkout.placed.descriptionNoEmail")}
+        </p>
 
         <div className="mt-8">
           <OrderReceipt order={order} locale={locale} />
