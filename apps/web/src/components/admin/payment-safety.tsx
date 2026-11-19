@@ -1,4 +1,8 @@
-import type { AdminOrderVerificationState, ReceiptUniqueness } from "@sakura/contracts";
+import type {
+  AdminOrderVerificationState,
+  OrderPaymentStatus,
+  ReceiptUniqueness,
+} from "@sakura/contracts";
 
 import { cn } from "@/lib/utils";
 
@@ -110,6 +114,59 @@ export function VerificationBadge({
           : "The payment gateway has never been asked about this order"
       }
     >
+      {tone.label}
+    </span>
+  );
+}
+
+const PAYMENT_STATUS_TONES: Record<
+  OrderPaymentStatus,
+  { label: string; className: string; title: string }
+> = {
+  /** Clay-deep, the "not yet" tone — normal for a COD order until it is delivered. */
+  UNPAID: {
+    label: "Unpaid",
+    className: "bg-tint text-clay-deep",
+    title: "No money has arrived for this order yet",
+  },
+  PAID: { label: "Paid", className: "bg-tint text-ink", title: "The payment was verified" },
+  /** The shop's money, but not in the shop's hands: Pathao holds it until payout. */
+  COLLECTED: {
+    label: "With courier",
+    className: "bg-tint text-clay-deep",
+    title: "Delivered — the courier collected the cash and has not paid the shop yet",
+  },
+  REMITTED: {
+    label: "Remitted",
+    className: "bg-tint text-ink",
+    title: "The courier paid the shop for this order",
+  },
+  REFUNDED: {
+    label: "Refunded",
+    className: "bg-tint text-muted",
+    title: "The money went back to the customer",
+  },
+};
+
+/**
+ * Where the order's money is — independent of where the order is.
+ *
+ * Exists because the two stopped moving together with cash on delivery: a
+ * shipped COD order is still unpaid, and nothing on the order status says so.
+ * Shown for every method, unlike the safety badges, because "has this order
+ * been paid" is a question staff ask of every order.
+ */
+export function PaymentStatusBadge({
+  status,
+  className,
+}: {
+  status: OrderPaymentStatus;
+  className?: string;
+}) {
+  const tone = PAYMENT_STATUS_TONES[status];
+
+  return (
+    <span className={cn(INDICATOR, tone.className, className)} title={tone.title}>
       {tone.label}
     </span>
   );

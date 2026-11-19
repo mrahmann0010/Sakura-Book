@@ -5,6 +5,7 @@ import type {
   OrderCancelRequest,
   OrderLookupRequest,
   OrderPaymentStatusRequest,
+  PaymentMethod,
 } from "@sakura/contracts";
 import { and, eq, or, sql, type SQL } from "drizzle-orm";
 import { ResourceNotFoundError } from "../common/errors";
@@ -26,6 +27,7 @@ import {
 } from "./order-status.machine";
 import { InvalidStatusTransitionError, TransactionIdAlreadyUsedError } from "./order.errors";
 import { findTransactionIdClaim } from "./transaction-id-claim";
+import { nextPaymentStatus } from "./payment-status";
 import { ORDER_STATUS_CHANGED } from "../common/events";
 import type { OrderStatusChangedEvent } from "./order.events";
 
@@ -137,7 +139,7 @@ export class OrdersService {
   ): Promise<OrderStatus> {
     const current = await tx.query.orders.findFirst({
       where: (row, { eq: equals }) => equals(row.id, orderId),
-      columns: { status: true },
+      columns: { status: true, paymentMethod: true, paymentStatus: true },
     });
 
     if (!current) throw new ResourceNotFoundError("Order", orderId);
@@ -145,9 +147,20 @@ export class OrdersService {
       throw new InvalidStatusTransitionError(orderId, current.status, next);
     }
 
+    /* Payment status rides the same guarded update, so it can never disagree
+       with the status move that caused it — see `nextPaymentStatus` for the
+       rules. Written here rather than by each caller for the same reason stock
+       is restored here: there are several callers, and forgetting is silent. */
+    const paymentStatus = nextPaymentStatus({
+      method: current.paymentMethod as PaymentMethod,
+      current: current.paymentStatus,
+      from: current.status,
+      to: next,
+    });
+
     const updated = await tx
       .update(orders)
-      .set({ status: next })
+      .set({ status: next, paymentStatus })
       .where(and(eq(orders.id, orderId), eq(orders.status, current.status)))
       .returning({ id: orders.id });
 

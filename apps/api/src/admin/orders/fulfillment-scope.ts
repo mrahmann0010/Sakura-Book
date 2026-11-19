@@ -170,6 +170,9 @@ export function redactDetailForFulfillment(detail: AdminOrderDetail): AdminOrder
     verification: NEUTRAL_VERIFICATION,
     verifications: [],
     gatewayClaim: null,
+    /* Who approved a COD order and what they checked is the desk's business;
+       the packer needs the amount to collect, which they already have. */
+    cod: null,
   };
 }
 

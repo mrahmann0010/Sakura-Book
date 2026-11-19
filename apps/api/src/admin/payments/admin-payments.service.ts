@@ -13,6 +13,7 @@ import { InvalidInputError } from "../../common/errors";
 import { DbService } from "../../db/db.service";
 import { orders } from "../../db/schema";
 import { ShippingTermsService } from "../../shipping";
+import { MONEY_RECEIVED_STATUSES } from "../../orders";
 import { REVENUE_STATUSES } from "../dashboard";
 
 /**
@@ -30,8 +31,12 @@ import { REVENUE_STATUSES } from "../dashboard";
  *
  * A wallet transfer is money the shop already has: the customer sent it
  * before the order was accepted, which is *why* it was accepted. Cash on
- * delivery is not — it is with a courier until the parcel is handed over, and
- * only DELIVERED says that happened.
+ * delivery is not — it is with a courier until the parcel is handed over.
+ *
+ * The split is read off `payment_status` (MONEY_RECEIVED_STATUSES, shared with
+ * the dashboard), not worked out here from the method and the order status.
+ * It used to be — "not COD, or delivered" — which gave the same answer but
+ * was a second copy of the money rule for every new payment state to miss.
  *
  * So the total splits in two, and the split is not cosmetic: a shop that
  * reads one blended figure as "our takings" is counting cash it cannot spend.
@@ -189,8 +194,7 @@ export class AdminPaymentsService {
        columns partition the same set the totals are drawn from. */
     const collected = sql`
       case
-        when ${orders.paymentMethod} <> 'cash-on-delivery' then ${orders.totalCents}
-        when ${orders.status} = 'DELIVERED' then ${orders.totalCents}
+        when ${inArray(orders.paymentStatus, MONEY_RECEIVED_STATUSES)} then ${orders.totalCents}
         else 0
       end`;
 

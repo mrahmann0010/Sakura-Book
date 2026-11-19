@@ -590,6 +590,14 @@ export function orderValuesFrom(
        empty strings for these whenever cash on delivery is chosen. */
     senderNumber: senderNumberToStore(customer.senderNumber),
     transactionId: emptyToNull(customer.transactionId),
+
+    /* The COD commitment box. The schema refuses a COD order without it, so
+       for COD this is always the moment of placing; null for every other
+       method, where there is nothing to promise. */
+    codAcknowledgedAt:
+      customer.method === "cash-on-delivery" && customer.codAcknowledged === true
+        ? new Date()
+        : null,
   };
 }
 

@@ -8,6 +8,7 @@ import { LinkButton } from "@/components/ui";
 import type { Locale } from "@/i18n/settings";
 import { routes } from "@/lib/routes";
 
+import { awaitingCodConfirmation, ConfirmCodOrder } from "./confirm-cod-order";
 import { OrderReceipt } from "./order-receipt";
 
 /* --------------------------------------------------------------------------
@@ -52,6 +53,8 @@ export function OrderPlaced({
             ? t("checkout.placed.description", { email })
             : t("checkout.placed.descriptionNoEmail")}
         </p>
+
+        {awaitingCodConfirmation(order) ? <ConfirmCodOrder order={order} className="mt-8" /> : null}
 
         <div className="mt-8">
           <OrderReceipt order={order} locale={locale} />

@@ -15,28 +15,32 @@ import type { Env } from "../../config/env.schema";
 import { DbService } from "../../db/db.service";
 import { books, orderItems, orders, orderStatusHistory } from "../../db/schema";
 import { ShippingTermsService } from "../../shipping";
+import { MONEY_RECEIVED_STATUSES } from "../../orders";
 
 /**
  * The landing page: what happened, and what needs doing.
  *
- * ## Revenue counts confirmed orders only
+ * ## Revenue counts money received, from the payment status
  *
- * PENDING is excluded. An order awaiting a bank transfer is an intention, and
- * counting it would make the day's takings a number that goes *down* when a
- * customer changes their mind — which is exactly when someone would be looking
- * at it. CANCELLED and REFUNDED are excluded for the same reason from the
- * other direction.
+ * "Collected" is orders whose `payment_status` is in MONEY_RECEIVED_STATUSES
+ * — a verified transfer, or cash a courier has collected. It is no longer read
+ * off the order status: for cash on delivery, PAYMENT_CONFIRMED means
+ * "accepted for packing", and counting it put money the shop did not have
+ * into the headline (docs/cod-orders.md §3.1).
  *
- * The consequence, stated because it will surprise someone: a cash-on-delivery
- * shop sees revenue appear only when an order is marked delivered, since that
- * is when COD reaches PAYMENT_CONFIRMED. That is the honest reading — the
- * money genuinely does not exist until the courier hands it over.
+ * "Ordered" keeps its meaning: accepted orders (REVENUE_STATUSES), by the date
+ * they were placed, paid or not. For a COD shop it runs ahead of collected,
+ * and that gap is the cash still on its way.
  *
- * ## Which date a confirmed order counts on
+ * PENDING, CANCELLED and REFUNDED stay out of both. An order awaiting a bank
+ * transfer is an intention, and counting it would make the day's takings a
+ * number that goes *down* when a customer changes their mind.
  *
- * Two dates, and they are not interchangeable. `recognisedAt` is when the
- * order entered PAYMENT_CONFIRMED — when the money became real. `createdAt` is
- * when the customer placed it.
+ * ## Which date an order counts on
+ *
+ * Two dates, and they are not interchangeable. `collected_on` is when the
+ * money arrived — a transfer's confirmation, a COD parcel's delivery.
+ * `ordered_on` is when the customer placed it.
  *
  * Every window is reported on both (`collected` and `ordered`), because for a
  * COD shop they are days apart and each answers a question somebody asks.
@@ -46,7 +50,7 @@ import { ShippingTermsService } from "../../shipping";
  * orders are still PENDING, and every past day keeps climbing as its couriers
  * settle, so the same chart shows a different history each time it is opened.
  *
- * The month series take `recognisedAt` alone. A trend has to be a fixed
+ * The month series take `collected_on` alone. A trend has to be a fixed
  * history or it is not a trend, and only the collection date is fixed.
  *
  * ## Day boundaries are the shop's, not UTC's
@@ -274,16 +278,27 @@ export class AdminDashboardService {
    * quantity per order *first* keeps the join one-to-one, so the money stays
    * correct while the copies come along for free.
    *
-   * `confirmed_at` is folded the same way, and for a second reason on top of
+   * `money_dates` is folded the same way, and for a second reason on top of
    * that one. An order can hold more than one PAYMENT_CONFIRMED row — a
-   * reconfirmation after a correction — so it has to collapse to `min()`
-   * before it is joined, or a single order would count twice. Written as a
+   * reconfirmation after a correction — so each date has to collapse to
+   * `min()` before it is joined, or a single order would count twice. Written as a
    * correlated subquery instead, it would also re-scan `order_status_history`
    * once per order: neither `order_id` column here carries an index, because
    * Postgres does not create one for a foreign key. Aggregating once and
    * joining the result asks for a single pass regardless of what is indexed.
    *
-   * ## Why `recognised_at` falls back to `created_at`
+   * ## Which date the money arrived on
+   *
+   * `collected_on` is set only for an order whose payment status says money
+   * arrived (MONEY_RECEIVED_STATUSES), and is null otherwise — so every query
+   * that groups or filters on it leaves unpaid orders out without having to
+   * say so. The date is the moment the money changed hands, which depends on
+   * how it was paid: a transfer when it was confirmed (PAYMENT_CONFIRMED), cash
+   * on delivery when the courier collected it (DELIVERED). For COD the first
+   * of those only means "accepted for packing", which is why this no longer
+   * reads it for every order.
+   *
+   * ## Why the money date falls back to `created_at`
    *
    * The fallback covers orders confirmed before the status log existed, and
    * any seeded row written straight to a confirmed status without a history
@@ -302,24 +317,35 @@ export class AdminDashboardService {
         from ${orderItems}
         group by ${orderItems.orderId}
       ),
-      confirmed_at as (
+      money_dates as (
         select
           ${orderStatusHistory.orderId} as order_id,
-          min(${orderStatusHistory.createdAt}) as recognised_at
+          min(${orderStatusHistory.createdAt})
+            filter (where ${orderStatusHistory.status} = 'PAYMENT_CONFIRMED') as confirmed_at,
+          min(${orderStatusHistory.createdAt})
+            filter (where ${orderStatusHistory.status} = 'DELIVERED') as delivered_at
         from ${orderStatusHistory}
-        where ${orderStatusHistory.status} = 'PAYMENT_CONFIRMED'
+        where ${orderStatusHistory.status} in ('PAYMENT_CONFIRMED', 'DELIVERED')
         group by ${orderStatusHistory.orderId}
       ),
       scoped as (
         select
           ${orders.totalCents} as total_cents,
           (${orders.createdAt} at time zone ${timezone})::date as ordered_on,
-          (coalesce(confirmed_at.recognised_at, ${orders.createdAt})
-            at time zone ${timezone})::date as collected_on,
+          case
+            when ${inArray(orders.paymentStatus, MONEY_RECEIVED_STATUSES)} then
+              (coalesce(
+                case
+                  when ${orders.paymentMethod} = 'cash-on-delivery' then money_dates.delivered_at
+                  else money_dates.confirmed_at
+                end,
+                ${orders.createdAt}
+              ) at time zone ${timezone})::date
+          end as collected_on,
           coalesce(copies_per_order.units, 0) as units
         from ${orders}
         left join copies_per_order on copies_per_order.order_id = ${orders.id}
-        left join confirmed_at on confirmed_at.order_id = ${orders.id}
+        left join money_dates on money_dates.order_id = ${orders.id}
         where ${inArray(orders.status, REVENUE_STATUSES)}
       )
     `;
@@ -409,12 +435,13 @@ export class AdminDashboardService {
 }
 
 /**
- * Statuses whose money the shop may count.
+ * Accepted orders: the set every revenue figure is drawn from.
  *
- * Not derived from the state machine, because this is a different question
- * from "has stock been committed" and the two lists happening to overlap today
- * would be a coincidence to depend on. Revenue is about whether payment has
- * been confirmed and not since reversed.
+ * Whether an accepted order's money has *arrived* is a separate question,
+ * answered by `payment_status` (MONEY_RECEIVED_STATUSES) — this list only says
+ * the order is live and the shop has agreed to send it. Not derived from the
+ * state machine, because "has stock been committed" is a different question
+ * again and the lists overlapping today is a coincidence to avoid depending on.
  */
 export const REVENUE_STATUSES: readonly OrderStatus[] = Object.freeze([
   "PAYMENT_CONFIRMED",

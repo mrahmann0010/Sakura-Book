@@ -1,4 +1,5 @@
-import type { OrderStatus } from "@sakura/contracts";
+import type { Order, OrderStatus } from "@sakura/contracts";
+import type { TFunction } from "i18next";
 
 import type { OrderProgressStep } from "@/components/domain";
 
@@ -35,4 +36,35 @@ export function toOrderProgressStep(status: OrderStatus): OrderProgressStep | nu
     case "REFUNDED":
       return null;
   }
+}
+
+/* --------------------------------------------------------------------------
+   Cash on delivery reads differently in two places.
+
+   For a transfer, the second stage is "payment verified" — the shop checked
+   the money. For cash on delivery no money moves until the courier arrives;
+   that stage is the shop accepting the order after the customer confirmed it.
+   Saying "payment verified" there would tell the customer they had paid.
+   -------------------------------------------------------------------------- */
+
+/** Stage labels that differ for cash on delivery, for `OrderProgress`. */
+export function progressLabelsFor(
+  order: Order,
+  t: TFunction,
+): Partial<Record<OrderProgressStep, string>> | undefined {
+  if (order.paymentMethod !== "cash-on-delivery") return undefined;
+
+  return { verified: t("orders.progress.confirmed") };
+}
+
+/** The tracking page's one-sentence status, with COD's own wording where it differs. */
+export function headlineKeyFor(order: Order): string {
+  if (
+    order.paymentMethod === "cash-on-delivery" &&
+    (order.status === "PENDING" || order.status === "PAYMENT_CONFIRMED")
+  ) {
+    return `orders.headlineCod.${order.status}`;
+  }
+
+  return `orders.headline.${order.status}`;
 }

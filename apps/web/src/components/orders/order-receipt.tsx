@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { Order } from "@sakura/contracts";
 
 import { OrderLine, OrderProgress, SummaryRow } from "@/components/domain";
-import { toOrderProgressStep } from "./order-status";
+import { progressLabelsFor, toOrderProgressStep } from "./order-status";
 import { ReceiptSheet, SHEET_H, SHEET_W } from "./receipt-sheet";
 import { Button, Card, CopyButton, Notice, OrderId, StatusPill } from "@/components/ui";
 import type { Locale } from "@/i18n/settings";
@@ -246,7 +246,7 @@ export function OrderReceipt({ order, locale }: { order: Order; locale: Locale }
           <p className="text-caption text-secondary mt-2.5">{t("checkout.placed.copyPrompt")}</p>
 
           {step ? (
-            <OrderProgress status={step} className="mt-8" />
+            <OrderProgress status={step} labels={progressLabelsFor(order, t)} className="mt-8" />
           ) : (
             <StatusPill status="cancelled" className="mt-8">
               {t(`orders.status.${order.status === "REFUNDED" ? "refunded" : "cancelled"}`)}

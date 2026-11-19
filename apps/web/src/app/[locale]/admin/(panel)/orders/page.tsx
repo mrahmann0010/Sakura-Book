@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import type { AdminOrderSummary, OrderStatus } from "@sakura/contracts";
+import type { AdminOrderSummary, OrderStatus, PaymentMethod } from "@sakura/contracts";
 
-import { PaymentSafetyBadges } from "@/components/admin/payment-safety";
+import { PaymentSafetyBadges, PaymentStatusBadge } from "@/components/admin/payment-safety";
 import { AdminTableRows } from "@/components/admin/skeletons";
 import { Button } from "@/components/ui";
 import { AdminApiError, listAdminOrders } from "@/lib/api/admin";
@@ -25,8 +25,27 @@ const TABS = [
     statuses: ["PAYMENT_CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED"],
   },
   { key: "pending", label: "Pending", statuses: ["PENDING"] },
+  /* The cash-on-delivery worklist: pending COD orders waiting for the customer
+     to message the Facebook page. A subset of Pending, split out because it is
+     worked differently — from the Messenger inbox, not the bKash statement. */
+  {
+    key: "cod",
+    label: "COD to confirm",
+    statuses: ["PENDING"],
+    paymentMethod: "cash-on-delivery",
+  },
   { key: "rejected", label: "Rejected", statuses: ["CANCELLED", "REFUNDED"] },
-] as const satisfies readonly { key: string; label: string; statuses: OrderStatus[] }[];
+] as const satisfies readonly {
+  key: string;
+  label: string;
+  statuses: OrderStatus[];
+  paymentMethod?: PaymentMethod;
+}[];
+
+/** The tab's payment-method filter, if it has one. */
+function methodOf(tab: (typeof TABS)[number]): PaymentMethod | undefined {
+  return "paymentMethod" in tab ? tab.paymentMethod : undefined;
+}
 
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -97,6 +116,7 @@ export default function AdminOrdersPage() {
         try {
           const list = await listAdminOrders({
             status: [...t.statuses],
+            paymentMethod: methodOf(t),
             q: query || undefined,
             page: 1,
             pageSize: 1,
@@ -121,9 +141,10 @@ export default function AdminOrdersPage() {
        rows with a spinner somewhere near them. */
     setItems([]);
     try {
-      const statuses = TABS.find((t) => t.key === activeTab)!.statuses;
+      const active = TABS.find((t) => t.key === activeTab)!;
       const list = await listAdminOrders({
-        status: statuses,
+        status: active.statuses,
+        paymentMethod: methodOf(active),
         q: query || undefined,
         page: pageNumber,
       });
@@ -239,7 +260,10 @@ export default function AdminOrdersPage() {
                 <td className="text-ink px-4 py-3">
                   {formatMoney(order.totalCents, "en-GB", order.currency)}
                 </td>
-                <td className="text-secondary px-4 py-3">{order.status}</td>
+                <td className="text-secondary px-4 py-3">
+                  <span className="block">{order.status}</span>
+                  <PaymentStatusBadge status={order.paymentStatus} className="mt-1" />
+                </td>
                 <td className="px-4 py-3 text-right">
                   <Link
                     href={`/${locale}/admin/orders/${order.orderNumber}`}

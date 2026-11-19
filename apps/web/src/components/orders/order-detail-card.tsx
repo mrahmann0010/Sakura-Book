@@ -11,7 +11,8 @@ import { deliveryWindow, formatDate, formatDateTime, formatTime } from "@/lib/da
 import { cn } from "@/lib/utils";
 
 import { OrderSummaryLines } from "./order-receipt";
-import { toOrderProgressStep } from "./order-status";
+import { awaitingCodConfirmation, ConfirmCodOrder } from "./confirm-cod-order";
+import { headlineKeyFor, progressLabelsFor, toOrderProgressStep } from "./order-status";
 
 /* --------------------------------------------------------------------------
    One order, answering the questions a customer actually opens this page to
@@ -90,7 +91,7 @@ export function OrderDetailCard({
      customer would use. The progress bar below shows the same thing as a
      shape; this says it outright, because a bar is read as a picture and a
      worried person wants a sentence. */
-  const headline = t(`orders.headline.${order.status}`);
+  const headline = t(headlineKeyFor(order));
 
   /* Two to three days from the moment payment cleared — see deliveryWindow for
      why it is anchored there and not to placedAt. Withheld once the parcel is
@@ -120,9 +121,14 @@ export function OrderDetailCard({
             <p className="text-h3 text-ink mt-6 font-serif leading-snug">{headline}</p>
             {estimate ? <p className="text-body mt-2">{estimate}</p> : null}
 
+            {awaitingCodConfirmation(order) ? (
+              <ConfirmCodOrder order={order} nested className="mt-6" />
+            ) : null}
+
             <OrderProgress
               status={step}
               orientation="vertical"
+              labels={progressLabelsFor(order, t)}
               detail={progressDetail(order, locale)}
               className="mt-8"
             />

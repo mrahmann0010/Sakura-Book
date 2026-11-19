@@ -58,6 +58,7 @@ export function toOrderResponse(row: OrderRow): Order {
     couponCode: row.discountCodeSnapshot,
 
     paymentMethod: row.paymentMethod as PaymentMethod,
+    paymentStatus: row.paymentStatus,
     paymentProvider: row.provider as PaymentProvider | null,
     // The paying number, but never `transactionId` beside it — see the
     // contract's note on why the reference stays server-side.

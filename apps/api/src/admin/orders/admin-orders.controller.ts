@@ -13,7 +13,9 @@ import {
 } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import {
+  adminApproveCodRequestSchema,
   adminConfirmPaymentRequestSchema,
+  adminDenyCodRequestSchema,
   adminEditOrderContactRequestSchema,
   adminEditPaymentDetailsRequestSchema,
   adminInternalNoteRequestSchema,
@@ -32,6 +34,7 @@ import type { Request, Response } from "express";
 import { createZodDto } from "nestjs-zod";
 import { AllowFulfillment, CurrentAdmin, Roles } from "../auth/admin-auth.decorators";
 import type { AccessClaims } from "../auth/tokens";
+import { AdminCodService } from "./admin-cod.service";
 import { AdminOrdersService, type AdminContext } from "./admin-orders.service";
 
 class AdminOrderQueryDto extends createZodDto(adminOrderQuerySchema) {}
@@ -43,6 +46,8 @@ class AdminReopenOrderDto extends createZodDto(adminReopenOrderRequestSchema) {}
 class AdminInternalNoteDto extends createZodDto(adminInternalNoteRequestSchema) {}
 class AdminEditPaymentDetailsDto extends createZodDto(adminEditPaymentDetailsRequestSchema) {}
 class AdminEditOrderContactDto extends createZodDto(adminEditOrderContactRequestSchema) {}
+class AdminApproveCodDto extends createZodDto(adminApproveCodRequestSchema) {}
+class AdminDenyCodDto extends createZodDto(adminDenyCodRequestSchema) {}
 
 /**
  * The fulfilment desk, over HTTP.
@@ -71,7 +76,10 @@ class AdminEditOrderContactDto extends createZodDto(adminEditOrderContactRequest
 @ApiTags("admin-orders")
 @Controller("admin/orders")
 export class AdminOrdersController {
-  constructor(private readonly adminOrdersService: AdminOrdersService) {}
+  constructor(
+    private readonly adminOrdersService: AdminOrdersService,
+    private readonly adminCodService: AdminCodService,
+  ) {}
 
   /**
    * The queue.
@@ -214,6 +222,40 @@ export class AdminOrdersController {
     @Req() request: Request,
   ): Promise<AdminOrderDetail> {
     return this.adminOrdersService.confirmPayment(orderNumber, body, contextOf(admin, request));
+  }
+
+  /**
+   * Approve a cash-on-delivery order after the customer has confirmed it,
+   * recording how they got in touch. STAFF may do this, like confirming a
+   * transfer — it is the same decision, whether an order may be sent. Closed
+   * to packers by the guard's default.
+   */
+  @Post(":orderNumber/cod/approve")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Approve a pending cash-on-delivery order for packing." })
+  async approveCod(
+    @Param("orderNumber") orderNumber: string,
+    @Body() body: AdminApproveCodDto,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminOrderDetail> {
+    return this.adminCodService.approve(orderNumber, body, contextOf(admin, request));
+  }
+
+  /**
+   * Turn down a pending cash-on-delivery order, with a staff-only reason.
+   * Returns its copies to stock. Reopenable like any desk rejection.
+   */
+  @Post(":orderNumber/cod/deny")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Deny a pending cash-on-delivery order." })
+  async denyCod(
+    @Param("orderNumber") orderNumber: string,
+    @Body() body: AdminDenyCodDto,
+    @CurrentAdmin() admin: AccessClaims,
+    @Req() request: Request,
+  ): Promise<AdminOrderDetail> {
+    return this.adminCodService.deny(orderNumber, body, contextOf(admin, request));
   }
 
   /**

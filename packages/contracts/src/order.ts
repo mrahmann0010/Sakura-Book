@@ -19,6 +19,47 @@ export const orderStatuses = [
 export type OrderStatus = (typeof orderStatuses)[number];
 
 /**
+ * Where an order's money is — kept apart from `orderStatuses`, which say where
+ * the order is.
+ *
+ * The two used to be one field, and for a prepaid order they move together:
+ * the money arrives, then the parcel is packed. Cash on delivery breaks that —
+ * the parcel is packed and shipped while unpaid, and the money arrives after
+ * DELIVERED, then again when the courier settles. One field cannot say
+ * "shipped, unpaid" or "delivered, cash still with Pathao", so this one does.
+ *
+ * - `UNPAID` — nothing received yet. Every order starts here.
+ * - `PAID` — a prepaid order's payment was verified.
+ * - `COLLECTED` — a COD parcel was delivered; the courier holds the cash.
+ * - `REMITTED` — the courier paid the shop for a COD parcel.
+ * - `REFUNDED` — the money went back to the customer.
+ *
+ * See docs/cod-orders.md §3 for the design and the migration plan.
+ */
+export const orderPaymentStatuses = ["UNPAID", "PAID", "COLLECTED", "REMITTED", "REFUNDED"] as const;
+
+export type OrderPaymentStatus = (typeof orderPaymentStatuses)[number];
+
+/* --------------------------------------------------------------------------
+   Cash-on-delivery confirmation (docs/cod-orders.md).
+
+   A COD order waits in PENDING until the customer messages the shop's Facebook
+   page and staff approve it. These are the shared pieces of that flow.
+   -------------------------------------------------------------------------- */
+
+/**
+ * How long a COD order waits for the customer to get in touch before it is
+ * cancelled and its copies go back on the shelf. Shown to the customer on the
+ * confirmation screen; the expiry job that enforces it is Step 2.
+ */
+export const COD_CONFIRMATION_HOURS = 48;
+
+/** How the customer reached the shop to confirm — recorded on approval. */
+export const codConfirmationChannels = ["FACEBOOK", "PHONE", "OTHER"] as const;
+
+export type CodConfirmationChannel = (typeof codConfirmationChannels)[number];
+
+/**
  * Lookup by any one of order number, email, or phone — deliberately
  * single-factor, so a customer who has forgotten their order ID can still
  * find it. Giving the order number returns that one order; giving email
@@ -137,6 +178,8 @@ export const orderSchema = z.object({
   couponCode: z.string().nullable(),
 
   paymentMethod: z.enum(paymentMethods),
+  /** Where the money is, independent of `status`. See `orderPaymentStatuses`. */
+  paymentStatus: z.enum(orderPaymentStatuses),
   /** Which wallet a manual-transfer payment moved through. Null otherwise. */
   paymentProvider: z.enum(paymentProviders).nullable(),
   /**

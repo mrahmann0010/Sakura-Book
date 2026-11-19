@@ -1,5 +1,11 @@
 import { pgEnum } from "drizzle-orm/pg-core";
-import { paymentProviders, paymentVerificationOutcomes, reviewStatuses } from "@sakura/contracts";
+import {
+  codConfirmationChannels,
+  orderPaymentStatuses,
+  paymentProviders,
+  paymentVerificationOutcomes,
+  reviewStatuses,
+} from "@sakura/contracts";
 
 export const bookAuthorRoleEnum = pgEnum("book_author_role", [
   "AUTHOR",
@@ -23,6 +29,22 @@ export const orderStatusEnum = pgEnum("order_status", [
   "CANCELLED",
   "REFUNDED",
 ]);
+
+/**
+ * Where an order's money is, beside `order_status` saying where the order is.
+ *
+ * Built from the contract's `orderPaymentStatuses`, like the other contract
+ * enums here, so the API and the panel cannot disagree about which states
+ * exist. Written only by `OrdersService.transition`, from the rule in
+ * `orders/payment-status.ts` — see that file for what moves it.
+ */
+export const orderPaymentStatusEnum = pgEnum("order_payment_status", orderPaymentStatuses);
+
+/** How a COD customer reached the shop to confirm. From the contract's list. */
+export const codConfirmationChannelEnum = pgEnum(
+  "cod_confirmation_channel",
+  codConfirmationChannels,
+);
 
 /**
  * How the customer said they would pay, recorded on the order itself.
@@ -217,4 +239,12 @@ export const auditActionEnum = pgEnum("audit_action", [
      were re-addressed after they were placed" is a filter, which is the
      question asked when a courier returns one. */
   "CONTACT_EDIT",
+  /* Staff approved a cash-on-delivery order after the customer got in touch,
+     recording how. Its own value so "who approved which COD orders" and the
+     approval rate are filters. */
+  "COD_APPROVED",
+  /* Staff turned down a cash-on-delivery order, with a staff-only reason.
+     Counts as a desk cancellation for reopening, like a TRANSITION to
+     CANCELLED does. */
+  "COD_DENIED",
 ]);

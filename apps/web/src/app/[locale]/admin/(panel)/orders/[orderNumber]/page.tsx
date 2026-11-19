@@ -6,16 +6,23 @@ import { useEffect, useState } from "react";
 import {
   normaliseBdPhone,
   type AdminOrderDetail,
+  type CodConfirmationChannel,
   type AdminOrderVerifyPaymentResult,
   type OrderStatus,
 } from "@sakura/contracts";
 
-import { ReceiptBadge, VerificationBadge } from "@/components/admin/payment-safety";
+import {
+  PaymentStatusBadge,
+  ReceiptBadge,
+  VerificationBadge,
+} from "@/components/admin/payment-safety";
 import { AdminDetailSkeleton } from "@/components/admin/skeletons";
-import { Button, Input, Notice, Textarea } from "@/components/ui";
+import { Button, Input, Notice, Radio, Textarea } from "@/components/ui";
 import {
   AdminApiError,
+  approveAdminCodOrder,
   confirmAdminOrderPayment,
+  denyAdminCodOrder,
   editAdminOrderContact,
   editAdminOrderPaymentDetails,
   getAdminOrder,
@@ -28,6 +35,28 @@ import {
 } from "@/lib/api/admin";
 import { useAdminRole } from "@/lib/admin-role";
 import { formatMoney } from "@/lib/money";
+
+/**
+ * A status as staff should read it. For cash on delivery, PAYMENT_CONFIRMED
+ * means the desk approved the order — nothing has been paid — so it says so.
+ */
+function statusLabel(status: OrderStatus, paymentMethod: string): string {
+  if (status === "PAYMENT_CONFIRMED" && paymentMethod === "cash-on-delivery") {
+    return "Approved (cash on delivery)";
+  }
+  return STATUS_LABELS[status];
+}
+
+const CHANNEL_LABELS: Record<CodConfirmationChannel, string> = {
+  FACEBOOK: "Facebook",
+  PHONE: "Phone",
+  OTHER: "Other",
+};
+
+const CHANNELS = (Object.keys(CHANNEL_LABELS) as CodConfirmationChannel[]).map((value) => ({
+  value,
+  label: CHANNEL_LABELS[value],
+}));
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   PENDING: "Pending",
@@ -121,6 +150,16 @@ export default function AdminOrderDetailPage() {
   const [trxReason, setTrxReason] = useState("");
   const [savingTrx, setSavingTrx] = useState(false);
 
+  /**
+   * The cash-on-delivery decision: how the customer got in touch and what was
+   * checked (sent with Approve), or why the order is being turned down (sent
+   * with Deny). Deny is collapsed behind a second click like the revert.
+   */
+  const [codChannel, setCodChannel] = useState<CodConfirmationChannel>("FACEBOOK");
+  const [codNote, setCodNote] = useState("");
+  const [denying, setDenying] = useState(false);
+  const [denyReason, setDenyReason] = useState("");
+
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
 
@@ -211,6 +250,24 @@ export default function AdminOrderDetailPage() {
           shortfallOverride,
         }),
       );
+    }
+  }
+
+  async function approveCod() {
+    const ok = await run(() =>
+      approveAdminCodOrder(orderNumber, {
+        channel: codChannel,
+        note: codNote.trim() || undefined,
+      }),
+    );
+    if (ok) setCodNote("");
+  }
+
+  async function denyCod() {
+    const ok = await run(() => denyAdminCodOrder(orderNumber, { reason: denyReason.trim() }));
+    if (ok) {
+      setDenying(false);
+      setDenyReason("");
     }
   }
 
@@ -408,6 +465,10 @@ export default function AdminOrderDetailPage() {
 
   /** Only from a standing confirmation — see the machine's one backward edge. */
   const canRevertPayment = order.allowedTransitions.includes("PENDING");
+  /* A COD order waiting for the customer to message the page. It gets its own
+     Approve/Deny card instead of Accept/Reject — the API refuses the generic
+     transition for it, so those buttons would only produce errors. */
+  const awaitingCod = order.paymentMethod === "cash-on-delivery" && order.status === "PENDING";
 
   return (
     <div className="flex flex-col gap-6">
@@ -415,7 +476,7 @@ export default function AdminOrderDetailPage() {
         <div>
           <h1 className="text-h2 text-ink font-serif">{order.orderNumber}</h1>
           <p className="text-13.5 text-secondary mt-1">
-            {STATUS_LABELS[order.status]} · Placed {new Date(order.placedAt).toLocaleString()}
+            {statusLabel(order.status, order.paymentMethod)} · Placed {new Date(order.placedAt).toLocaleString()}
           </p>
         </div>
       </div>
@@ -577,6 +638,33 @@ export default function AdminOrderDetailPage() {
           <dl className="text-13.5 mt-4 flex flex-col gap-2">
             <Row label="Method" value={order.paymentMethod} />
             {order.paymentProvider ? <Row label="Wallet" value={order.paymentProvider} /> : null}
+            <div className="flex items-center justify-between gap-4">
+              <dt className="text-muted">Money</dt>
+              <dd>
+                <PaymentStatusBadge status={order.paymentStatus} />
+              </dd>
+            </div>
+            {order.cod ? (
+              <>
+                <Row
+                  label="Agreed to pay on delivery"
+                  value={
+                    order.cod.acknowledgedAt
+                      ? new Date(order.cod.acknowledgedAt).toLocaleString()
+                      : "Before the checkbox existed"
+                  }
+                />
+                {order.cod.confirmedAt ? (
+                  <Row
+                    label="Approved"
+                    value={`${new Date(order.cod.confirmedAt).toLocaleString()} · ${
+                      order.cod.confirmedByEmail ?? "unknown"
+                    }${order.cod.channel ? ` · ${CHANNEL_LABELS[order.cod.channel]}` : ""}`}
+                  />
+                ) : null}
+                {order.cod.note ? <Row label="Checked" value={order.cod.note} multiline /> : null}
+              </>
+            ) : null}
             {/* Labelled for the packer by what they do with it: on a cash order
                 it is the figure the courier collects and the label must carry. */}
             <Row
@@ -850,7 +938,106 @@ export default function AdminOrderDetailPage() {
         </table>
       </section>
 
-      {order.status !== "CANCELLED" && order.status !== "REFUNDED" ? (
+      {awaitingCod && !isPacker ? (
+        <section className="rounded-container border-rule bg-surface p-card border">
+          <h2 className="text-h4 text-ink font-serif">Confirm cash on delivery</h2>
+          <p className="text-13.5 text-secondary mt-1">
+            Approve once the customer has messaged the Facebook page about order{" "}
+            {order.orderNumber} and the order and their profile check out. Approving sends it to
+            packing and texts the customer. Nothing has been paid; the courier collects{" "}
+            {formatMoney(order.totalCents, "en-GB", order.currency)}.
+          </p>
+
+          <fieldset className="mt-4">
+            <legend className="text-13.5 text-muted">How did the customer confirm?</legend>
+            <div className="mt-2 flex flex-wrap gap-4">
+              {CHANNELS.map((channel) => (
+                <Radio
+                  key={channel.value}
+                  name="cod-channel"
+                  value={channel.value}
+                  checked={codChannel === channel.value}
+                  onChange={() => setCodChannel(channel.value)}
+                >
+                  {channel.label}
+                </Radio>
+              ))}
+            </div>
+          </fieldset>
+
+          <Textarea
+            label="What did you check? (staff-only, optional)"
+            value={codNote}
+            onChange={(event) => setCodNote(event.target.value)}
+            rows={2}
+            className="mt-3"
+          />
+
+          {denying ? (
+            <>
+              <Textarea
+                label="Why is this order being turned down? (staff-only, goes to the audit log)"
+                value={denyReason}
+                onChange={(event) => setDenyReason(event.target.value)}
+                rows={2}
+                className="mt-3"
+                error={
+                  denyReason.trim().length > 0 && denyReason.trim().length < 10
+                    ? "Say why this order is being turned down."
+                    : undefined
+                }
+              />
+              <p className="text-caption text-secondary mt-2">
+                The customer only sees that the order could not be confirmed. The copies go back on
+                the shelf.
+              </p>
+            </>
+          ) : null}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {denying ? (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  loading={busy}
+                  disabled={denyReason.trim().length < 10}
+                  onClick={() => void denyCod()}
+                >
+                  Deny order
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => {
+                    setDenying(false);
+                    setDenyReason("");
+                  }}
+                >
+                  Keep it
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button type="button" loading={busy} onClick={() => void approveCod()}>
+                  Approve
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() => setDenying(true)}
+                >
+                  Deny
+                </Button>
+              </>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {order.status !== "CANCELLED" && order.status !== "REFUNDED" && !awaitingCod ? (
         <section className="rounded-container border-rule bg-surface p-card border">
           <h2 className="text-h4 text-ink font-serif">
             {order.status === "PENDING" ? "Review" : "Update status"}
@@ -1016,18 +1203,34 @@ export default function AdminOrderDetailPage() {
 
       {canRevertPayment ? (
         <section className="rounded-container border-rule bg-surface p-card border">
-          <h2 className="text-h4 text-ink font-serif">Confirmed by mistake?</h2>
-          <p className="text-13.5 text-secondary mt-1">
-            Withdraws the confirmation and puts the order back to Pending. The payment record is
-            voided so a real payment can be confirmed later, and the sale comes back off the books.
-            Stock stays reserved for this customer.
-          </p>
-          {/* Said plainly, because it is the one consequence the button
-                cannot undo and the one an operator will not think of. */}
-          <p className="text-13.5 text-clay-deep mt-2">
-            The customer was emailed when this order was confirmed. That email cannot be unsent —
-            call them.
-          </p>
+          {order.paymentMethod === "cash-on-delivery" ? (
+            <>
+              <h2 className="text-h4 text-ink font-serif">Approved by mistake?</h2>
+              <p className="text-13.5 text-secondary mt-1">
+                Puts the order back to waiting for the customer to confirm. Nothing was paid, so
+                there is no payment to void. Stock stays reserved for this customer.
+              </p>
+              <p className="text-13.5 text-clay-deep mt-2">
+                The customer was texted when this order was approved. That text cannot be unsent —
+                message them.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 className="text-h4 text-ink font-serif">Confirmed by mistake?</h2>
+              <p className="text-13.5 text-secondary mt-1">
+                Withdraws the confirmation and puts the order back to Pending. The payment record
+                is voided so a real payment can be confirmed later, and the sale comes back off the
+                books. Stock stays reserved for this customer.
+              </p>
+              {/* Said plainly, because it is the one consequence the button
+                    cannot undo and the one an operator will not think of. */}
+              <p className="text-13.5 text-clay-deep mt-2">
+                The customer was emailed when this order was confirmed. That email cannot be
+                unsent — call them.
+              </p>
+            </>
+          )}
 
           {reverting ? (
             <>
@@ -1067,7 +1270,9 @@ export default function AdminOrderDetailPage() {
           ) : (
             <div className="mt-3">
               <Button type="button" variant="secondary" onClick={() => setReverting(true)}>
-                Revert payment confirmation
+                {order.paymentMethod === "cash-on-delivery"
+                  ? "Undo approval"
+                  : "Revert payment confirmation"}
               </Button>
             </div>
           )}
@@ -1129,7 +1334,9 @@ export default function AdminOrderDetailPage() {
         <ul className="mt-4 flex flex-col gap-3">
           {order.timeline.map((event, index) => (
             <li key={index} className="border-rule text-13.5 border-b pb-3 last:border-0">
-              <span className="text-ink font-medium">{STATUS_LABELS[event.status]}</span>
+              <span className="text-ink font-medium">
+                {statusLabel(event.status, order.paymentMethod)}
+              </span>
               <span className="text-caption text-muted ml-2">
                 {new Date(event.occurredAt).toLocaleString()}
               </span>

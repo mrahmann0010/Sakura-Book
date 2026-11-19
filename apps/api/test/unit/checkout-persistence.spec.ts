@@ -35,6 +35,9 @@ const DESTINATIONS: Record<string, keyof typeof orders.$inferInsert | null> = {
   senderNumber: "senderNumber",
   transactionId: "transactionId",
   notes: "customerNote",
+  /* Stored as the moment it was ticked, not as a boolean: the schema refuses
+     a COD order without it, so "when" is the only information left. */
+  codAcknowledged: "codAcknowledgedAt",
 
   /* The three address parts are folded into the `shipping_address` jsonb
      rather than getting columns of their own — one value the courier reads,

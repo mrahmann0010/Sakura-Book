@@ -62,7 +62,11 @@ export type AuditAction =
    * A member of staff corrected an order's delivery details, with a written
    * reason. See `AdminOrdersService.editContactDetails`.
    */
-  | "CONTACT_EDIT";
+  | "CONTACT_EDIT"
+  /** Staff approved a cash-on-delivery order, recording how the customer confirmed. */
+  | "COD_APPROVED"
+  /** Staff turned down a cash-on-delivery order, with a staff-only reason. */
+  | "COD_DENIED";
 
 /**
  * Who acted.

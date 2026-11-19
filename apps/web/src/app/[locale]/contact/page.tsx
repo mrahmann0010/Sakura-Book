@@ -6,12 +6,13 @@ import { FacebookIcon, LinkButton, MailIcon, MapPinIcon, MessengerIcon } from "@
 import { getTranslation } from "@/i18n/server";
 import type { Locale } from "@/i18n/settings";
 import { footerColumns } from "@/lib/books";
+import { SHOP_EMAIL, SHOP_FACEBOOK_URL, SHOP_MESSENGER_URL } from "@/lib/contact";
 import { localizeLinks, routes } from "@/lib/routes";
 import { localeAlternates } from "@/lib/site";
 
-const email = "contact@nihonovaacademy.com";
-const messengerHref = "https://m.me/nihonovaacademy";
-const facebookHref = "https://www.facebook.com/nihonovaacademy/";
+const email = SHOP_EMAIL;
+const messengerHref = SHOP_MESSENGER_URL;
+const facebookHref = SHOP_FACEBOOK_URL;
 
 /**
  * One row of the contact list: a glyph in its own tile, then the label and the

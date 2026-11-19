@@ -2,7 +2,12 @@ import { z } from "zod";
 import { divisionSlugs } from "./bd-geo";
 import { normaliseBdPhone } from "./bd-phone";
 import { paymentMethods } from "./checkout";
-import { orderSchema, orderStatuses } from "./order";
+import {
+  codConfirmationChannels,
+  orderPaymentStatuses,
+  orderSchema,
+  orderStatuses,
+} from "./order";
 import { paginated, pageQuerySchema } from "./pagination";
 import { cleanTransactionId } from "./transaction-id";
 import {
@@ -199,6 +204,7 @@ export const adminOrderSummarySchema = z.object({
    */
   city: z.string(),
   paymentMethod: z.enum(paymentMethods),
+  paymentStatus: z.enum(orderPaymentStatuses),
   paymentProvider: z.enum(paymentProviders).nullable(),
   currency: z.string().length(3),
   totalCents: z.number().int().nonnegative(),
@@ -266,6 +272,49 @@ export const adminPickListSchema = z.object({
 export type AdminPickListEntry = z.infer<typeof adminPickListEntrySchema>;
 export type AdminPickList = z.infer<typeof adminPickListSchema>;
 
+/**
+ * Approving a cash-on-delivery order, once the customer has messaged the shop
+ * and the order checks out. Moves it from PENDING into fulfilment.
+ *
+ * Its own endpoint rather than a transition with a note, so the channel the
+ * customer used is always recorded: the generic transition refuses to move a
+ * COD order out of PENDING (see AdminOrdersService.transition).
+ */
+export const adminApproveCodRequestSchema = z.object({
+  channel: z.enum(codConfirmationChannels),
+  /** Staff-only: what was checked ("profile 6 years old, address matches"). */
+  note: z.string().trim().max(500).optional(),
+});
+
+export type AdminApproveCodRequest = z.infer<typeof adminApproveCodRequestSchema>;
+
+/**
+ * Turning a cash-on-delivery order down. The reason is staff-only — it goes
+ * to the audit log, never to the customer's tracking page, because "the
+ * profile looked fake" is not something to show the person it is about.
+ */
+export const adminDenyCodRequestSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(10, "Say why this order is being turned down.")
+    .max(500),
+});
+
+export type AdminDenyCodRequest = z.infer<typeof adminDenyCodRequestSchema>;
+
+/** What the panel shows about a COD order's confirmation. Null for prepaid orders. */
+export const adminCodConfirmationSchema = z.object({
+  /** When the customer ticked "I will pay on delivery". Null on orders from before the box. */
+  acknowledgedAt: z.string().datetime().nullable(),
+  confirmedAt: z.string().datetime().nullable(),
+  confirmedByEmail: z.string().nullable(),
+  channel: z.enum(codConfirmationChannels).nullable(),
+  note: z.string().nullable(),
+});
+
+export type AdminCodConfirmation = z.infer<typeof adminCodConfirmationSchema>;
+
 /** A recorded payment attempt against an order. */
 export const adminPaymentSchema = z.object({
   provider: z.string(),
@@ -291,6 +340,8 @@ export type AdminPayment = z.infer<typeof adminPaymentSchema>;
  */
 export const adminOrderDetailSchema = orderSchema.extend({
   customerEmail: z.string(),
+  /** Cash-on-delivery confirmation details. Null for any other method. */
+  cod: adminCodConfirmationSchema.nullable(),
   /** What the customer typed at checkout ("leave at the gate"). */
   customerNote: z.string().nullable(),
   /** Staff-only. Never returned by any storefront endpoint. */
