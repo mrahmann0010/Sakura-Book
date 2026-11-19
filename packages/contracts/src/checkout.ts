@@ -32,7 +32,21 @@ const required = (fix: string) => z.string().trim().min(1, fix);
 
 export const shippingAddressSchema = z.object({
   fullName: required("Add the name the parcel should be addressed to."),
-  email: z.string().trim().email("Use an address like you@example.com so we can send updates."),
+  /**
+   * Optional: many customers here order by phone alone, and a required email
+   * was filled with made-up addresses or abandoned. Empty means "no email" —
+   * stored as "" (the column is NOT NULL), and the confirmation email is
+   * simply not sent. Phone stands in as the second factor wherever email
+   * used to prove an order is yours (cancel, payment status).
+   */
+  email: z
+    .string()
+    .trim()
+    .refine(
+      (value) => value === "" || z.string().email().safeParse(value).success,
+      "Use an address like you@example.com so we can send updates.",
+    )
+    .optional(),
   phone: required("Add a number the courier can reach you on."),
   /**
    * A second number for the courier, when the first one does not answer.

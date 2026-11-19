@@ -1,6 +1,5 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useForm, useWatch, type FieldErrors } from "react-hook-form";
@@ -33,6 +32,7 @@ import {
 } from "./payment-verification-modal";
 import { waitForPayment } from "./wait-for-payment";
 import { ShippingFields } from "./shipping-fields";
+import { localizedZodResolver } from "@/lib/localized-resolver";
 
 /* --------------------------------------------------------------------------
    Checkout for a LOCKED waitlist invite — one reserved book, up to the
@@ -122,7 +122,7 @@ export function InviteCheckoutView({
     trigger,
     formState: { errors, isSubmitting, isSubmitted, isValid },
   } = useForm<CheckoutValues>({
-    resolver: zodResolver(checkoutSchema),
+    resolver: localizedZodResolver<CheckoutValues>(checkoutSchema, t),
     defaultValues: { ...checkoutDefaults, ...prefill },
     mode: "onBlur",
   });
@@ -224,7 +224,7 @@ export function InviteCheckoutView({
       // and the modal resolves on it at once. See waitForPayment.
       const settled = await waitForPayment(order);
 
-      setPendingOrder({ order: settled, email: values.email });
+      setPendingOrder({ order: settled, email: values.email ?? "" });
       setVerification(settled.status === "PAYMENT_CONFIRMED" ? "verified" : "unverified");
     } catch (err) {
       setVerification(null);
@@ -310,7 +310,7 @@ export function InviteCheckoutView({
         loading={isSubmitting}
         loadingLabel={t("checkout.placing")}
       >
-        {t("checkout.place")}
+        {deliveryKnown ? t("checkout.placeWithTotal", { total }) : t("checkout.place")}
       </Button>
     );
 
@@ -494,20 +494,26 @@ export function InviteCheckoutView({
       </Shell>
 
       <StickyBar
+        /* One row: step and total on the left, the action on the right. The
+           breakdown folds behind the total — the payment step already prints
+           it beside the transfer fields — and the figure appears only once a
+           zone prices delivery; before that it would read "—". */
+        step={step === "delivery" ? t("checkout.stepDelivery") : t("checkout.stepPayment")}
         label={deliveryKnown ? t("cart.summary.total") : undefined}
         value={deliveryKnown ? total : undefined}
         breakdown={
-          step === "payment"
+          deliveryKnown
             ? rows.map((row) => (
                 <SummaryRow key={row.key} label={row.label} value={row.value} tone={row.tone} />
               ))
             : undefined
         }
+        breakdownToggle={t("checkout.barDetails")}
         action={primaryAction}
       />
 
       {toast ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 pb-40 lg:pb-8">
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 pb-28 lg:pb-8">
           <div className="shell flex justify-center">
             <Toast className="max-w-measure pointer-events-auto shadow-lg">{toast}</Toast>
           </div>

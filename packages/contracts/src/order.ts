@@ -50,9 +50,15 @@ export const orderLookupRequestSchema = z
  * returns NOT_FOUND, never 403 — a "wrong email" response would confirm the
  * order number is real and turn this into an enumeration oracle.
  */
-export const orderCancelRequestSchema = z.object({
+const orderCancelFields = z.object({
   orderNumber: z.string().trim().min(1, "Enter the order ID from your confirmation."),
-  email: z.string().trim().email("Enter the email address you ordered with."),
+  /**
+   * The second factor: the email *or* the phone the order was placed with.
+   * Phone because email is optional at checkout — an order without one would
+   * otherwise be uncancellable, or worse, matched by an empty string.
+   */
+  email: z.string().trim().email("Enter the email address you ordered with.").optional(),
+  phone: z.string().trim().min(1).optional(),
   /**
    * Optional, and free text the customer typed. Stored on the status history
    * entry so the shop can read why orders are being dropped — which is the
@@ -61,6 +67,11 @@ export const orderCancelRequestSchema = z.object({
    */
   reason: z.string().trim().max(280).optional(),
 });
+
+export const orderCancelRequestSchema = orderCancelFields.refine(
+  (value) => value.email || value.phone,
+  { message: "Enter the email or phone number you ordered with." },
+);
 
 export type OrderCancelRequest = z.infer<typeof orderCancelRequestSchema>;
 
@@ -71,10 +82,11 @@ export type OrderCancelRequest = z.infer<typeof orderCancelRequestSchema>;
  * background worker retries the claim. Two factors, like cancel, because it
  * is polled and so gets a looser rate limit than single-factor lookup.
  */
-export const orderPaymentStatusRequestSchema = orderCancelRequestSchema.pick({
-  orderNumber: true,
-  email: true,
-});
+export const orderPaymentStatusRequestSchema = orderCancelFields
+  .pick({ orderNumber: true, email: true, phone: true })
+  .refine((value) => value.email || value.phone, {
+    message: "Enter the email or phone number you ordered with.",
+  });
 
 export type OrderPaymentStatusRequest = z.infer<typeof orderPaymentStatusRequestSchema>;
 

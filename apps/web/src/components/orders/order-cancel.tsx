@@ -55,7 +55,9 @@ export function OrderCancel({
   const { t } = useTranslation();
 
   const [open, setOpen] = useState(false);
-  const [email, setEmail] = useState("");
+  /* The email or the phone the order was placed with — email is optional at
+     checkout, so phone has to be able to prove it too. */
+  const [contact, setContact] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +69,7 @@ export function OrderCancel({
     try {
       const cancelled = await cancelOrder({
         orderNumber: order.orderNumber,
-        email: email.trim(),
+        ...(contact.includes("@") ? { email: contact.trim() } : { phone: contact.trim() }),
         reason: reason.trim() || undefined,
       });
 
@@ -100,10 +102,9 @@ export function OrderCancel({
 
         <div className="mt-6 flex flex-col gap-5">
           <Input
-            label={t("checkout.shipping.email")}
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            label={t("orders.cancel.contactLabel")}
+            value={contact}
+            onChange={(event) => setContact(event.target.value)}
             hint={t("orders.cancel.emailHint")}
           />
           <Textarea
@@ -126,7 +127,7 @@ export function OrderCancel({
           <Button
             type="button"
             variant="destructive"
-            disabled={!email.trim()}
+            disabled={!contact.trim()}
             loading={submitting}
             loadingLabel={t("orders.cancel.submitting")}
             onClick={() => void submit()}

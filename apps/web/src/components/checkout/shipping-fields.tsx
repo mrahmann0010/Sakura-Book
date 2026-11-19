@@ -5,7 +5,7 @@ import { useState } from "react";
 import type { FieldErrors, UseFormRegister, UseFormSetValue } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
-import { Eyebrow, Input, Radio, RadioGroup, Select, Textarea } from "@/components/ui";
+import { Eyebrow, FieldLabel, Input, Radio, RadioGroup, Select, Textarea } from "@/components/ui";
 import { bdDivisions, districtsFor, divisionOfDistrict } from "@/lib/bd-geo";
 import type { CheckoutValues } from "@/lib/checkout";
 
@@ -153,17 +153,23 @@ export function ShippingFields({
   return (
     <fieldset className="min-w-0">
       <Eyebrow as="legend">{t("checkout.shipping.legend")}</Eyebrow>
-      <p className="text-body text-ink mt-1.5">{t("checkout.shipping.legendHint")}</p>
+      <p className="text-caption text-secondary mt-1.5">{t("checkout.shipping.requiredNote")}</p>
 
       <div className="mt-3.5 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
         <Input
-          label={t("checkout.shipping.fullName")}
+          label={<FieldLabel required>{t("checkout.shipping.fullName")}</FieldLabel>}
+          aria-required
           autoComplete="name"
           error={errors.fullName?.message}
           {...register("fullName")}
         />
         <Input
-          label={t("checkout.shipping.email")}
+          label={
+            <FieldLabel optional={t("checkout.shipping.optionalTag")}>
+              {t("checkout.shipping.email")}
+            </FieldLabel>
+          }
+          hint={t("checkout.shipping.emailHint")}
           type="email"
           inputMode="email"
           autoComplete="email"
@@ -171,27 +177,42 @@ export function ShippingFields({
           {...register("email")}
         />
         <Input
-          label={t("checkout.shipping.phone")}
+          label={<FieldLabel required>{t("checkout.shipping.phone")}</FieldLabel>}
+          aria-required
           type="tel"
           inputMode="tel"
           autoComplete="tel"
+          placeholder="01XXXXXXXXX"
           error={errors.phone?.message}
           {...register("phone")}
         />
         {/* The courier's fallback number. Optional, and labelled as such —
             the manifest has a slot for it, most orders will leave it empty. */}
         <Input
-          label={t("checkout.shipping.secondaryPhone")}
+          label={
+            <FieldLabel optional={t("checkout.shipping.optionalTag")}>
+              {t("checkout.shipping.secondaryPhone")}
+            </FieldLabel>
+          }
           hint={t("checkout.shipping.secondaryPhoneHint")}
           type="tel"
           inputMode="tel"
-          autoComplete="tel"
+          /* Not "tel": autofill would copy the main number in here, which is
+             exactly the duplicate this field exists to avoid. */
+          autoComplete="off"
           error={errors.secondaryPhone?.message}
           {...register("secondaryPhone")}
         />
 
+        {/* Contact above, address below: the address half opens with the
+            line that says what it is for. */}
+        <div className="border-rule border-t pt-3.5 sm:col-span-2">
+          <p className="text-body text-ink">{t("checkout.shipping.legendHint")}</p>
+        </div>
+
         <Select
-          label={t("checkout.shipping.division")}
+          label={<FieldLabel required>{t("checkout.shipping.division")}</FieldLabel>}
+          aria-required
           options={[
             { value: "", label: t("checkout.shipping.divisionPlaceholder"), disabled: true },
             ...bdDivisions.map((d) => ({
@@ -206,7 +227,8 @@ export function ShippingFields({
           }}
         />
         <Select
-          label={t("checkout.shipping.district")}
+          label={<FieldLabel required>{t("checkout.shipping.district")}</FieldLabel>}
+          aria-required
           disabled={!division}
           /* The zone error lands on whichever control finishes the choice. */
           error={needsArea ? undefined : errors.zone?.message}
@@ -224,7 +246,10 @@ export function ShippingFields({
 
         {district === "Dhaka" ? (
           <div className="sm:col-span-2">
-            <RadioGroup name="dhaka-zone" label={t("checkout.shipping.dhakaZone")}>
+            <RadioGroup
+              name="dhaka-zone"
+              label={<FieldLabel required>{t("checkout.shipping.dhakaZone")}</FieldLabel>}
+            >
               {districtZones.map((option) => (
                 <Radio
                   key={option.id}
@@ -253,7 +278,8 @@ export function ShippingFields({
           </div>
         ) : needsArea ? (
           <Select
-            label={t("checkout.shipping.zone")}
+            label={<FieldLabel required>{t("checkout.shipping.zone")}</FieldLabel>}
+            aria-required
             error={errors.zone?.message}
             hint={tierHint}
             options={[
@@ -293,7 +319,8 @@ export function ShippingFields({
         /> */}
 
         <Textarea
-          label={t("checkout.shipping.address")}
+          label={<FieldLabel required>{t("checkout.shipping.address")}</FieldLabel>}
+          aria-required
           hint={t("checkout.shipping.addressHint")}
           autoComplete="street-address"
           rows={3}
@@ -317,7 +344,11 @@ export function ShippingFields({
           }}
         /> */}
         <Textarea
-          label={t("checkout.shipping.notes")}
+          label={
+            <FieldLabel optional={t("checkout.shipping.optionalTag")}>
+              {t("checkout.shipping.notes")}
+            </FieldLabel>
+          }
           hint={t("checkout.shipping.notesHint")}
           rows={2}
           error={errors.notes?.message}

@@ -189,10 +189,13 @@
     "shipping": {
       "legend": "Shipping details",
       "legendHint": "Enter the address where you want your book delivered.",
+      "requiredNote": "Fields marked * are required.",
+      "optionalTag": "Optional",
       "fullName": "Full name",
       "email": "Email",
+      "emailHint": "Give one and we'll email your order confirmation.",
       "phone": "Phone",
-      "secondaryPhone": "Secondary phone (optional)",
+      "secondaryPhone": "Secondary phone",
       "secondaryPhoneHint": "We'll call this number if the first one can't be reached.",
       "division": "Division",
       "divisionPlaceholder": "Select division",
@@ -216,10 +219,10 @@
       "upazila": "Thana / Upazila",
       "area": "Area / Block / Village",
       "address": "Detailed address",
-      "addressHint": "Where the book will be delivered — house, road, any landmark.",
+      "addressHint": "For example: House 12, Road 5, next to the mosque.",
       "postCode": "Post code",
       "notes": "Delivery notes",
-      "notesHint": "Optional. Anything the courier should know."
+      "notesHint": "Anything the courier should know."
     },
     "payment": {
       "legend": "Payment",
@@ -307,9 +310,13 @@
       "mobile_one": "{{count}} book · show order",
       "mobile_other": "{{count}} books · show order"
     },
-    "next": "Continue to payment",
+    "next": "Continue to payment →",
     "back": "Back to delivery details",
     "place": "Place order",
+    "placeWithTotal": "Place order · {{total}}",
+    "stepDelivery": "Step 1 of 2",
+    "stepPayment": "Step 2 of 2",
+    "barDetails": "Details",
     "placing": "Placing order",
     "missing": "Please fill in {{fields}}.",
     "errorSummary": "Check the fields marked below, then place the order again.",
@@ -344,6 +351,7 @@
       "eyebrow": "Order placed",
       "title": "Thank you — your order is in",
       "description": "We have emailed a confirmation to {{email}}. Keep the order ID for tracking.",
+      "descriptionNoEmail": "Keep the order ID — you'll need it to track your order. We'll keep you updated by phone.",
       "orderId": "Order ID",
       "copyPrompt": "Save this somewhere — you'll need it to track your order.",
       "action": "Continue shopping",
@@ -406,14 +414,15 @@
       "action": "Cancel this order",
       "title": "Cancel this order?",
       "description": "We'll put the books back on the shelf and stop the order. This can't be undone.",
-      "emailHint": "The email you ordered with, so we know it's you.",
+      "emailHint": "The email or phone number you ordered with, so we know it's you.",
       "reasonLabel": "Reason (optional)",
       "reasonHint": "It helps us understand why orders get cancelled.",
       "confirm": "Yes, cancel it",
       "keep": "Keep my order",
       "submitting": "Cancelling",
-      "mismatch": "We couldn't match that email to this order. Check it and try again.",
-      "failed": "We couldn't cancel the order just now. Please try again in a moment."
+      "mismatch": "We couldn't match that email or phone number to this order. Check it and try again.",
+      "failed": "We couldn't cancel the order just now. Please try again in a moment.",
+      "contactLabel": "Email or phone number"
     },
     "payment": {
       "pending": "Awaiting payment",
@@ -761,5 +770,20 @@
     },
     "thanks": "Thank you for reading with us.",
     "page": "Page {{page}} of {{total}}"
+  },
+  "validation": {
+    "fullName": "Add the name the parcel should be addressed to.",
+    "email": "Use an address like you@example.com, or leave it empty.",
+    "phone": "Add a number the courier can reach you on.",
+    "address": "Add the street, house and area so the courier can find you.",
+    "city": "Add the town or city.",
+    "zone": "Choose your area so we can price delivery.",
+    "zoneUnknown": "Choose your area from the list.",
+    "notesTooLong": "Keep delivery notes under 500 characters.",
+    "provider": "Choose which wallet you paid with.",
+    "senderNumber": "Add the number you sent the money from.",
+    "senderNumberFormat": "Enter the 11-digit wallet number you paid from, like 01XXXXXXXXX.",
+    "transactionId": "Add the transaction ID from your payment confirmation.",
+    "emptyBasket": "Your basket is empty."
   }
 }
