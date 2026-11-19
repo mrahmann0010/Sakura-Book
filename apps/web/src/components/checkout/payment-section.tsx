@@ -17,11 +17,10 @@ import type { AcceptedPaymentMethod, CheckoutValues } from "@/lib/checkout";
 /* --------------------------------------------------------------------------
    The payment half of the checkout form (wireframe 1d/1e).
 
-   Three shapes of option live side by side: cash on delivery, the
-   bKash/Rocket/Nagad hand-off (its own multi-step control,
-   `MobileMoneyPayment`, because "send money, then prove you sent it" doesn't
-   fit one card), and card, drawn disabled and stated in words rather than
-   hidden (principle 03).
+   Three shapes of option, in this order: the bKash/Rocket/Nagad hand-off (its
+   own multi-step control, `MobileMoneyPayment`, because "send money, then
+   prove you sent it" doesn't fit one card), cash on delivery, and card, drawn
+   disabled and stated in words rather than hidden (principle 03).
 
    Cash on delivery was taken out of this form in August and is back with a
    condition: the shopper ticks that they have seen the total and will pay the
@@ -57,7 +56,24 @@ export function PaymentSection({
     <fieldset className="min-w-0">
       <Eyebrow as="legend">{t("checkout.payment.legend")}</Eyebrow>
 
-      <PaymentOptionList className="mt-3.5" label={t("checkout.payment.legend")}>
+      <MobileMoneyPayment
+        className="mt-3.5"
+        register={register}
+        setValue={setValue}
+        errors={errors}
+        provider={provider}
+        amount={amount}
+        breakdown={breakdown}
+        onProviderChange={(next) => {
+          setProvider(next);
+          if (next && method !== "manual-transfer") onMethodChange("manual-transfer");
+        }}
+      />
+
+      {/* After the wallets, on purpose: bKash, Rocket and Nagad are paid up
+          front and go straight to packing, so they lead. Cash on delivery
+          waits for the customer to message the page. */}
+      <PaymentOptionList className="mt-2.5" label={t("checkout.payment.legend")}>
         <PaymentOption
           name="method"
           value="cash-on-delivery"
@@ -104,20 +120,6 @@ export function PaymentSection({
           }
         />
       </PaymentOptionList>
-
-      <MobileMoneyPayment
-        className="mt-2.5"
-        register={register}
-        setValue={setValue}
-        errors={errors}
-        provider={provider}
-        amount={amount}
-        breakdown={breakdown}
-        onProviderChange={(next) => {
-          setProvider(next);
-          if (next && method !== "manual-transfer") onMethodChange("manual-transfer");
-        }}
-      />
 
       {/* Same as the pre-order step: worth stating while the shopper is still
           deciding, pure noise once they have settled on a method. */}

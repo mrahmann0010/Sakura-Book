@@ -222,6 +222,7 @@ Goal: the process in §1, end to end.
 - [x] **Commitment tick box:** shown when COD is selected, with the "how it works" text (message us on Facebook, 48 h) and the exact total. Required by the shared checkout schema (`codAcknowledged`), so the API refuses a COD order without it. Stored as `cod_acknowledged_at`.
 - [x] **No payment modal for COD:** both checkouts (cart and waitlist invite) go straight to the thank-you screen.
 - [x] **Thank-you screen:** "One more step: message us to confirm" card above the receipt:
+  - (COD is now listed after bKash, Rocket and Nagad, before Card)
   - a fixed Bangla message to send, with a **Copy** button: "আমি আমার ক্যাশ অন ডেলিভারি অর্ডার {order} নিশ্চিত করতে চাই। অনুগ্রহ করে অনুমোদন দিন।" (Bangla in every site language, because it's addressed to the shop's team)
   - a **Confirm on Messenger** button that opens a chat with the page (`m.me/nihonovaacademy`) with the same message pre-typed. The pre-typed draft isn't guaranteed in every Messenger version, which is why the copy box exists.
 - [x] **Tracking page:** while waiting, it shows "Waiting for you to confirm on Facebook" and the same Messenger card. COD orders use "Order confirmed" instead of "Payment verified" in the progress bar and headline.
