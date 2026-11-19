@@ -127,8 +127,24 @@ export const checkoutSchema = shippingAddressSchema
        and the refinement below reports that as a missing ID. */
     transactionId: z.string().trim().transform(cleanTransactionId).optional(),
     notes: z.string().trim().max(500, "Keep delivery notes under 500 characters.").optional(),
+    /**
+     * The cash-on-delivery commitment: the customer ticked that they have seen
+     * the books and the total, and will pay the courier. Required for COD by
+     * the refinement below and recorded on the order as `cod_acknowledged_at`,
+     * so a refused parcel can be answered with "you confirmed this total". See
+     * docs/cod-orders.md §1.
+     */
+    codAcknowledged: z.boolean().optional(),
   })
   .superRefine((values, ctx) => {
+    if (values.method === "cash-on-delivery" && values.codAcknowledged !== true) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["codAcknowledged"],
+        message: "Tick the box to confirm you will pay the total on delivery.",
+      });
+    }
+
     if (values.method !== "manual-transfer") return;
 
     if (!values.provider) {
@@ -211,6 +227,7 @@ export const checkoutDefaults: CheckoutValues = {
   senderNumber: "",
   transactionId: "",
   notes: "",
+  codAcknowledged: false,
 };
 
 /** The fields a given method adds to the form. Drives the expanding panel. */

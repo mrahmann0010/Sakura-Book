@@ -58,6 +58,7 @@ import {
   PaymentUnderpaidError,
 } from "./admin-order.errors";
 import { toPathaoCsv } from "./pathao-export";
+import { codPendingTransitionBlocker } from "./cod-approval";
 
 /**
  * The statuses whose delivery details are a record rather than instructions.
@@ -757,6 +758,17 @@ export class AdminOrdersService {
       }
     }
 
+    /* One door out of PENDING for a cash-on-delivery order, in each direction.
+       Approving records how the customer got in touch, and denying records a
+       staff-only reason; a bare transition would do neither, and nothing
+       afterwards could tell an approved order from one waved through. See
+       AdminCodService. Packers never reach here for this — they cannot enter
+       PAYMENT_CONFIRMED or cancel a pending order at all. */
+    const codBlock = codPendingTransitionBlocker(order.paymentMethod, from, entering);
+    if (codBlock) {
+      throw new InvalidInputError(codBlock, { orderNumber, from, requested: request.status });
+    }
+
     if (entering.includes("PAYMENT_CONFIRMED")) {
       await this.guardPaymentGrant(order, request, context);
     }
@@ -1077,7 +1089,9 @@ export class AdminOrdersService {
         and(
           eq(auditLog.entityType, "orders"),
           eq(auditLog.entityId, row.orderNumber),
-          eq(auditLog.action, "TRANSITION"),
+          // A COD denial is a desk cancellation too, so it can be undone the
+          // same way a mistaken rejection can.
+          inArray(auditLog.action, ["TRANSITION", "COD_DENIED"]),
           sql`${auditLog.after}->>'status' = 'CANCELLED'`,
         ),
       )

@@ -514,13 +514,19 @@ describe("admin grants claim the payment first", () => {
   });
 
   it("does not ask the gateway for cash on delivery", async () => {
+    /* A pending COD order no longer leaves PENDING through the generic
+       transition at all — AdminCodService.approve is its only way in, and that
+       never touches the gateway. What still has to hold is that the refusal
+       comes before any claim: a COD order has no receipt to claim. */
     const cod = order({ paymentMethod: "cash-on-delivery", transactionId: null });
     const { service, gateway, transitionAndCommit } = adminWith([], cod);
 
-    await service.transition("SB-10482", { status: "PAYMENT_CONFIRMED" }, CONTEXT);
+    await expect(
+      service.transition("SB-10482", { status: "PAYMENT_CONFIRMED" }, CONTEXT),
+    ).rejects.toThrow(/Approve/);
 
     expect(gateway.calls).toHaveLength(0);
-    expect(transitionAndCommit).toHaveBeenCalled();
+    expect(transitionAndCommit).not.toHaveBeenCalled();
   });
 });
 

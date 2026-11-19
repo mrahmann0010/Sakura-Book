@@ -6,3 +6,4 @@
  */
 export { AdminOrdersController } from "./admin-orders.controller";
 export { AdminOrdersService, type AdminContext } from "./admin-orders.service";
+export { AdminCodService } from "./admin-cod.service";

@@ -40,6 +40,25 @@ export const orderPaymentStatuses = ["UNPAID", "PAID", "COLLECTED", "REMITTED", 
 
 export type OrderPaymentStatus = (typeof orderPaymentStatuses)[number];
 
+/* --------------------------------------------------------------------------
+   Cash-on-delivery confirmation (docs/cod-orders.md).
+
+   A COD order waits in PENDING until the customer messages the shop's Facebook
+   page and staff approve it. These are the shared pieces of that flow.
+   -------------------------------------------------------------------------- */
+
+/**
+ * How long a COD order waits for the customer to get in touch before it is
+ * cancelled and its copies go back on the shelf. Shown to the customer on the
+ * confirmation screen; the expiry job that enforces it is Step 2.
+ */
+export const COD_CONFIRMATION_HOURS = 48;
+
+/** How the customer reached the shop to confirm — recorded on approval. */
+export const codConfirmationChannels = ["FACEBOOK", "PHONE", "OTHER"] as const;
+
+export type CodConfirmationChannel = (typeof codConfirmationChannels)[number];
+
 /**
  * Lookup by any one of order number, email, or phone — deliberately
  * single-factor, so a customer who has forgotten their order ID can still

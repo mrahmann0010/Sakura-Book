@@ -18,7 +18,7 @@ import { AdminRolesGuard } from "./auth/admin-roles.guard";
 import { AdminBooksController, AdminBooksService, AdminUploadsController } from "./catalog";
 import { AdminCouponsController, AdminCouponsService } from "./coupons";
 import { AdminDashboardController, AdminDashboardService } from "./dashboard";
-import { AdminOrdersController, AdminOrdersService } from "./orders";
+import { AdminCodService, AdminOrdersController, AdminOrdersService } from "./orders";
 import { AdminPaymentsController, AdminPaymentsService } from "./payments";
 import { AdminReviewsController, AdminReviewsService } from "./reviews";
 import { AdminSettingsController, AdminSettingsService } from "./settings";
@@ -129,6 +129,7 @@ import {
   providers: [
     AdminAuthService,
     AdminOrdersService,
+    AdminCodService,
     AdminSettingsService,
     AdminDashboardService,
     AdminPaymentsService,

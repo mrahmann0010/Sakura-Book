@@ -141,6 +141,7 @@ export function toAdminOrderDetail(
     ...customerView,
 
     customerEmail: row.customerEmail,
+    cod: codConfirmationOf(row),
     customerNote: row.customerNote,
     internalNote: row.internalNote,
 
@@ -217,3 +218,32 @@ function toAdminPayment(row: InferSelectModel<typeof payments>): AdminPayment {
 
 /** See the note on the same constant in orders/order.mapper.ts. */
 const CURRENCY_OF_RECORD = "BDT";
+
+/**
+ * The COD confirmation block on the detail page, or null for a prepaid order.
+ *
+ * Present from the moment a COD order exists, not only once approved: the
+ * panel needs `acknowledgedAt` while deciding, and the approval half simply
+ * reads null until then.
+ */
+export function codConfirmationOf(
+  row: Pick<
+    OrderRow,
+    | "paymentMethod"
+    | "codAcknowledgedAt"
+    | "codConfirmedAt"
+    | "codConfirmedBy"
+    | "codConfirmationChannel"
+    | "codConfirmationNote"
+  >,
+): AdminOrderDetail["cod"] {
+  if (row.paymentMethod !== "cash-on-delivery") return null;
+
+  return {
+    acknowledgedAt: row.codAcknowledgedAt?.toISOString() ?? null,
+    confirmedAt: row.codConfirmedAt?.toISOString() ?? null,
+    confirmedByEmail: row.codConfirmedBy,
+    channel: row.codConfirmationChannel,
+    note: row.codConfirmationNote,
+  };
+}

@@ -11,6 +11,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import {
+  codConfirmationChannelEnum,
   orderPaymentStatusEnum,
   orderStatusEnum,
   paymentMethodEnum,
@@ -246,6 +247,22 @@ export const orders = pgTable(
      * backfilled by migration 0047.
      */
     paymentStatus: orderPaymentStatusEnum("payment_status").notNull().default("UNPAID"),
+
+    /* ---- Cash-on-delivery confirmation (docs/cod-orders.md) ----------------
+       A COD order waits in PENDING until the customer messages the shop and
+       staff approve it. These record that: the customer's commitment at
+       checkout, and who approved the order, when, and on what evidence. All
+       null for prepaid orders, and the approval half is null until approved.
+       ---------------------------------------------------------------------- */
+
+    /** When the customer ticked "I've seen the total and will pay on delivery". */
+    codAcknowledgedAt: timestamp("cod_acknowledged_at", { withTimezone: true }),
+    codConfirmedAt: timestamp("cod_confirmed_at", { withTimezone: true }),
+    /** The approving staff member's email, as the audit log records actors. */
+    codConfirmedBy: text("cod_confirmed_by"),
+    codConfirmationChannel: codConfirmationChannelEnum("cod_confirmation_channel"),
+    /** Staff-only: what was checked before approving. */
+    codConfirmationNote: text("cod_confirmation_note"),
 
     ...timestamps,
   },
