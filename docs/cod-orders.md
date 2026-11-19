@@ -1,6 +1,6 @@
 # Cash on delivery (COD) orders
 
-Status: **Steps 0A + 0B in review** · Last updated: 2026-11-19 · Base branch: `deployment`
+Status: **Steps 0A, 0B, 1 in review** · Last updated: 2026-11-19 · Base branch: `deployment`
 
 How Sakura Book takes COD orders with no advance payment, with every COD order
 approved by an admin before it is packed. This file has five parts:
@@ -218,44 +218,38 @@ Goal: revenue means money, for every method.
 ### Step 1: COD approval flow (COD goes live)
 Goal: the process in §1, end to end.
 
-- [ ] **DB (migration `0048`):** order columns:
-  - `cod_acknowledged_at`
-  - `confirmed_at`, `confirmed_by`
-  - `confirmation_channel` (`facebook | phone | other`)
-  - `confirmation_note`
-
-  Also check whether a cancel reason already exists on orders or in the status history note, and reuse it if so. New audit actions: `cod_approved` and `cod_denied`.
-- [ ] **Shop settings:**
-  - `facebookPageUrl` (m.me link)
-  - `codConfirmationHours` (default 48)
-- [ ] **Checkout API:**
-  - a COD request must carry `codAcknowledged: true`, otherwise it's rejected with a clear error
-  - store the timestamp
-  - contract change in `@sakura/contracts`
-- [ ] **Checkout UI** (`checkout-view.tsx`):
-  - a required tick box with the live total, shown only for COD
-  - place-order button disabled until it's ticked
-- [ ] **COD confirmation screen:** Facebook button with the order number pre-filled, and the deadline. Copy in bn/en/ja.
-- [ ] **Tracking page:**
-  - COD + `PENDING` shows "Waiting for your confirmation", with the Facebook button
-  - approved shows the normal stages
-- [ ] **Admin API:**
-  - `POST /admin/orders/:n/cod/approve` with channel and note → `PAYMENT_CONFIRMED`
-  - `POST /admin/orders/:n/cod/deny` with a reason → `CANCELLED`, stock returns
+- [x] **COD back in checkout.** It had been removed from the payment form in August (`c4a3ed6`); the API still accepted it. Restored as the first payment option. **Deploying this makes COD visible to every customer.**
+- [x] **Commitment tick box:** shown when COD is selected, with the "how it works" text (message us on Facebook, 48 h) and the exact total. Required by the shared checkout schema (`codAcknowledged`), so the API refuses a COD order without it. Stored as `cod_acknowledged_at`.
+- [x] **No payment modal for COD:** both checkouts (cart and waitlist invite) go straight to the thank-you screen.
+- [x] **Thank-you screen:** "One more step: message us to confirm" card above the receipt, with a **Confirm on Messenger** button that opens `m.me/nihonovaacademy` with the order number already typed.
+- [x] **Tracking page:** while waiting, it shows "Waiting for you to confirm on Facebook" and the same Messenger card. COD orders use "Order confirmed" instead of "Payment verified" in the progress bar and headline.
+- [x] **DB (migration `0048`):**
+  - `cod_acknowledged_at`, `cod_confirmed_at`, `cod_confirmed_by`, `cod_confirmation_channel` (`FACEBOOK | PHONE | OTHER`), `cod_confirmation_note`
+  - audit actions `COD_APPROVED`, `COD_DENIED`
+  - no cancel-reason column: the existing status-history note and audit note are used
+- [x] **Admin API** (`AdminCodService`):
+  - `POST /admin/orders/:n/cod/approve` (channel + optional note) → `PAYMENT_CONFIRMED`, payment status stays `UNPAID`, SMS to the customer after commit (one Bangla segment, best effort)
+  - `POST /admin/orders/:n/cod/deny` (reason, at least 10 characters) → `CANCELLED`, stock returns. The customer sees only "Order could not be confirmed"; the reason goes to the audit log
   - both refused for non-COD orders, non-`PENDING` orders and packers
-  - both write an audit row
-- [ ] **Generic transition guard:** a COD order can't leave `PENDING` through the generic transition or `advance` endpoint, only through approve. One door, so channel and note are always recorded.
-- [ ] **Admin UI:** "Awaiting confirmation" tab on the orders page. Each row shows:
-  - name and phone
-  - books and total
-  - age, and time left before expiry
-  - Approve (channel + note) and Deny (reason) actions
-- [ ] **SMS on approve:** one Bangla segment (≤70 chars) using the existing SMS module, e.g. "অর্ডার #1234 নিশ্চিত হয়েছে। শীঘ্রই পাঠানো হবে।"
-- [ ] **Tests:**
-  - approve/deny rules and the role guard
-  - the generic transition is blocked for COD
-  - acknowledgement is required
-  - stock returns on deny
+- [x] **One door:** the generic transition refuses to move a pending COD order out of `PENDING` in either direction, including by an `advance` walk.
+- [x] **Reopen:** a denied COD order can be reopened like any desk rejection (`COD_DENIED` counts as a desk cancellation).
+- [x] **Undo approval:** the existing revert (ADMIN only) works for COD and also clears the approval details. Panel wording says "Undo approval" for COD.
+- [x] **Admin UI:**
+  - "COD to confirm" tab on the orders list (pending + COD)
+  - "Confirm cash on delivery" card on the order: channel, note, Approve, Deny (reason required)
+  - Payment card shows when the customer agreed, who approved, how, and what was checked
+  - the status reads "Approved (cash on delivery)" instead of "Payment confirmed"
+- [x] **Copy:** English, Bangla, Japanese.
+- [x] **Tests:** `test/unit/cod-approval.spec.ts` (18 tests: schema, checkout stamp, guard, SMS length, reopen, approve/deny service); two existing tests updated for the new behaviour. 736 API tests pass.
+- [x] **Checked for real:** API and web run locally against a throwaway Postgres with seed data:
+  - placed COD orders through the actual checkout (with and without the tick)
+  - approved, denied, reopened and undid approval through the panel and the API
+  - confirmed stock, audit rows, the customer timeline, the Messenger link and the Bangla screens
+
+**Where this differs from the plan:**
+- **Facebook link:** a shared constant (`apps/web/src/lib/contact.ts`), reused from the contact page, not a shop setting. Moving it to settings only matters if the page changes often.
+- **48 hours:** a shared constant (`COD_CONFIRMATION_HOURS`) for now. It becomes a shop setting in Step 2, together with the expiry job that enforces it.
+- **Who approves:** STAFF and ADMIN, not ADMIN only. Approving is the same job as confirming a bKash transfer, which STAFF already do. Packers can't. A one-line change makes it ADMIN-only if you prefer.
 
 ### Step 2: housekeeping
 - [ ] **Expiry worker:** cancels COD orders still `PENDING` after `codConfirmationHours`, with the reason "expired". Stock returns. Same pattern as `claim-retry.worker.ts`. Must be idempotent and safe to run on more than one instance.
@@ -289,6 +283,7 @@ Goal: the process in §1, end to end.
 | 2026-11-19 | — | Code survey: COD revenue counted at acceptance; COD payment row never settled. Order set to 0A → 0B → 1 → 2 → 3 → 0C | — |
 | 2026-11-19 | 0A | `payment_status` column, backfill (verified on Postgres), rule in `transition`, contracts, tests. Branch `feat/cod-payment-status` off `deployment` | pushed, no PR yet |
 | 2026-11-19 | 0B | Dashboard + payments page read `payment_status`; admin payment badge. Branch `feat/cod-revenue-by-payment`, stacked on 0A | pushed, no PR yet |
+| 2026-11-19 | 1 | COD back in checkout with tick box; Messenger confirmation step; approve/deny API + panel; migration 0048. Branch `feat/cod-approval-flow`, stacked on 0B | pushed, no PR yet |
 
 ## 6. Open questions
 

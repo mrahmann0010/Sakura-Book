@@ -970,6 +970,23 @@ export class AdminOrdersService {
 
       await this.ordersService.transition(order.id, "PENDING", tx, note);
 
+      /* Undoing a COD approval: the order is back to waiting for the customer,
+         so the record of who approved it, how and why is withdrawn with it —
+         left in place it would read as an approval the order no longer has.
+         The audit log keeps both the approval and this revert. The customer's
+         acknowledgement from checkout stands; they did tick the box. */
+      if (order.paymentMethod === "cash-on-delivery") {
+        await tx
+          .update(orders)
+          .set({
+            codConfirmedAt: null,
+            codConfirmedBy: null,
+            codConfirmationChannel: null,
+            codConfirmationNote: null,
+          })
+          .where(eq(orders.id, order.id));
+      }
+
       await this.auditService.record(
         {
           ...auditContext(context),

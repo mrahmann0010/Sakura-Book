@@ -27,6 +27,7 @@ const MESSAGE_KEYS: Record<string, string> = {
   "Enter the 11-digit wallet number you paid from, like 01XXXXXXXXX.": "senderNumberFormat",
   "Add the transaction ID from your payment confirmation.": "transactionId",
   "Your basket is empty.": "emptyBasket",
+  "Tick the box to confirm you will pay the total on delivery.": "codAcknowledged",
 };
 
 /** One schema message in the current language, or as written if unmapped. */

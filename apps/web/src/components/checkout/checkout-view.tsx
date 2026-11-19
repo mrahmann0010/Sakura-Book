@@ -178,6 +178,7 @@ export function CheckoutView({
     provider: t("checkout.payment.mobileMoneyLegend"),
     senderNumber: t("checkout.payment.senderNumber"),
     transactionId: t("checkout.payment.transactionId"),
+    codAcknowledged: t("checkout.payment.codAckLabel"),
   };
 
   function missingToast(names: readonly (keyof CheckoutValues)[]) {
@@ -292,7 +293,11 @@ export function CheckoutView({
       return;
     }
 
-    setVerification("verifying");
+    /* The "checking your payment" modal is for a transfer the shopper has
+       already sent. A COD order has nothing to check — it goes straight to the
+       thank-you screen, which tells them how to confirm it. */
+    const cod = values.method === "cash-on-delivery";
+    if (!cod) setVerification("verifying");
 
     try {
       const order = await placeOrderRequest(
@@ -318,6 +323,12 @@ export function CheckoutView({
          idempotent per order number, so a retry or a re-render cannot sell
          the same order twice. */
       trackPurchase(order);
+
+      if (cod) {
+        setPlacedOrder({ order, email: values.email ?? "" });
+        cart.clear();
+        return;
+      }
 
       /* The server claims the payment once inside the request — a
          manual-transfer order comes back PAYMENT_CONFIRMED when the claim

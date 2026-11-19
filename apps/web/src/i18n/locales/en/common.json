@@ -227,6 +227,11 @@
     "payment": {
       "legend": "Payment",
       "cash-on-delivery": "Cash on delivery",
+      "cash-on-deliveryMeta": "pay the courier",
+      "codHowItWorks": "After you place the order, message us on Facebook with your order number to confirm it. We start packing once we've checked it. Orders not confirmed within {{hours}} hours are cancelled.",
+      "codTotal": "Total to pay on delivery:",
+      "codAcknowledge": "I've checked my books and the total, and I'll pay the courier when the parcel arrives.",
+      "codAckLabel": "the cash-on-delivery confirmation",
       "manual-transfer": "bKash or bank transfer",
       "manual-transferMeta": "manual transfer",
       "manual-transferHint": "Send the total, then give us the number you paid from and the transaction ID.",
@@ -360,7 +365,14 @@
       "discount": "Discount",
       "payment": "Payment",
       "downloadReceipt": "Download receipt",
-      "downloadFailed": "Could not generate the receipt. Please try again."
+      "downloadFailed": "Could not generate the receipt. Please try again.",
+      "cod": {
+        "eyebrow": "One more step",
+        "title": "Message us to confirm your order",
+        "body": "Send us a message on Facebook with your order number, {{orderNumber}}. We'll check it and start packing. If we don't hear from you within {{hours}} hours, the order is cancelled.",
+        "action": "Confirm on Messenger",
+        "draft": "Hi, I'd like to confirm my cash-on-delivery order {{orderNumber}}."
+      }
     },
     "reassurance": "Nothing is charged online — you settle up with the courier or by transfer."
   },
@@ -380,6 +392,7 @@
       "label": "Order progress",
       "placed": "Order placed",
       "verified": "Payment verified",
+      "confirmed": "Order confirmed",
       "packed": "Packed",
       "shipped": "Shipped",
       "delivered": "Delivered"
@@ -396,6 +409,10 @@
       "DELIVERED": "Delivered",
       "CANCELLED": "This order was cancelled",
       "REFUNDED": "This order was refunded"
+    },
+    "headlineCod": {
+      "PENDING": "Waiting for you to confirm on Facebook",
+      "PAYMENT_CONFIRMED": "Order confirmed — we're getting it ready"
     },
     "track": {
       "eyebrow": "Track order",
@@ -784,6 +801,7 @@
     "senderNumber": "Add the number you sent the money from.",
     "senderNumberFormat": "Enter the 11-digit wallet number you paid from, like 01XXXXXXXXX.",
     "transactionId": "Add the transaction ID from your payment confirmation.",
-    "emptyBasket": "Your basket is empty."
+    "emptyBasket": "Your basket is empty.",
+    "codAcknowledged": "Tick the box to confirm you will pay the total on delivery."
   }
 }

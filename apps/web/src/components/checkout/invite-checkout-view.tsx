@@ -138,6 +138,7 @@ export function InviteCheckoutView({
     provider: t("checkout.payment.mobileMoneyLegend"),
     senderNumber: t("checkout.payment.senderNumber"),
     transactionId: t("checkout.payment.transactionId"),
+    codAcknowledged: t("checkout.payment.codAckLabel"),
   };
 
   function missingToast(names: readonly (keyof CheckoutValues)[]) {
@@ -209,7 +210,9 @@ export function InviteCheckoutView({
 
   async function placeOrder(values: CheckoutValues) {
     setSubmitError(null);
-    setVerification("verifying");
+    // No payment to check for cash on delivery — see the same branch in CheckoutView.
+    const cod = values.method === "cash-on-delivery";
+    if (!cod) setVerification("verifying");
 
     try {
       const order = await placeOrderRequest(
@@ -219,6 +222,11 @@ export function InviteCheckoutView({
 
       // Counted as soon as the order exists — see the same call in CheckoutView.
       trackPurchase(order);
+
+      if (cod) {
+        setPlacedOrder({ order, email: values.email ?? "" });
+        return;
+      }
 
       // The claim inside the request is the only one, so this answer is final
       // and the modal resolves on it at once. See waitForPayment.

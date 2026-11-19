@@ -37,6 +37,8 @@ import {
   adminRestockScheduleSchema,
   adminRecordRefundRequestSchema,
   adminReopenOrderRequestSchema,
+  adminApproveCodRequestSchema,
+  adminDenyCodRequestSchema,
   adminRevertPaymentRequestSchema,
   adminRegionSchema,
   adminReviewListSchema,
@@ -90,6 +92,8 @@ import {
   type WaitlistBooksUpdate,
   type AdminRecordRefundRequest,
   type AdminReopenOrderRequest,
+  type AdminApproveCodRequest,
+  type AdminDenyCodRequest,
   type AdminRevertPaymentRequest,
   type AdminRegion,
   type AdminRegionCreate,
@@ -579,6 +583,32 @@ export function revertAdminOrderPayment(
  * Reopen an order rejected by mistake. Refused with the API's own message when
  * the copies have sold or the TrxID has been used on another order since.
  */
+/** Approve a pending cash-on-delivery order — see AdminCodService. */
+export function approveAdminCodOrder(
+  orderNumber: string,
+  request: AdminApproveCodRequest,
+): Promise<AdminOrderDetail> {
+  const validated = validate(adminApproveCodRequestSchema, request);
+  return adminFetch(
+    `/admin/orders/${encodeURIComponent(orderNumber)}/cod/approve`,
+    adminOrderDetailSchema,
+    { method: "POST", body: validated },
+  );
+}
+
+/** Turn down a pending cash-on-delivery order, with a staff-only reason. */
+export function denyAdminCodOrder(
+  orderNumber: string,
+  request: AdminDenyCodRequest,
+): Promise<AdminOrderDetail> {
+  const validated = validate(adminDenyCodRequestSchema, request);
+  return adminFetch(
+    `/admin/orders/${encodeURIComponent(orderNumber)}/cod/deny`,
+    adminOrderDetailSchema,
+    { method: "POST", body: validated },
+  );
+}
+
 export function reopenAdminOrder(
   orderNumber: string,
   request: AdminReopenOrderRequest,

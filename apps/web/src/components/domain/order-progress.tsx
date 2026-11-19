@@ -34,6 +34,13 @@ export type OrderProgressProps = {
    * columns on a 360px phone cannot hold.
    */
   orientation?: "horizontal" | "vertical";
+  /**
+   * Replaces a stage's label. For a cash-on-delivery order the second stage
+   * is the shop accepting it, not a payment being verified — no money has
+   * moved — so the caller renames it rather than this component learning
+   * about payment methods.
+   */
+  labels?: Partial<Record<OrderProgressStep, string>>;
   className?: string;
 };
 
@@ -50,6 +57,7 @@ export function OrderProgress({
   status,
   detail,
   orientation = "horizontal",
+  labels,
   className,
 }: OrderProgressProps) {
   const { t } = useTranslation();
@@ -87,7 +95,9 @@ export function OrderProgress({
             </span>
 
             <span className={cn(vertical ? "flex-1 pb-5" : "mt-3.5", isLast && vertical && "pb-0")}>
-              <span className={timelineLabel({ step: state })}>{t(`orders.progress.${step}`)}</span>
+              <span className={timelineLabel({ step: state })}>
+                {labels?.[step] ?? t(`orders.progress.${step}`)}
+              </span>
               {detail?.[step] ? (
                 <span className="text-caption text-secondary mt-1.5 block">{detail[step]}</span>
               ) : null}
