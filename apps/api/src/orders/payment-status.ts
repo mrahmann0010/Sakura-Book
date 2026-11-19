@@ -51,3 +51,21 @@ export function nextPaymentStatus(input: {
 
   return current;
 }
+
+/**
+ * The payment statuses that mean money has reached the shop or its courier —
+ * what every revenue figure called "collected" counts.
+ *
+ * COLLECTED is in, although the courier still holds that cash: it is the
+ * shop's money, owed on a known schedule, and leaving it out would make a COD
+ * shop's takings swing on Pathao's payout days rather than on its sales.
+ * Where the courier/shop split matters, REMITTED tells them apart.
+ *
+ * One list, imported by the dashboard and the payments page, so two screens
+ * cannot disagree about what "collected" means.
+ */
+export const MONEY_RECEIVED_STATUSES: readonly OrderPaymentStatus[] = Object.freeze([
+  "PAID",
+  "COLLECTED",
+  "REMITTED",
+]);

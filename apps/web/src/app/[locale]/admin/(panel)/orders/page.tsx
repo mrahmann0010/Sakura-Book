@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { AdminOrderSummary, OrderStatus } from "@sakura/contracts";
 
-import { PaymentSafetyBadges } from "@/components/admin/payment-safety";
+import { PaymentSafetyBadges, PaymentStatusBadge } from "@/components/admin/payment-safety";
 import { AdminTableRows } from "@/components/admin/skeletons";
 import { Button } from "@/components/ui";
 import { AdminApiError, listAdminOrders } from "@/lib/api/admin";
@@ -239,7 +239,10 @@ export default function AdminOrdersPage() {
                 <td className="text-ink px-4 py-3">
                   {formatMoney(order.totalCents, "en-GB", order.currency)}
                 </td>
-                <td className="text-secondary px-4 py-3">{order.status}</td>
+                <td className="text-secondary px-4 py-3">
+                  <span className="block">{order.status}</span>
+                  <PaymentStatusBadge status={order.paymentStatus} className="mt-1" />
+                </td>
                 <td className="px-4 py-3 text-right">
                   <Link
                     href={`/${locale}/admin/orders/${order.orderNumber}`}

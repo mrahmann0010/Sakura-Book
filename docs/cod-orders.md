@@ -1,6 +1,6 @@
 # Cash on delivery (COD) orders
 
-Status: **Step 0A in review** · Last updated: 2026-11-19 · Base branch: `deployment`
+Status: **Steps 0A + 0B in review** · Last updated: 2026-11-19 · Base branch: `deployment`
 
 How Sakura Book takes COD orders with no advance payment, with every COD order
 approved by an admin before it is packed. This file has five parts:
@@ -192,20 +192,28 @@ Goal: every order carries a correct payment status. No behaviour changes.
 ### Step 0B: migrate: money readers use `payment_status`
 Goal: revenue means money, for every method.
 
-- [ ] **Dashboard revenue** (`admin-dashboard.service.ts`):
-  - filter on payment status
-  - date collected revenue by when the payment became `PAID`/`COLLECTED`, not by the `PAYMENT_CONFIRMED` history row
-  - fix the file's COD comment
-- [ ] **Revenue page and admin payments** (`admin-payments.service.ts`): same rule
-- [ ] **Admin order list and detail:** show a payment badge (Unpaid / Paid / Collected / Remitted / Refunded) next to the status
-- [ ] **Stays on order status, on purpose** (fulfilment events, not money):
+- [x] **Shared definition:** `MONEY_RECEIVED_STATUSES` = `PAID`, `COLLECTED`, `REMITTED` (`apps/api/src/orders/payment-status.ts`). Both screens import it.
+- [x] **Dashboard revenue** (`admin-dashboard.service.ts`):
+  - "collected" counts only money received
+  - dated by when the money arrived: prepaid on `PAYMENT_CONFIRMED`, COD on `DELIVERED`
+  - "ordered" is unchanged (accepted orders, by placement date)
+  - covers today / 7 days / 30 days, the 12-month trend and the monthly drill-down, all through the one shared base query
+- [x] **Payments page** (`admin-payments.service.ts`): the collected/expected split reads `payment_status` instead of "not COD, or delivered". Same numbers today, one rule instead of two.
+- [x] **Admin payment badge:** Unpaid / Paid / With courier / Remitted / Refunded
+  - order list: under the status
+  - order detail: "Money" row in the Payment card
+- [x] **Stays on order status, on purpose** (fulfilment events, not money):
   - `units_sold`
   - the confirmation email
   - waitlist settlement
   - packer scope
+- [x] **Copy:** dashboard chart caption and service comments now describe the real behaviour.
+- [x] **Check:** ran the real `AdminDashboardService` and `AdminPaymentsService` on a throwaway Postgres with 6 known orders. All figures matched by hand. The 0A version of the dashboard, run on the same data, showed an accepted-but-undelivered COD order as collected (3,000 vs the correct 5,000 today), confirming the bug.
 
-  For COD these will fire on approval, which is the right moment: the stock is committed and the customer should hear back.
-- [ ] **Check:** compare dashboard totals before and after on a production data copy. The only differences should be COD orders accepted but not delivered.
+**Effect after deploy:**
+- COD revenue on the dashboard moves from the day an order was accepted to the day it was delivered.
+- Accepted COD orders not yet delivered leave "collected" but stay in "ordered".
+- Prepaid figures and the Payments page totals do not change.
 
 ### Step 1: COD approval flow (COD goes live)
 Goal: the process in §1, end to end.
@@ -279,7 +287,8 @@ Goal: the process in §1, end to end.
 |---|---|---|---|
 | 2026-11-19 | — | Process, decisions and state design agreed | — |
 | 2026-11-19 | — | Code survey: COD revenue counted at acceptance; COD payment row never settled. Order set to 0A → 0B → 1 → 2 → 3 → 0C | — |
-| 2026-11-19 | 0A | `payment_status` column, backfill (verified on Postgres), rule in `transition`, contracts, tests. Branch `feat/cod-payment-status` off `deployment` | pending |
+| 2026-11-19 | 0A | `payment_status` column, backfill (verified on Postgres), rule in `transition`, contracts, tests. Branch `feat/cod-payment-status` off `deployment` | pushed, no PR yet |
+| 2026-11-19 | 0B | Dashboard + payments page read `payment_status`; admin payment badge. Branch `feat/cod-revenue-by-payment`, stacked on 0A | pushed, no PR yet |
 
 ## 6. Open questions
 

@@ -10,7 +10,11 @@ import {
   type OrderStatus,
 } from "@sakura/contracts";
 
-import { ReceiptBadge, VerificationBadge } from "@/components/admin/payment-safety";
+import {
+  PaymentStatusBadge,
+  ReceiptBadge,
+  VerificationBadge,
+} from "@/components/admin/payment-safety";
 import { AdminDetailSkeleton } from "@/components/admin/skeletons";
 import { Button, Input, Notice, Textarea } from "@/components/ui";
 import {
@@ -577,6 +581,12 @@ export default function AdminOrderDetailPage() {
           <dl className="text-13.5 mt-4 flex flex-col gap-2">
             <Row label="Method" value={order.paymentMethod} />
             {order.paymentProvider ? <Row label="Wallet" value={order.paymentProvider} /> : null}
+            <div className="flex items-center justify-between gap-4">
+              <dt className="text-muted">Money</dt>
+              <dd>
+                <PaymentStatusBadge status={order.paymentStatus} />
+              </dd>
+            </div>
             {/* Labelled for the packer by what they do with it: on a cash order
                 it is the figure the courier collects and the label must carry. */}
             <Row

@@ -12,6 +12,9 @@ export { OrdersModule } from "./orders.module";
 // level. Import it directly from "./orders/orders-http.module" instead.
 export { CheckoutService } from "./checkout.service";
 export { OrdersService } from "./orders.service";
+// Where an order's money is: the rule that moves it, and which values count
+// as money received for every revenue figure.
+export { MONEY_RECEIVED_STATUSES, nextPaymentStatus } from "./payment-status";
 export { toOrderResponse, type OrderRow } from "./order.mapper";
 // The shared read shape, so the admin detail view cannot assemble an order
 // differently from the way checkout and guest lookup assemble theirs.

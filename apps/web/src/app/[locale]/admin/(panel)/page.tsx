@@ -242,8 +242,9 @@ export default function AdminDashboardPage() {
               <h2 className="text-h4 text-ink font-serif">Revenue collected, last 12 months</h2>
             </div>
             <p className="text-13.5 text-secondary mt-1">
-              Each month holds the money recognised in it, not the value of the orders placed in it
-              — so a cash-on-delivery order counts on the day the courier settles.
+              Each month holds the money received in it, not the value of the orders placed in it
+              — so a cash-on-delivery order counts on the day it was delivered, not the day it was
+              accepted.
             </p>
             <div className="mt-4">
               <BarChart
