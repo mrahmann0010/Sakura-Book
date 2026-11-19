@@ -13,7 +13,8 @@ calendar — "30 days" means the first working month after this branch ships.*
 | 2 | **Review this branch and ship it** | Dev | The 14 fixes in `implementation-report.md` do nothing until deployed. |
 | 3 | **Verify Googlebot is not blocked** in the Cloudflare managed `robots.txt` | Owner | TEC-18. A managed block sits ahead of the app's rules. Confirm `Googlebot` and `Googlebot-Image` are unaffected. |
 | 4 | **Decide the `ja` locale** | Owner | TEC-02. A third of the crawl budget for a market that cannot be shipped to. Recommendation: keep the UI, remove it from the index. |
-| 5 | **Decide on empty facet pages** | Owner | TEC-21. N3/N2/N1/vocabulary/reading have no stock. One array controls it: `indexableFacets` in `src/lib/seo.ts`. |
+| 5 | **Fix the category tagging** | Owner / admin | **TEC-23, now the top data task.** `nihonova-spoken-japanese` is tagged into every level *and* every skill; `kanji-redical-guide-book` into all five levels. Result: `?genre=n3`, `?genre=n2`, `?genre=n1` and `?genre=kanji` return the **same two books**. Admin data, no deploy. **Do it before requesting indexing for those pages.** |
+| 5b | **Add ISBNs** | Owner / admin | TEC-24. All five titles return `isbn: None`. Strongest entity signal a book has, and a Merchant Center requirement. |
 
 ## 30 days — foundations and measurement
 
@@ -24,7 +25,7 @@ calendar — "30 days" means the first working month after this branch ships.*
 | 8 | Run **Rich Results Test** on a book page and a facet page, now that they are live | S | Confirms the structured data in the wild. |
 | 9 | **Fix the misspelled slugs with a redirect map** (TEC-03) | M | `redical`→`radical`, `grammer`→`grammar`, in slug *and* title. Needs `308`s from the old URLs. **Do not rename without them.** |
 | 10 | Run **PageSpeed Insights** on home, catalogue and a book page | S | Lab baseline; field data follows once there is traffic. |
-| 10b | **Frame price on the commercial pages.** Four price queries sit in the top 50 and Rokomari sells comparable N5 titles at ৳150–৳300. State what the higher price buys: written in Bangla, by the academy that teaches it. | S | Transactional intent, currently unanswered. |
+| 10b | **Frame price on the commercial pages.** Four price queries sit in the top 50. Production prices are ৳199–৳349 against Rokomari's ৳150–৳300 and BooKVandar's ৳480 — **mid-market, not a premium** (TEC-25). Lead with what the book teaches; state the Bangla-medium and academy-authorship advantage as the reason to choose it, not as a defence of the price. | S | Transactional intent, currently unanswered. |
 | 11 | **Get the first links.** Nothing links to this domain. Start with the obvious and legitimate: a prominent link from `nihonovaacademy.com`, the academy's Facebook page, and any BD study-abroad or JLPT community the academy already belongs to. | M | The single biggest non-content constraint. **No paid links, no directories-for-links.** |
 | 12 | **Improve image alt text** to include level and skill (TEC-20) | S | Google Images is a real channel for covers. |
 | 13 | **Enrich the five product descriptions** with level, audience, coverage and outcomes | M | Staff work in the admin, not code. Thin product copy is the one on-page weakness the code cannot fix. **Never state a claim the book does not support.** |
@@ -76,6 +77,6 @@ calendar — "30 days" means the first working month after this branch ships.*
 | --- | --- |
 | **No links.** A domain nothing points to will not rank regardless of on-page quality. | Items 11 and 23; genuinely linkable content. |
 | **Content quality collapse** under volume pressure. | Two pieces a month, instructor-reviewed. Twenty good articles beat two hundred generated ones, and Google's systems specifically target the latter. |
-| **Thin facet pages** if inventory does not grow. | Item 5 — the allowlist is one array. |
+| **Near-duplicate facet pages** from over-tagging (TEC-23). | Item 5 — admin data. Any facet still returning only out-of-stock titles afterwards comes out of `indexableFacets`. |
 | **Misspelled slugs become permanent** because the redirect work looks tedious. | Item 9. It gets harder, not easier, the more links accumulate. |
 | **Claiming results without data.** | Search Console first (item 6). Nothing in these documents claims a ranking, and nothing should until it is measured. |

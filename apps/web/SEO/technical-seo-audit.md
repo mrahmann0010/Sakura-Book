@@ -276,11 +276,103 @@ Correct and accessible; weak for Google Images, which is a real discovery
 channel for book covers. Consider `"{title} — JLPT {level} {skill} book cover"`
 from the same category data `bookSeoTitle` already uses.
 
-### TEC-21 · Facet pages can render an empty shelf — `OPEN (business decision)`
+### TEC-21 · ~~Facet pages can render an empty shelf~~ — `WITHDRAWN — the prediction was wrong`
 
-`?genre=n3`, `?genre=n2`, `?genre=n1`, `?genre=vocabulary`, `?genre=reading`
-are indexable but have no stock. See `keyword-mapping.md` Cluster 3 for the
-three options. The lever is one array — `indexableFacets` in `src/lib/seo.ts`.
+**This finding was incorrect and is superseded by TEC-23.**
+
+It predicted that `?genre=n3`, `?genre=n2`, `?genre=n1`, `?genre=vocabulary`
+and `?genre=reading` would render empty shelves, and proposed trimming
+`indexableFacets` to suit. It was written from the *sitemap* (five titles, four
+of them N5/N4) without checking what each facet actually returns.
+
+Measured against production on 18 November 2026, after the pass shipped:
+
+```
+n5          4 books
+n4          3 books
+n3          2 books
+n2          2 books
+n1          2 books
+kanji       2 books
+grammar     2 books
+listening   3 books
+vocabulary  1 book
+reading     1 book
+```
+
+No facet is empty. The real defect is the opposite one, and it is worse — see
+below. Recorded rather than deleted because a withdrawn finding is part of the
+audit's record, and because the roadmap and the mapping document both acted on
+it.
+
+### TEC-23 · Over-tagging makes four facet pages near-duplicates — `OPEN (data, not code)` · **High**
+
+The books are tagged into far more categories than they belong to:
+
+| Book | Tagged into |
+| --- | --- |
+| `nihonova-spoken-japanese` | **every level (N5–N1) and every skill** (grammar, kanji, vocabulary, reading, listening) |
+| `kanji-redical-guide-book` | **all five levels** N5, N4, N3, N2, N1 — plus kanji |
+
+The consequence is visible in the counts above: **`?genre=n3`, `?genre=n2`,
+`?genre=n1` and `?genre=kanji` all return the same two books.** Four indexable
+URLs with identical membership, differing only in their heading and lede.
+Google's likely response is to pick one canonical and report the rest as
+"Duplicate without user-selected canonical" — which would undo a good part of
+what TEC-01 was for.
+
+`?genre=vocabulary` and `?genre=reading` are a second case of the same cause:
+each returns exactly one book, `nihonova-spoken-japanese`, which is **out of
+stock**. An indexable page whose entire inventory is one unbuyable title is a
+thin page by any measure.
+
+There is also a plain accuracy problem underneath the SEO one: a *Spoken
+Japanese* book is not an N1 reading text, and a radicals guide is not an N1
+title. The tags are claims about the books, and these ones are not true.
+
+**Fix — admin data, no deploy required:**
+
+1. Untag `nihonova-spoken-japanese` from every level and skill except the ones
+   it genuinely teaches.
+2. Untag `kanji-redical-guide-book` from N3/N2/N1 unless the radicals it covers
+   really do span those levels.
+3. Re-check the counts afterwards. Any facet still returning only out-of-stock
+   titles should come **out** of `indexableFacets` until it has stock — which
+   is the one part of the withdrawn TEC-21 that survives, now for a reason that
+   was measured rather than assumed.
+
+**Do this before requesting indexing for `?genre=kanji`**, or the first thing
+Google sees of that page is three duplicates of it.
+
+### TEC-24 · No book carries an ISBN — `OPEN (data, not code)` · **Medium**
+
+All five titles return `isbn: None`. The field exists on the contract
+(`bookDetailSchema.isbn13`) and the JSON-LD emits it when present, so this is
+unfilled data rather than missing capability.
+
+An ISBN is the strongest entity identifier a book has: it is what lets Google
+tie this page to the same work elsewhere, it is a **Merchant Center
+requirement** for book listings (see `seo-strategy.md` §7, where a feed is
+already proposed), and it is a trust signal to a buyer comparing editions.
+
+If the titles are registered with the Bangladesh ISBN agency, the numbers
+should go into the admin. If they are not registered, that is worth doing
+before the next print run.
+
+### TEC-25 · Price positioning was misjudged in this audit — `CORRECTED`
+
+The first pass advised preparing to defend a price premium. Production prices
+say otherwise:
+
+| | Price |
+| --- | --- |
+| Rokomari N5 titles | ৳150–৳300 |
+| **Nihonova** | **৳199–৳349** |
+| BooKVandar — Sharif's N5 Bangla | ৳480 |
+
+Nihonova sits **mid-market**, not above it. The page copy should therefore lead
+with what the book teaches, not with justifying its cost. The recommendation in
+`seo-roadmap.md` item 10b is revised accordingly.
 
 ### TEC-22 · Footer headings are English in all three locales — `OPEN (i18n, not SEO)`
 

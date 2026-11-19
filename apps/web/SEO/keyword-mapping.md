@@ -52,26 +52,28 @@ this pass; before it the shop had no page targeting any level term.**
 | --- | --- | --- | --- | --- |
 | `?genre=n5` | `JLPT N5 বই` | `JLPT N5 books Bangladesh`, `N5 প্রস্তুতি বই`, `hiragana katakana বই` | **P0** | 3 titles |
 | `?genre=n4` | `JLPT N4 বই` | `JLPT N4 preparation books`, `N4 গ্রামার বই` | **P1** | 1 title |
-| `?genre=n3` | `JLPT N3 বই` | `N3 কাঞ্জি বই` | P2 | **none yet** |
-| `?genre=n2` | `JLPT N2 বই` | `N2 রিডিং বই` | P3 | **none yet** |
-| `?genre=n1` | `JLPT N1 বই` | `N1 গ্রামার বই` | P3 | **none yet** |
+| `?genre=n3` | `JLPT N3 বই` | `N3 কাঞ্জি বই` | P2 | 2 — *both over-tagged, see below* |
+| `?genre=n2` | `JLPT N2 বই` | `N2 রিডিং বই` | P3 | 2 — *same two books as N3* |
+| `?genre=n1` | `JLPT N1 বই` | `N1 গ্রামার বই` | P3 | 2 — *same two books as N3* |
 
-> **Open risk.** N3/N2/N1 pages currently render an empty shelf. An indexable
-> empty category is a thin page. Recommendation in `seo-roadmap.md`: either
-> publish the titles, or have these pages show the next level down with an
-> honest "N3 titles are in production" line, or drop them from
-> `indexableFacets` in `src/lib/seo.ts` until there is stock. **This is a
-> business decision and has deliberately not been made unilaterally.**
+> **Open risk — revised after measuring production.** These pages are *not*
+> empty, as the first draft of this document predicted. They are near-duplicates:
+> `?genre=n3`, `?genre=n2`, `?genre=n1` and `?genre=kanji` all return the **same
+> two books**, because `kanji-redical-guide-book` is tagged into all five levels
+> and `nihonova-spoken-japanese` into every level and skill. The fix is the
+> tagging, in the admin — see `technical-seo-audit.md` TEC-23. Only if a facet
+> still returns nothing buyable afterwards should it come out of
+> `indexableFacets` in `src/lib/seo.ts`.
 
 ## Cluster 4 — Skill pages
 
 | URL | Primary | Secondary | Priority | Inventory |
 | --- | --- | --- | --- | --- |
-| `?genre=kanji` | `জাপানি কানজি শেখার বই` | `kanji radicals বই`, `Japanese kanji book Bangla` | **P0** | 1 (flagship) |
-| `?genre=grammar` | `জাপানি ব্যাকরণ বই` | `Japanese grammar book Bangla`, `JLPT গ্রামার` | **P1** | 1 |
-| `?genre=listening` | `জাপানি লিসেনিং বই` | `JLPT choukai practice` | **P1** | 2 |
-| `?genre=vocabulary` | `জাপানি শব্দভান্ডার বই` | `Japanese vocabulary Bangla meaning` | P2 | **none yet** |
-| `?genre=reading` | `জাপানি রিডিং বই` | `JLPT dokkai practice` | P3 | **none yet** |
+| `?genre=kanji` | `জাপানি কানজি শেখার বই` | `kanji radicals বই`, `Japanese kanji book Bangla` | **P0** | 2 — *same two books as N3; fix tagging first* |
+| `?genre=grammar` | `জাপানি ব্যাকরণ বই` | `Japanese grammar book Bangla`, `JLPT গ্রামার` | **P1** | 2 |
+| `?genre=listening` | `জাপানি লিসেনিং বই` | `JLPT choukai practice` | **P0 — promoted** | 3 · both in-stock listening titles are confirmed traffic drivers |
+| `?genre=vocabulary` | `জাপানি শব্দভান্ডার বই` | `Japanese vocabulary Bangla meaning` | P2 | 1 — *out of stock* |
+| `?genre=reading` | `জাপানি রিডিং বই` | `JLPT dokkai practice` | P3 | 1 — *out of stock* |
 
 **Cannibalisation — watch this one.** `?genre=n5` and `?genre=kanji` both
 plausibly answer "JLPT N5 kanji book". The split: **level pages own level

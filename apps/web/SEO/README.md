@@ -15,6 +15,7 @@ carried out against commit `d643c57` and the live site.
 | [`content-roadmap.md`](content-roadmap.md) | Twenty researched content opportunities with outlines |
 | [`technical-seo-audit.md`](technical-seo-audit.md) | 22 findings with severity, reproducible evidence and status |
 | [`implementation-report.md`](implementation-report.md) | Every code change, with validation output |
+| [`indexing-priority.md`](indexing-priority.md) | **The 10 URLs to push in Search Console**, measured against production, and what to fix first |
 | [`seo-roadmap.md`](seo-roadmap.md) | Immediate / 30 / 60 / 90-day plan and long-term growth |
 | [`initial-guide.md`](initial-guide.md) | The original brief this pass answers |
 
@@ -61,7 +62,8 @@ skill pages. Rokomari's category page, by contrast, has **no `<h1>` at all**.
 1. The `ja` locale — an indexed duplicate of `/en` for a market that cannot be
    shipped to (TEC-02).
 2. The two misspelled product slugs, which need a redirect migration (TEC-03).
-3. The five facet pages with no stock behind them (TEC-21).
-4. Whether the Cloudflare managed robots.txt block is intended (TEC-18).
+3. The category tagging (TEC-23) — two books are tagged into nearly every level and skill, so four facet pages return the same two titles. Admin data, no deploy. **This is now the highest-value open item.**
+4. Missing ISBNs on all five titles (TEC-24).
+5. Whether the Cloudflare managed robots.txt block is intended (TEC-18).
 
 Start with [`seo-roadmap.md`](seo-roadmap.md).

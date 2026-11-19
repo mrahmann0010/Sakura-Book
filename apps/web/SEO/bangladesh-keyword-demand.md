@@ -84,10 +84,14 @@ traffic.
 
 A SERP check on `japanese n5 book price in bangladesh` returned Rokomari
 listings at ৳150–৳300 and BooKVandar's Sharif's N5 at ৳480. **Nihonova's
-titles did not appear.** These are transactional queries the shop can win with
-pages it now has — but it must be prepared to be compared on price, and the
-answer to that comparison is "written in Bangla by the academy that teaches it",
-stated on the page.
+titles did not appear.**
+
+Nihonova's own prices, read from production JSON-LD, are **৳199–৳349** — in
+the middle of that range, not above it. These are transactional queries the
+shop can win with the pages it now has, and it can compete on price without
+discounting. The page should therefore lead with **what the book teaches**;
+Bangla-medium explanation and academy authorship are reasons to choose it, not
+a defence of its cost.
 
 ---
 
