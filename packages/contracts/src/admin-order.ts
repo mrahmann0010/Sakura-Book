@@ -2,7 +2,7 @@ import { z } from "zod";
 import { divisionSlugs } from "./bd-geo";
 import { normaliseBdPhone } from "./bd-phone";
 import { paymentMethods } from "./checkout";
-import { orderSchema, orderStatuses } from "./order";
+import { orderPaymentStatuses, orderSchema, orderStatuses } from "./order";
 import { paginated, pageQuerySchema } from "./pagination";
 import { cleanTransactionId } from "./transaction-id";
 import {
@@ -199,6 +199,7 @@ export const adminOrderSummarySchema = z.object({
    */
   city: z.string(),
   paymentMethod: z.enum(paymentMethods),
+  paymentStatus: z.enum(orderPaymentStatuses),
   paymentProvider: z.enum(paymentProviders).nullable(),
   currency: z.string().length(3),
   totalCents: z.number().int().nonnegative(),

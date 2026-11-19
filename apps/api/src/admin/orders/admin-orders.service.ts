@@ -146,6 +146,7 @@ export class AdminOrdersService {
           customerPhone: orders.customerPhone,
           shippingAddress: orders.shippingAddress,
           paymentMethod: orders.paymentMethod,
+          paymentStatus: orders.paymentStatus,
           provider: orders.provider,
           totalCents: orders.totalCents,
           internalNote: orders.internalNote,

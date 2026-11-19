@@ -1,5 +1,10 @@
 import { pgEnum } from "drizzle-orm/pg-core";
-import { paymentProviders, paymentVerificationOutcomes, reviewStatuses } from "@sakura/contracts";
+import {
+  orderPaymentStatuses,
+  paymentProviders,
+  paymentVerificationOutcomes,
+  reviewStatuses,
+} from "@sakura/contracts";
 
 export const bookAuthorRoleEnum = pgEnum("book_author_role", [
   "AUTHOR",
@@ -23,6 +28,16 @@ export const orderStatusEnum = pgEnum("order_status", [
   "CANCELLED",
   "REFUNDED",
 ]);
+
+/**
+ * Where an order's money is, beside `order_status` saying where the order is.
+ *
+ * Built from the contract's `orderPaymentStatuses`, like the other contract
+ * enums here, so the API and the panel cannot disagree about which states
+ * exist. Written only by `OrdersService.transition`, from the rule in
+ * `orders/payment-status.ts` — see that file for what moves it.
+ */
+export const orderPaymentStatusEnum = pgEnum("order_payment_status", orderPaymentStatuses);
 
 /**
  * How the customer said they would pay, recorded on the order itself.

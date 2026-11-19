@@ -39,6 +39,7 @@ type OrderListRow = Pick<
   | "customerPhone"
   | "shippingAddress"
   | "paymentMethod"
+  | "paymentStatus"
   | "provider"
   | "totalCents"
   | "internalNote"
@@ -102,6 +103,7 @@ export function toAdminOrderSummary(
     region: (row.shippingAddress as ShippingAddress).region,
     city: (row.shippingAddress as ShippingAddress).city,
     paymentMethod: row.paymentMethod as PaymentMethod,
+    paymentStatus: row.paymentStatus,
     paymentProvider: row.provider as PaymentProvider | null,
     currency: CURRENCY_OF_RECORD,
     totalCents: row.totalCents,

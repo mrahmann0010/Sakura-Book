@@ -10,7 +10,12 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { orderStatusEnum, paymentMethodEnum, paymentProviderEnum } from "../enums";
+import {
+  orderPaymentStatusEnum,
+  orderStatusEnum,
+  paymentMethodEnum,
+  paymentProviderEnum,
+} from "../enums";
 import { coupons } from "../marketing/coupon";
 import { timestamps } from "../timestamps";
 import { orderItems } from "./order-item";
@@ -232,6 +237,15 @@ export const orders = pgTable(
     // Denormalized "current status" for fast reads. The append-only log in
     // orderStatusHistory is the source of truth for how the order got here.
     status: orderStatusEnum("status").notNull().default("PENDING"),
+
+    /**
+     * Where the money is — the other half of what `status` used to carry
+     * alone. Set only by `OrdersService.transition`, in the same transaction
+     * as the status change that moves it, from the rule in
+     * `orders/payment-status.ts`. Every order starts UNPAID; existing rows were
+     * backfilled by migration 0047.
+     */
+    paymentStatus: orderPaymentStatusEnum("payment_status").notNull().default("UNPAID"),
 
     ...timestamps,
   },
