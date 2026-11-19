@@ -365,9 +365,9 @@
       "cod": {
         "eyebrow": "あと一歩",
         "title": "メッセージでご注文を確定してください",
-        "body": "注文番号 {{orderNumber}} を添えて、Facebookでメッセージをお送りください。確認後に梱包を始めます。{{hours}}時間以内にご連絡がない場合、ご注文はキャンセルされます。",
-        "action": "Messengerで確定する",
-        "draft": "代金引換の注文 {{orderNumber}} を確定したいです。"
+        "body": "下のメッセージをコピーして、Messengerでお送りください。ご注文 {{orderNumber}} を確認後、梱包を始めます。{{hours}}時間以内にご連絡がない場合、ご注文はキャンセルされます。",
+        "messageLabel": "送信するメッセージ",
+        "action": "Messengerで確定する"
       }
     },
     "reassurance": "オンラインでの決済はありません — 配達時または振込でお支払いください。"

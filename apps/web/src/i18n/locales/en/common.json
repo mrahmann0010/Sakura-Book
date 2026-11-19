@@ -369,9 +369,9 @@
       "cod": {
         "eyebrow": "One more step",
         "title": "Message us to confirm your order",
-        "body": "Send us a message on Facebook with your order number, {{orderNumber}}. We'll check it and start packing. If we don't hear from you within {{hours}} hours, the order is cancelled.",
-        "action": "Confirm on Messenger",
-        "draft": "Hi, I'd like to confirm my cash-on-delivery order {{orderNumber}}."
+        "body": "Copy the message below and send it to us on Messenger. We'll check your order {{orderNumber}} and start packing. If we don't hear from you within {{hours}} hours, the order is cancelled.",
+        "messageLabel": "Message to send",
+        "action": "Confirm on Messenger"
       }
     },
     "reassurance": "Nothing is charged online — you settle up with the courier or by transfer."
