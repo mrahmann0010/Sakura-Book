@@ -1,6 +1,6 @@
 # Cash on delivery (COD) orders
 
-Status: **Steps 0A, 0B, 1 in review** · Last updated: 2026-11-19 · Base branch: `deployment`
+Status: **Steps 0A, 0B, 1 in review (PR #100)** · Last updated: 2026-11-19 · Base branch: `deployment`
 
 How Sakura Book takes COD orders with no advance payment, with every COD order
 approved by an admin before it is packed. This file has five parts:
@@ -284,9 +284,9 @@ Goal: the process in §1, end to end.
 |---|---|---|---|
 | 2026-11-19 | — | Process, decisions and state design agreed | — |
 | 2026-11-19 | — | Code survey: COD revenue counted at acceptance; COD payment row never settled. Order set to 0A → 0B → 1 → 2 → 3 → 0C | — |
-| 2026-11-19 | 0A | `payment_status` column, backfill (verified on Postgres), rule in `transition`, contracts, tests. Branch `feat/cod-payment-status` off `deployment` | pushed, no PR yet |
-| 2026-11-19 | 0B | Dashboard + payments page read `payment_status`; admin payment badge. Branch `feat/cod-revenue-by-payment`, stacked on 0A | pushed, no PR yet |
-| 2026-11-19 | 1 | COD back in checkout with tick box; Messenger confirmation step; approve/deny API + panel; migration 0048. Branch `feat/cod-approval-flow`, stacked on 0B | pushed, no PR yet |
+| 2026-11-19 | 0A | `payment_status` column, backfill (verified on Postgres), rule in `transition`, contracts, tests. Branch `feat/cod-payment-status` off `deployment` | #100 |
+| 2026-11-19 | 0B | Dashboard + payments page read `payment_status`; admin payment badge. Branch `feat/cod-revenue-by-payment`, stacked on 0A | #100 |
+| 2026-11-19 | 1 | COD back in checkout with tick box; Messenger confirmation step; approve/deny API + panel; migration 0048. Branch `feat/cod-approval-flow`, stacked on 0B | #100 |
 
 ## 6. Open questions
 
