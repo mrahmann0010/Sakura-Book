@@ -260,7 +260,7 @@
       "cardUnavailable": "カード決済はまだご利用いただけません。",
       "senderNumber": "送金元のbKash/Rocket/Nagad番号",
       "transactionId": "取引ID",
-      "codFeeNote": "デジタル決済なら代引き手数料なし。",
+      "codFeeNote": "デジタル決済なら代引き手数料0円！",
       "codChargesApplicable": "代引き手数料がかかります"
     },
     "items": {
