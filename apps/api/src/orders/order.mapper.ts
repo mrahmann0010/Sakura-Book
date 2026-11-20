@@ -54,6 +54,7 @@ export function toOrderResponse(row: OrderRow): Order {
     subtotalCents: row.subtotalCents,
     deliveryCents: row.shippingCents,
     discountCents: row.discountCents,
+    codFeeCents: row.codFeeCents,
     totalCents: row.totalCents,
     couponCode: row.discountCodeSnapshot,
 

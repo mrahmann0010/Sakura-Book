@@ -137,7 +137,14 @@ export const orders = pgTable(
     discountCodeSnapshot: text("discount_code_snapshot"), // the code as applied, e.g. "SAVE10"
     discountCents: integer("discount_cents").notNull().default(0),
 
-    // subtotalCents + shippingCents - discountCents
+    /**
+     * The cash-on-delivery charge (@sakura/contracts cod-fee), frozen at
+     * placement. Zero for prepaid orders and for COD orders placed before the
+     * charge existed.
+     */
+    codFeeCents: integer("cod_fee_cents").notNull().default(0),
+
+    // subtotalCents + shippingCents - discountCents + codFeeCents
     totalCents: integer("total_cents").notNull(),
 
     customerNote: text("customer_note"), // customer-facing: "gift wrap", "leave at gate", etc.

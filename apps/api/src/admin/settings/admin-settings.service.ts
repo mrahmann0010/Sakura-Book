@@ -300,6 +300,8 @@ export class AdminSettingsService {
             flatRateCents: before.flatRateCents,
             freeDeliveryThresholdCents: before.freeDeliveryThresholdCents,
             originDivision: before.originDivision,
+            codFeeDhakaBps: before.codFeeDhakaBps,
+            codFeeOutsideBps: before.codFeeOutsideBps,
             source: before.source,
           },
           after: { ...changes },

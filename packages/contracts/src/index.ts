@@ -26,6 +26,7 @@ export * from "./order";
 export * from "./shipping";
 export * from "./shipping-zones";
 export * from "./shipping-rates";
+export * from "./cod-fee";
 export * from "./bd-geo";
 export * from "./bd-phone";
 export * from "./transaction-id";

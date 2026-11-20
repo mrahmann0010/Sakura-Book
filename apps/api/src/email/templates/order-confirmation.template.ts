@@ -47,6 +47,14 @@ export function orderConfirmationEmail(order: OrderRow): { subject: string; html
           <td style="padding:8px 0;text-align:right;">${formatTaka(order.shippingCents)}</td>
         </tr>
         ${
+          order.codFeeCents > 0
+            ? `<tr>
+                 <td style="padding:8px 0;">ক্যাশ অন ডেলিভারি চার্জ</td>
+                 <td style="padding:8px 0;text-align:right;">${formatTaka(order.codFeeCents)}</td>
+               </tr>`
+            : ""
+        }
+        ${
           order.discountCents > 0
             ? `<tr>
                  <td style="padding:8px 0;">ছাড়</td>

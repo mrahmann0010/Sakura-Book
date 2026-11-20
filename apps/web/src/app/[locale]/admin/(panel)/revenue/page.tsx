@@ -79,6 +79,7 @@ const PLATFORM_LABELS: Record<PaymentPlatform, string> = {
 /** Full clay, and clay mixed toward the surface — the validated ordinal pair. */
 const BOOKS_FILL = "var(--clay)";
 const DELIVERY_FILL = "color-mix(in srgb, var(--clay) 62%, var(--surface))";
+const COD_FEE_FILL = "color-mix(in srgb, var(--clay) 30%, var(--surface))";
 
 function todayIso(): string {
   const now = new Date();
@@ -133,8 +134,8 @@ export default function AdminRevenuePage() {
 
   const totals = data?.totals;
   const currency = data?.currency;
-  // What the bar spans. Books + delivery, before the discount comes off.
-  const gross = totals ? totals.booksCents + totals.deliveryCents : 0;
+  // What the bar spans. Books + delivery + COD charge, before the discount comes off.
+  const gross = totals ? totals.booksCents + totals.deliveryCents + totals.codFeeCents : 0;
 
   return (
     <div className="flex flex-col gap-8">
@@ -277,6 +278,12 @@ export default function AdminRevenuePage() {
                         value: totals.deliveryCents,
                         fill: DELIVERY_FILL,
                       },
+                      {
+                        key: "cod-fee",
+                        label: "COD charge",
+                        value: totals.codFeeCents,
+                        fill: COD_FEE_FILL,
+                      },
                     ]}
                     total={gross}
                     currency={currency}
@@ -304,6 +311,12 @@ export default function AdminRevenuePage() {
                     swatch={DELIVERY_FILL}
                     share={gross > 0 ? totals.deliveryCents / gross : 0}
                     value={formatMoney(totals.deliveryCents, "en-GB", currency)}
+                  />
+                  <SumRow
+                    label="COD charge collected"
+                    swatch={COD_FEE_FILL}
+                    share={gross > 0 ? totals.codFeeCents / gross : 0}
+                    value={formatMoney(totals.codFeeCents, "en-GB", currency)}
                   />
                   <SumRow
                     label="Discounts given"

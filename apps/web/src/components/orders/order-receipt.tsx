@@ -93,6 +93,12 @@ export function OrderSummaryLines({ order, locale }: { order: Order; locale: Loc
           label={t("cart.summary.delivery")}
           value={formatMoney(order.deliveryCents, money, order.currency)}
         />
+        {order.codFeeCents > 0 ? (
+          <SummaryRow
+            label={t("cart.summary.codFee")}
+            value={formatMoney(order.codFeeCents, money, order.currency)}
+          />
+        ) : null}
         {order.discountCents > 0 ? (
           <SummaryRow
             tone="credit"

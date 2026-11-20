@@ -196,11 +196,17 @@ export function InviteCheckoutView({
     isPlaceholderData,
     isError: quoteFailed,
   } = useQuery({
-    queryKey: ["invite-quote", JSON.stringify(items), zone || undefined],
+    queryKey: [
+      "invite-quote",
+      JSON.stringify(items),
+      zone || undefined,
+      method === "cash-on-delivery",
+    ],
     queryFn: () =>
       quoteCart(items, {
         zone: zone || undefined,
         inviteToken: token,
+        paymentMethod: method === "cash-on-delivery" ? "cash-on-delivery" : undefined,
       }),
     placeholderData: keepPreviousData,
     staleTime: 0,
@@ -294,6 +300,7 @@ export function InviteCheckoutView({
               threshold: formatMoney(cart.freeDeliveryThreshold, money),
             }),
       deliveryUnknown: deliveryKnown ? undefined : t("cart.summary.deliveryPending"),
+      codFee: t("cart.summary.codFee"),
     },
     money,
   );
@@ -470,6 +477,11 @@ export function InviteCheckoutView({
                   setValue={setValue}
                   errors={errors}
                   method={method}
+                  codFeeNote={
+                    deliveryKnown && cart.codFeeIfCod > 0
+                      ? t("checkout.payment.codFeeNote")
+                      : undefined
+                  }
                   amount={total}
                   breakdown={rows.map((row) => (
                     <SummaryRow key={row.key} label={row.label} value={row.value} tone={row.tone} />

@@ -84,6 +84,10 @@ export type CartTotals = {
   deliveryCredit: number;
   /** Coupon discount off the subtotal, as the server priced it. Zero without one. */
   discount: number;
+  /** Cash-on-delivery charge inside `total`. Zero unless quoted for COD. */
+  codFee: number;
+  /** What COD would add, for the payment option's note. Never in `total`. */
+  codFeeIfCod: number;
   total: number;
 };
 
@@ -161,6 +165,8 @@ export function cartFromQuote(quote: CartQuote): Cart {
     delivery: quote.deliveryCents,
     deliveryCredit: quote.deliveryCreditCents,
     discount: quote.coupon?.discountCents ?? 0,
+    codFee: quote.codFeeCents,
+    codFeeIfCod: quote.codFeeIfCodCents,
     total: quote.totalCents,
     freeDeliveryThreshold: quote.freeDeliveryThresholdCents,
     coupon: quote.coupon ?? null,
@@ -187,6 +193,8 @@ export function zeroTotals(): CartTotals {
     delivery: 0,
     deliveryCredit: 0,
     discount: 0,
+    codFee: 0,
+    codFeeIfCod: 0,
     total: 0,
   };
 }
@@ -227,6 +235,8 @@ export function summaryLines(
      * discount to show.
      */
     discount?: string;
+    /** The COD charge row's label. Drawn when given and the quote has one. */
+    codFee?: string;
   },
   locale = "en-GB",
 ): SummaryLine[] {
@@ -251,6 +261,15 @@ export function summaryLines(
       label: labels.deliveryFree,
       value: formatCredit(totals.deliveryCredit, locale),
       tone: "credit",
+    });
+  }
+
+  if (totals.codFee > 0 && labels.codFee) {
+    lines.push({
+      key: "cod-fee",
+      label: labels.codFee,
+      value: formatMoney(totals.codFee, locale),
+      tone: "default",
     });
   }
 

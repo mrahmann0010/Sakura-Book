@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { bookAvailabilityValues } from "./catalog";
+import type { AcceptedPaymentMethod } from "./checkout";
 import { shippingTiers } from "./shipping-zones";
 
 /* --------------------------------------------------------------------------
@@ -18,6 +19,17 @@ export const cartItemSchema = z.object({
   bookId: z.string().uuid(),
   quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY),
 });
+
+/* Spelt out rather than imported: ./checkout imports this file, and a runtime
+   import back would be a cycle. The type check below fails the build if the
+   two lists ever drift. */
+const quoteMethods = ["cash-on-delivery", "manual-transfer"] as const;
+const _quoteMethodsMatch: [AcceptedPaymentMethod] extends [(typeof quoteMethods)[number]]
+  ? [(typeof quoteMethods)[number]] extends [AcceptedPaymentMethod]
+    ? true
+    : never
+  : never = true;
+void _quoteMethodsMatch;
 
 export const cartQuoteRequestSchema = z.object({
   /**
@@ -43,6 +55,12 @@ export const cartQuoteRequestSchema = z.object({
    * value here carries no pricing authority on its own.
    */
   inviteToken: z.string().trim().min(1).optional(),
+  /**
+   * The payment method picked so far. Cash on delivery adds the COD charge
+   * (./cod-fee) to the total; anything else, or absent, adds nothing. Joins
+   * the quote so the total the checkout shows is the one it will charge.
+   */
+  paymentMethod: z.enum(quoteMethods).optional(),
 });
 
 /**
@@ -116,11 +134,21 @@ export const cartQuoteSchema = z.object({
   parcelWeightGrams: z.number().int().nonnegative().default(0),
 
   /** Absent when no code was sent, or when the code was refused. */
-  coupon: z
-    .object({ code: z.string(), discountCents: z.number().int().nonnegative() })
-    .optional(),
+  coupon: z.object({ code: z.string(), discountCents: z.number().int().nonnegative() }).optional(),
   /** Why a sent code was not applied. Discriminate on the presence of `coupon`. */
   couponRejection: z.string().optional(),
+
+  /**
+   * The cash-on-delivery charge, already inside `totalCents` when it is
+   * non-zero. Zero unless the quote was asked for `cash-on-delivery`.
+   * Defaulted so a web build newer than the API still parses an older quote.
+   */
+  codFeeCents: z.number().int().nonnegative().default(0),
+  /**
+   * What COD would add, whichever method was asked for — so the payment
+   * option can say "+৳12" before it is picked. Never part of `totalCents`.
+   */
+  codFeeIfCodCents: z.number().int().nonnegative().default(0),
 
   totalCents: z.number().int().nonnegative(),
 

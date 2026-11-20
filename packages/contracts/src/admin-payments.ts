@@ -65,7 +65,7 @@ export type PaymentBreakdownQuery = z.infer<typeof paymentBreakdownQuerySchema>;
  * actually arrived. Shared by the totals block and by every platform row, so
  * a row and the headline can never be shaped differently.
  *
- * `totalCents = booksCents + deliveryCents - discountCents`, and
+ * `totalCents = booksCents + deliveryCents + codFeeCents - discountCents`, and
  * `totalCents = collectedCents + expectedCents`. Both identities hold for
  * every row and for the totals; the screen draws them as arithmetic and would
  * visibly break if they stopped being true.
@@ -76,6 +76,8 @@ export const paymentTotalsSchema = z.object({
   booksCents: z.number().int().nonnegative(),
   /** Sum of `shippingCents` — the delivery fee collected. */
   deliveryCents: z.number().int().nonnegative(),
+  /** Sum of `codFeeCents` — the cash-on-delivery charge. Defaulted for an older API. */
+  codFeeCents: z.number().int().nonnegative().default(0),
   /** Sum of `discountCents`, as a positive number. It is deducted, not added. */
   discountCents: z.number().int().nonnegative(),
   /** Sum of `totalCents` — what the customer was charged. */

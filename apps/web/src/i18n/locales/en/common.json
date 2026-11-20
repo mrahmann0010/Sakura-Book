@@ -154,7 +154,8 @@
       "deliveryFreeValue": "Free",
       "totalPlusDelivery": "{{amount}} + delivery",
       "checkout": "Proceed to checkout",
-      "note": "Postage is calculated from the address you give at checkout."
+      "note": "Postage is calculated from the address you give at checkout.",
+      "codFee": "COD charge"
     },
     "remove": {
       "title": "Remove this book?",
@@ -261,7 +262,9 @@
       "cardMeta": "coming later",
       "cardUnavailable": "Card payments are not switched on yet.",
       "senderNumber": "bKash/Rocket/Nagad number you paid from",
-      "transactionId": "Transaction ID"
+      "transactionId": "Transaction ID",
+      "codFeeNote": "Pay digitally and save the COD charge!",
+      "codChargesApplicable": "COD charges applicable"
     },
     "items": {
       "legend": "Your books",
@@ -627,9 +630,7 @@
       },
       "refunds": {
         "title": "4. Cancellations & Refunds",
-        "body": [
-          "Cancellations, returns, and refunds are handled under our Refund Policy."
-        ]
+        "body": ["Cancellations, returns, and refunds are handled under our Refund Policy."]
       },
       "conduct": {
         "title": "5. Fair Use",

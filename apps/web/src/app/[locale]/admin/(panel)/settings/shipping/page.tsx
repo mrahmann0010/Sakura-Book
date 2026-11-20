@@ -25,12 +25,17 @@ import {
 type TermsForm = {
   flatRateTaka: string;
   freeDeliveryThresholdTaka: string;
+  /** Percent as typed ("1", "1.5"); saved as basis points. */
+  codFeeDhakaPercent: string;
+  codFeeOutsidePercent: string;
 };
 
 function fromTerms(terms: AdminShippingTerms): TermsForm {
   return {
     flatRateTaka: String(terms.flatRateCents / 100),
     freeDeliveryThresholdTaka: String(terms.freeDeliveryThresholdCents / 100),
+    codFeeDhakaPercent: String(terms.codFeeDhakaBps / 100),
+    codFeeOutsidePercent: String(terms.codFeeOutsideBps / 100),
   };
 }
 
@@ -97,6 +102,8 @@ export default function AdminShippingSettingsPage() {
   const [form, setForm] = useState<TermsForm>({
     flatRateTaka: "",
     freeDeliveryThresholdTaka: "",
+    codFeeDhakaPercent: "",
+    codFeeOutsidePercent: "",
   });
 
   const [regions, setRegions] = useState<AdminRegion[]>([]);
@@ -143,6 +150,8 @@ export default function AdminShippingSettingsPage() {
       const updated = await updateAdminShippingTerms({
         flatRateCents: Math.round(Number(form.flatRateTaka) * 100),
         freeDeliveryThresholdCents: Math.round(Number(form.freeDeliveryThresholdTaka) * 100),
+        codFeeDhakaBps: Math.round(Number(form.codFeeDhakaPercent) * 100),
+        codFeeOutsideBps: Math.round(Number(form.codFeeOutsidePercent) * 100),
       });
       setForm(fromTerms(updated));
       setMeta(updated);
@@ -195,7 +204,8 @@ export default function AdminShippingSettingsPage() {
   return (
     <div className="flex max-w-lg flex-col gap-10">
       <p className="text-13.5 text-secondary">
-        Postage for each delivery tier, the fallback rate, and when delivery is waived.
+        Postage for each delivery tier, the fallback rate, when delivery is waived, and the
+        cash-on-delivery charge.
       </p>
 
       {loading ? (
@@ -221,6 +231,33 @@ export default function AdminShippingSettingsPage() {
                 setForm((prev) => ({ ...prev, freeDeliveryThresholdTaka: event.target.value }))
               }
             />
+
+            {/* The COD charge. Customers see it as a whole-taka amount, rounded
+                up, so a fractional rate here never shows as ৳4.78. */}
+            <fieldset className="flex flex-col gap-4">
+              <legend className="text-ink mb-1 text-sm font-medium">Cash-on-delivery charge</legend>
+              <p className="text-caption text-secondary -mt-2">
+                Added only to COD orders, as a % of books + delivery, rounded up to the whole taka.
+                Pathao takes about 0.5% in Dhaka and 1% outside.
+              </p>
+              <Input
+                label="Dhaka city (%)"
+                inputMode="decimal"
+                value={form.codFeeDhakaPercent}
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, codFeeDhakaPercent: event.target.value }))
+                }
+              />
+              <Input
+                label="Suburbs and outside Dhaka (%)"
+                hint="Use 0 to turn the charge off. Maximum 10%."
+                inputMode="decimal"
+                value={form.codFeeOutsidePercent}
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, codFeeOutsidePercent: event.target.value }))
+                }
+              />
+            </fieldset>
 
             {error ? <p className="text-13.5 text-clay">{error}</p> : null}
 

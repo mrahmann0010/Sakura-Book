@@ -46,6 +46,7 @@ export class CartController {
       couponCode: body.couponCode,
       zone: body.zone,
       region: body.region,
+      paymentMethod: body.paymentMethod,
       holding: await this.inviteHolding(body.inviteToken),
     });
 

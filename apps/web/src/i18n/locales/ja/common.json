@@ -151,7 +151,8 @@
       "deliveryFreeValue": "無料",
       "totalPlusDelivery": "{{amount}} + 配送料",
       "checkout": "レジに進む",
-      "note": "配送料はレジで入力された住所に基づいて計算されます。"
+      "note": "配送料はレジで入力された住所に基づいて計算されます。",
+      "codFee": "代引き手数料"
     },
     "remove": {
       "title": "この本を削除しますか？",
@@ -258,7 +259,9 @@
       "cardMeta": "準備中",
       "cardUnavailable": "カード決済はまだご利用いただけません。",
       "senderNumber": "送金元のbKash/Rocket/Nagad番号",
-      "transactionId": "取引ID"
+      "transactionId": "取引ID",
+      "codFeeNote": "デジタル決済なら代引き手数料0円！",
+      "codChargesApplicable": "代引き手数料がかかります"
     },
     "items": {
       "legend": "ご注文の本",
@@ -623,9 +626,7 @@
       },
       "refunds": {
         "title": "4. キャンセルと返金",
-        "body": [
-          "キャンセル・返品・返金については、返金ポリシーに基づき対応いたします。"
-        ]
+        "body": ["キャンセル・返品・返金については、返金ポリシーに基づき対応いたします。"]
       },
       "conduct": {
         "title": "5. 適正なご利用",
