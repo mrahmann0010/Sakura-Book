@@ -263,7 +263,7 @@
       "cardUnavailable": "Card payments are not switched on yet.",
       "senderNumber": "bKash/Rocket/Nagad number you paid from",
       "transactionId": "Transaction ID",
-      "codFeeNote": "To avoid the COD charge, pay with bKash, Rocket or Nagad.",
+      "codFeeNote": "No COD charge with bKash, Rocket or Nagad.",
       "codChargesApplicable": "COD charges applicable"
     },
     "items": {

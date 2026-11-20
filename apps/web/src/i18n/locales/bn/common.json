@@ -263,7 +263,7 @@
       "cardUnavailable": "কার্ড পেমেন্ট এখনও চালু হয়নি।",
       "senderNumber": "যে বিকাশ/রকেট/নগদ নম্বর থেকে টাকা পাঠিয়েছেন",
       "transactionId": "ট্রানজেকশন আইডি",
-      "codFeeNote": "ক্যাশ অন ডেলিভারি চার্জ এড়াতে bKash, Rocket বা Nagad-এ পরিশোধ করুন।",
+      "codFeeNote": "bKash, Rocket বা Nagad-এ COD চার্জ নেই।",
       "codChargesApplicable": "ক্যাশ অন ডেলিভারি চার্জ প্রযোজ্য"
     },
     "items": {
