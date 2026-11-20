@@ -54,6 +54,12 @@ export type PricedCart = {
   coupon?: PricedCoupon;
   couponRejection?: string;
 
+  /** Inside `totalCents`. Zero unless priced for cash on delivery. */
+  codFeeCents: number;
+  /** What COD would add. Never inside `totalCents`. */
+  codFeeIfCodCents: number;
+  /** The COD rate for the quoted zone, as a percentage. */
+  codFeePercent: number;
   totalCents: number;
   freeDeliveryThresholdCents: number;
 };
@@ -80,6 +86,9 @@ export function toCartQuote(priced: PricedCart): CartQuote {
       : undefined,
     couponRejection: priced.couponRejection,
 
+    codFeeCents: priced.codFeeCents,
+    codFeeIfCodCents: priced.codFeeIfCodCents,
+    codFeePercent: priced.codFeePercent,
     totalCents: priced.totalCents,
     freeDeliveryThresholdCents: priced.freeDeliveryThresholdCents,
   };

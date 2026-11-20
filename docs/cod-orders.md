@@ -46,6 +46,22 @@ One PR, 9 commits, branch `feat/cod-approval-flow`. Branches `feat/cod-payment-s
 - [ ] On a real phone, tap **Confirm on Messenger**: it opens the Nihonova chat; note whether the draft message is filled in.
 - [ ] With the SMS gateway on, approve an order and check the text arrives.
 
+### COD charge (branch `feat/cod-fee`, migration 0049)
+
+COD orders pay a charge that covers the courier's cash-handling fee. It is double Pathao's rate, which leaves room for refused parcels:
+
+| Tier | Pathao takes | Customer pays |
+|---|---|---|
+| ISD (Dhaka city) | ~0.5% | **1%** |
+| SUBURB, OSD | ~1% | **2%** |
+
+- **Staff set the rates** on **Admin → Settings → Shipping → Cash-on-delivery charge**: one % for Dhaka city, one for suburbs + outside Dhaka (0–10%, decimals allowed). Saved on `shop_settings.cod_fee_dhaka_bps` / `cod_fee_outside_bps` and audited. Never saved → defaults 1% / 2% (`DEFAULT_COD_FEE_RATES`).
+- **One formula:** `codFeeCents()` in `packages/contracts/src/cod-fee.ts`. The API prices with it inside checkout's transaction, and the web only shows the server's numbers.
+- **Base:** books after discount plus the delivery charge actually charged. Rounded up to the whole taka. Free delivery does not waive it. Prepaid (bKash/Rocket/Nagad) orders pay nothing.
+- **Priced like the zone:** `/cart/quote` takes `paymentMethod`. Checkout requotes when COD is picked, so the summary, the "I'll pay ৳X" tick and the charged total all include the charge. The COD option carries a small "COD charges applicable" line before it is picked; once picked, it names the % and the amount and says that wallets skip it.
+- **Rate changes never touch placed orders:** the charge is frozen in `orders.cod_fee_cents` (default 0; older orders stay 0). `total = subtotal + shipping − discount + cod_fee`. Shown on receipts, the email and the revenue page. The Pathao manifest's COD amount is `total`, so it already includes the charge.
+- **Deploy:** run migration 0049.
+
 ### Remaining work, in order
 
 1. **Step 2: housekeeping** (§4)
@@ -357,6 +373,8 @@ Goal: the process in §1, end to end.
 | 2026-11-19 | 0A | `payment_status` column, backfill (verified on Postgres), rule in `transition`, contracts, tests. Branch `feat/cod-payment-status` off `deployment` | #100 |
 | 2026-11-19 | 0B | Dashboard + payments page read `payment_status`; admin payment badge. Branch `feat/cod-revenue-by-payment`, stacked on 0A | #100 |
 | 2026-11-19 | 1 | COD back in checkout with tick box; Messenger confirmation step; approve/deny API + panel; migration 0048. Branch `feat/cod-approval-flow`, stacked on 0B | #100 |
+
+| 2026-11-20 | — | COD charge: 1% ISD / 2% SUBURB+OSD, priced server-side, frozen in `orders.cod_fee_cents`; rates editable in Settings → Shipping (migration 0049). Branch `feat/cod-fee` | — |
 
 ## 6. Open questions
 

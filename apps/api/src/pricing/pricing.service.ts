@@ -1,11 +1,14 @@
 import { Injectable } from "@nestjs/common";
 import {
   MAX_LINE_QUANTITY,
+  codFeeBpsFor,
+  codFeeCents,
   parcelWeightGrams,
   shippingCentsFor,
   tierOfRegion,
   tierOfZone,
   type CartItem,
+  type AcceptedPaymentMethod,
   type CartQuoteRejection,
 } from "@sakura/contracts";
 import { BooksService, type PriceableBook } from "../catalog";
@@ -65,6 +68,8 @@ export class PricingService {
       couponCode?: string;
       zone?: string;
       region?: string;
+      /** Cash on delivery adds the COD charge — see @sakura/contracts cod-fee. */
+      paymentMethod?: AcceptedPaymentMethod;
       /** The shopper's own live invite reservation — see `rejectionFor`. */
       holding?: { bookId: string; quantity: number };
     } = {},
@@ -120,9 +125,10 @@ export class PricingService {
        method, so that when checkout calls it inside its transaction the
        postage rules it prices against are the ones committed at that moment —
        not ones an admin changed while the order was being written. */
-    const [startCents, terms] = await Promise.all([
+    const [startCents, terms, codRates] = await Promise.all([
       tier ? this.regionsService.startCentsFor(tier, executor) : null,
       this.shippingTermsService.current(executor),
+      this.shippingTermsService.codFeeRates(executor),
     ]);
 
     const delivery = this.shippingPolicy.quote(
@@ -131,6 +137,17 @@ export class PricingService {
       terms,
       tier ? shippingCentsFor(tier, weightGrams, startCents) : null,
     );
+
+    /* Clamped rather than trusted to be non-negative. computeDiscountCents
+       already caps the discount at the subtotal, so this can only fire if
+       that guarantee is ever weakened — and a negative total is the one
+       arithmetic outcome that must never reach a payment provider. */
+    const collectedCents = Math.max(0, subtotalCents - discountCents + delivery.chargedCents);
+    /* What the courier would collect, and its COD charge on that. Priced for
+       every quote so the payment option can show it before it is picked;
+       added to the total only when COD is the method. */
+    const codFeeIfCod = codFeeCents(tier, collectedCents, codRates);
+    const codFee = options.paymentMethod === "cash-on-delivery" ? codFeeIfCod : 0;
 
     return {
       currency: terms.currency,
@@ -147,11 +164,10 @@ export class PricingService {
       coupon: coupon.applied,
       couponRejection: coupon.rejection,
 
-      // Clamped rather than trusted to be non-negative. computeDiscountCents
-      // already caps the discount at the subtotal, so this can only fire if
-      // that guarantee is ever weakened — and a negative total is the one
-      // arithmetic outcome that must never reach a payment provider.
-      totalCents: Math.max(0, subtotalCents - discountCents + delivery.chargedCents),
+      codFeeCents: codFee,
+      codFeeIfCodCents: codFeeIfCod,
+      codFeePercent: codFeeBpsFor(tier, codRates) / 100,
+      totalCents: collectedCents + codFee,
 
       freeDeliveryThresholdCents: terms.freeDeliveryThresholdCents,
     };

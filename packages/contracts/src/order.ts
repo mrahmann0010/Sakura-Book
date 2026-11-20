@@ -36,7 +36,13 @@ export type OrderStatus = (typeof orderStatuses)[number];
  *
  * See docs/cod-orders.md §3 for the design and the migration plan.
  */
-export const orderPaymentStatuses = ["UNPAID", "PAID", "COLLECTED", "REMITTED", "REFUNDED"] as const;
+export const orderPaymentStatuses = [
+  "UNPAID",
+  "PAID",
+  "COLLECTED",
+  "REMITTED",
+  "REFUNDED",
+] as const;
 
 export type OrderPaymentStatus = (typeof orderPaymentStatuses)[number];
 
@@ -173,6 +179,8 @@ export const orderSchema = z.object({
   subtotalCents: z.number().int().nonnegative(),
   deliveryCents: z.number().int().nonnegative(),
   discountCents: z.number().int().nonnegative(),
+  /** The cash-on-delivery charge (./cod-fee). Zero for prepaid orders. */
+  codFeeCents: z.number().int().nonnegative().default(0),
   totalCents: z.number().int().nonnegative(),
   /** Snapshot of the code used, so the order reads correctly if it is later deleted. */
   couponCode: z.string().nullable(),

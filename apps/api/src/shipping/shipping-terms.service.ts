@@ -1,5 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type { AdminShippingTerms } from "@sakura/contracts";
+import {
+  DEFAULT_COD_FEE_RATES,
+  type AdminShippingTerms,
+  type CodFeeRates,
+} from "@sakura/contracts";
 import { eq } from "drizzle-orm";
 import { SHIPPING_CONFIG, type ShippingConfig } from "../config/shipping.config";
 import { DbService } from "../db/db.service";
@@ -63,13 +67,29 @@ export class ShippingTermsService {
     });
   }
 
+  /**
+   * The COD charge rates in force — saved ones, else the contracts defaults.
+   * Takes an `Executor` for the same reason `current` does: checkout charges
+   * the rate committed when the order is written.
+   */
+  async codFeeRates(executor: Executor = this.dbService.db): Promise<CodFeeRates> {
+    const row = await this.row(executor);
+    return {
+      dhakaBps: row?.codFeeDhakaBps ?? DEFAULT_COD_FEE_RATES.dhakaBps,
+      outsideBps: row?.codFeeOutsideBps ?? DEFAULT_COD_FEE_RATES.outsideBps,
+    };
+  }
+
   /** The same numbers, plus where each came from and who last touched them. */
   async describe(executor: Executor = this.dbService.db): Promise<AdminShippingTerms> {
     const row = await this.row(executor);
     const terms = await this.current(executor);
+    const cod = await this.codFeeRates(executor);
 
     return {
       ...terms,
+      codFeeDhakaBps: cod.dhakaBps,
+      codFeeOutsideBps: cod.outsideBps,
       /**
        * "database" only when at least one field is actually stored. A row that
        * exists with both columns null is still an unconfigured shop — the row
@@ -81,7 +101,9 @@ export class ShippingTermsService {
         row &&
         (row.deliveryFlatCents !== null ||
           row.freeDeliveryThresholdCents !== null ||
-          row.originDivision !== null)
+          row.originDivision !== null ||
+          row.codFeeDhakaBps !== null ||
+          row.codFeeOutsideBps !== null)
           ? "database"
           : "environment",
       updatedAt: row?.updatedAt.toISOString() ?? null,
@@ -111,19 +133,21 @@ export class ShippingTermsService {
       flatRateCents?: number;
       freeDeliveryThresholdCents?: number;
       originDivision?: string;
+      codFeeDhakaBps?: number;
+      codFeeOutsideBps?: number;
     },
     actor: { id: string; email: string },
     tx: Transaction,
   ): Promise<void> {
     const values = {
-      ...(changes.flatRateCents !== undefined
-        ? { deliveryFlatCents: changes.flatRateCents }
-        : {}),
+      ...(changes.flatRateCents !== undefined ? { deliveryFlatCents: changes.flatRateCents } : {}),
       ...(changes.freeDeliveryThresholdCents !== undefined
         ? { freeDeliveryThresholdCents: changes.freeDeliveryThresholdCents }
         : {}),
-      ...(changes.originDivision !== undefined
-        ? { originDivision: changes.originDivision }
+      ...(changes.originDivision !== undefined ? { originDivision: changes.originDivision } : {}),
+      ...(changes.codFeeDhakaBps !== undefined ? { codFeeDhakaBps: changes.codFeeDhakaBps } : {}),
+      ...(changes.codFeeOutsideBps !== undefined
+        ? { codFeeOutsideBps: changes.codFeeOutsideBps }
         : {}),
       updatedById: actor.id,
       updatedByEmail: actor.email,

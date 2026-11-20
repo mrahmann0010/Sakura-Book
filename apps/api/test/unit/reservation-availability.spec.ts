@@ -49,7 +49,10 @@ function service(row: PriceableBook) {
     { priceable: async () => new Map([[row.id, row]]) } as never,
     { evaluate: async () => ({ ok: false, reason: "UNKNOWN" }) } as never,
     { quote: () => ({ baseCents: 0, chargedCents: 0, creditCents: 0 }) } as never,
-    { current: async () => ({ currency: "BDT" }) } as never,
+    {
+      current: async () => ({ currency: "BDT" }),
+      codFeeRates: async () => ({ dhakaBps: 100, outsideBps: 200 }),
+    } as never,
     { startCentsFor: async () => null } as never,
   );
 }

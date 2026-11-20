@@ -234,7 +234,13 @@ export function CheckoutView({
      flat placeholder rate, which the rail labels as pending. */
   const zone = useWatch({ control, name: "zone" });
   const zoneChosen = Boolean(zone);
-  const cart = useCart(zone || undefined, (couponMode && appliedCode) || undefined);
+  /* COD joins the quote so its charge lands in the total the customer sees,
+     ticks and is charged. */
+  const cart = useCart(
+    zone || undefined,
+    (couponMode && appliedCode) || undefined,
+    method === "cash-on-delivery",
+  );
 
   /* Whether this visit has had books in it. Set during render rather than in
      an effect (React's pattern for deriving from changing data), so the very
@@ -486,6 +492,7 @@ export function CheckoutView({
               threshold: formatMoney(cart.freeDeliveryThreshold, money),
             }),
       deliveryUnknown: deliveryKnown ? undefined : t("cart.summary.deliveryPending"),
+      codFee: t("cart.summary.codFee"),
       discount:
         couponMode && cart.coupon
           ? t("checkout.coupon.summaryRow", { code: cart.coupon.code })
@@ -695,6 +702,14 @@ export function CheckoutView({
                     setValue={setValue}
                     errors={errors}
                     method={method}
+                    codFeeNote={
+                      deliveryKnown && cart.codFeeIfCod > 0
+                        ? t("checkout.payment.codFeeNote", {
+                            percent: cart.codFeePercent,
+                            amount: formatMoney(cart.codFeeIfCod, money),
+                          })
+                        : undefined
+                    }
                     amount={total}
                     breakdown={rows.map((row) => (
                       <SummaryRow

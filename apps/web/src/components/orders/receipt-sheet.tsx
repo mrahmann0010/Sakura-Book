@@ -294,6 +294,12 @@ export function ReceiptSheet({ order }: { order: Order }) {
                     <span className="rs-total-label">{t("cart.summary.delivery")}</span>
                     <span className="rs-total-value">{cash(order.deliveryCents)}</span>
                   </div>
+                  {order.codFeeCents > 0 ? (
+                    <div className="rs-total-row">
+                      <span className="rs-total-label">{t("cart.summary.codFee")}</span>
+                      <span className="rs-total-value">{cash(order.codFeeCents)}</span>
+                    </div>
+                  ) : null}
                   {order.discountCents > 0 ? (
                     <div className="rs-total-row">
                       <span className="rs-total-label">

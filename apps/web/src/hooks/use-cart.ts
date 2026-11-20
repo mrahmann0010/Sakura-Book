@@ -79,7 +79,12 @@ export type UseCart = Cart & {
   clear: () => void;
 };
 
-export function useCart(zone?: string, couponCode?: string): UseCart {
+/**
+ * `cod` asks the quote to price cash on delivery, which adds the COD charge to
+ * the total. Only checkout passes it, and only while COD is the chosen method,
+ * so every other page keeps sharing the plain key.
+ */
+export function useCart(zone?: string, couponCode?: string, cod = false): UseCart {
   const dispatch = useAppDispatch();
   const items = useAppSelector(selectCartItems);
   const rehydrated = useAppSelector(selectCartHydrated);
@@ -103,8 +108,19 @@ export function useCart(zone?: string, couponCode?: string): UseCart {
   } = useQuery({
     /* The code joins the key only when there is one, so every page without a
        coupon box keeps sharing the exact key it always had. */
-    queryKey: couponCode ? ["cart-quote", items, zone, couponCode] : ["cart-quote", items, zone],
-    queryFn: () => quoteCart(items, { zone, couponCode }),
+    queryKey: [
+      "cart-quote",
+      items,
+      zone,
+      ...(couponCode ? [couponCode] : []),
+      ...(cod ? ["cod"] : []),
+    ],
+    queryFn: () =>
+      quoteCart(items, {
+        zone,
+        couponCode,
+        paymentMethod: cod ? "cash-on-delivery" : undefined,
+      }),
     enabled: hydrated && items.length > 0,
     placeholderData: keepPreviousData,
     staleTime: 0,

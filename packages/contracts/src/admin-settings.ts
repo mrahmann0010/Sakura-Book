@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { monthlyTrendPointSchema } from "./admin-dashboard";
+import { MAX_COD_FEE_BPS } from "./cod-fee";
 import { orderStatuses } from "./order";
 import { reopenDateSchema, restockScheduleSchema } from "./waitlist";
 
@@ -35,6 +36,10 @@ export const shippingTermsUpdateSchema = z
     freeDeliveryThresholdCents: z.number().int().nonnegative(),
     /** The division the shop currently ships from. See `originDivision` on `shippingTermsSchema`. */
     originDivision: z.string().trim().min(1),
+    /** COD charge for Dhaka city, in basis points (100 = 1%). See ./cod-fee. */
+    codFeeDhakaBps: z.number().int().min(0).max(MAX_COD_FEE_BPS),
+    /** COD charge for the suburbs and outside Dhaka, in basis points. */
+    codFeeOutsideBps: z.number().int().min(0).max(MAX_COD_FEE_BPS),
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
@@ -58,6 +63,8 @@ export const adminShippingTermsSchema = z.object({
   flatRateCents: z.number().int().nonnegative(),
   freeDeliveryThresholdCents: z.number().int().nonnegative(),
   originDivision: z.string().trim().min(1),
+  codFeeDhakaBps: z.number().int().nonnegative(),
+  codFeeOutsideBps: z.number().int().nonnegative(),
   source: z.enum(["database", "environment"]),
   updatedAt: z.string().datetime().nullable(),
   updatedByEmail: z.string().nullable(),

@@ -288,7 +288,11 @@ export class CheckoutService {
        books' worth of stock. */
     const priced = await this.pricingService.priceCart(
       request.items,
-      { couponCode: request.couponCode, zone: request.customer.zone },
+      {
+        couponCode: request.couponCode,
+        zone: request.customer.zone,
+        paymentMethod: request.customer.method,
+      },
       tx,
     );
 
@@ -573,6 +577,7 @@ export function orderValuesFrom(
     discountCodeSnapshot: priced.coupon?.code ?? null,
     discountCents: priced.coupon?.discountCents ?? 0,
 
+    codFeeCents: priced.codFeeCents,
     totalCents: priced.totalCents,
 
     customerNote: customer.notes ?? null,

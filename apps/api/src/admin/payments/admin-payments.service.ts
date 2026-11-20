@@ -46,7 +46,7 @@ import { REVENUE_STATUSES } from "../dashboard";
  *
  * For every row and for the totals:
  *
- *   totalCents = booksCents + deliveryCents - discountCents
+ *   totalCents = booksCents + deliveryCents + codFeeCents - discountCents
  *   totalCents = collectedCents + expectedCents
  *
  * The first is the orders table's own arithmetic (see the `totalCents` column
@@ -204,6 +204,7 @@ export class AdminPaymentsService {
         count(*)::int as order_count,
         coalesce(sum(${orders.subtotalCents}), 0)::int as books_cents,
         coalesce(sum(${orders.shippingCents}), 0)::int as delivery_cents,
+        coalesce(sum(${orders.codFeeCents}), 0)::int as cod_fee_cents,
         coalesce(sum(${orders.discountCents}), 0)::int as discount_cents,
         coalesce(sum(${orders.totalCents}), 0)::int as total_cents,
         coalesce(sum(${collected}), 0)::int as collected_cents
@@ -215,6 +216,7 @@ export class AdminPaymentsService {
       order_count: number;
       books_cents: number;
       delivery_cents: number;
+      cod_fee_cents: number;
       discount_cents: number;
       total_cents: number;
       collected_cents: number;
@@ -229,6 +231,7 @@ export class AdminPaymentsService {
         orderCount: Number(row.order_count),
         booksCents: Number(row.books_cents),
         deliveryCents: Number(row.delivery_cents),
+        codFeeCents: Number(row.cod_fee_cents),
         discountCents: Number(row.discount_cents),
         totalCents,
         collectedCents,
@@ -245,6 +248,7 @@ function sumTotals(rows: readonly PlatformBreakdown[]): PaymentTotals {
       orderCount: total.orderCount + row.orderCount,
       booksCents: total.booksCents + row.booksCents,
       deliveryCents: total.deliveryCents + row.deliveryCents,
+      codFeeCents: total.codFeeCents + row.codFeeCents,
       discountCents: total.discountCents + row.discountCents,
       totalCents: total.totalCents + row.totalCents,
       collectedCents: total.collectedCents + row.collectedCents,
@@ -254,6 +258,7 @@ function sumTotals(rows: readonly PlatformBreakdown[]): PaymentTotals {
       orderCount: 0,
       booksCents: 0,
       deliveryCents: 0,
+      codFeeCents: 0,
       discountCents: 0,
       totalCents: 0,
       collectedCents: 0,

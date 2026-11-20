@@ -344,6 +344,13 @@
       "when": 1795080986885,
       "tag": "0048_cod_confirmation",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1795156858120,
+      "tag": "0049_cod_fee",
+      "breakpoints": true
     }
   ]
 }

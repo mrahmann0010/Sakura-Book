@@ -36,6 +36,7 @@ export function PaymentSection({
   onMethodChange,
   amount,
   breakdown,
+  codFeeNote,
 }: {
   register: UseFormRegister<CheckoutValues>;
   setValue: UseFormSetValue<CheckoutValues>;
@@ -46,6 +47,8 @@ export function PaymentSection({
       is about to type this figure into a banking app. */
   amount?: ReactNode;
   breakdown?: ReactNode;
+  /** Worded COD charge for the picked zone; absent until delivery is priced. */
+  codFeeNote?: string;
 }) {
   const { t } = useTranslation();
   const [provider, setProvider] = useState<MobileMoneyProviderId | null>(null);
@@ -87,6 +90,9 @@ export function PaymentSection({
           }}
           label={t("checkout.payment.cash-on-delivery")}
           meta={t("checkout.payment.cash-on-deliveryMeta")}
+          /* Small print on the option itself, so the charge is known before
+             COD is picked, not discovered in the total afterwards. */
+          description={t("checkout.payment.codChargesApplicable")}
           fields={
             <div className="flex flex-col gap-3">
               {/* Said before the order is placed, not only after: a shopper who
@@ -95,6 +101,10 @@ export function PaymentSection({
               <p className="text-caption text-secondary">
                 {t("checkout.payment.codHowItWorks", { hours: COD_CONFIRMATION_HOURS })}
               </p>
+              {/* Before the tick, so the total it promises already includes
+                  the charge, and the way to avoid it is named while bKash is
+                  still one tap away. */}
+              {codFeeNote ? <p className="text-caption text-secondary">{codFeeNote}</p> : null}
               <div>
                 <Checkbox
                   {...register("codAcknowledged")}

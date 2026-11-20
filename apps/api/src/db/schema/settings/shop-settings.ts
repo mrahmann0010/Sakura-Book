@@ -54,6 +54,14 @@ export const shopSettings = pgTable(
      */
     originDivision: text("origin_division"),
 
+    /**
+     * The cash-on-delivery charge, in basis points (100 = 1%). Null means
+     * never saved — DEFAULT_COD_FEE_RATES in @sakura/contracts applies.
+     * Dhaka is the ISD tier; outside covers SUBURB and OSD.
+     */
+    codFeeDhakaBps: integer("cod_fee_dhaka_bps"),
+    codFeeOutsideBps: integer("cod_fee_outside_bps"),
+
     /** Receiving number shown at checkout. Null → BKASH_NUMBER from the environment. */
     bkashNumber: text("bkash_number"),
     /** Receiving number shown at checkout. Null → ROCKET_NUMBER from the environment. */
