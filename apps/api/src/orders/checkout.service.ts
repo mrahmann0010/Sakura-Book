@@ -584,10 +584,11 @@ export function orderValuesFrom(
     idempotencyKey,
     paymentMethod: customer.method,
 
-    /* Which wallet the transfer moved through. undefined (cash on delivery,
-       or a request predating this field) becomes null the same way the
-       receipt fields below do. */
-    provider: customer.provider ?? null,
+    /* Which wallet the transfer moved through. Only a manual transfer has
+       one: the form keeps a wallet the customer tapped before switching to
+       cash on delivery, and storing it would label a COD order "bKash".
+       undefined (a request predating this field) also becomes null. */
+    provider: customer.method === "manual-transfer" ? (customer.provider ?? null) : null,
 
     /* The manual-transfer receipt — the wallet the money came from and the
        transaction ID on the confirmation. Normalised to null rather than
