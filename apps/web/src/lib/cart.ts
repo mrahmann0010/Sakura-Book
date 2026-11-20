@@ -88,8 +88,6 @@ export type CartTotals = {
   codFee: number;
   /** What COD would add, for the payment option's note. Never in `total`. */
   codFeeIfCod: number;
-  /** The COD rate for the quoted zone, as a percentage (1, 2). */
-  codFeePercent: number;
   total: number;
 };
 
@@ -169,7 +167,6 @@ export function cartFromQuote(quote: CartQuote): Cart {
     discount: quote.coupon?.discountCents ?? 0,
     codFee: quote.codFeeCents,
     codFeeIfCod: quote.codFeeIfCodCents,
-    codFeePercent: quote.codFeePercent,
     total: quote.totalCents,
     freeDeliveryThreshold: quote.freeDeliveryThresholdCents,
     coupon: quote.coupon ?? null,
@@ -198,7 +195,6 @@ export function zeroTotals(): CartTotals {
     discount: 0,
     codFee: 0,
     codFeeIfCod: 0,
-    codFeePercent: 0,
     total: 0,
   };
 }

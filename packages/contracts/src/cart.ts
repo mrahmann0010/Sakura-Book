@@ -149,8 +149,6 @@ export const cartQuoteSchema = z.object({
    * option can say "+৳12" before it is picked. Never part of `totalCents`.
    */
   codFeeIfCodCents: z.number().int().nonnegative().default(0),
-  /** The COD rate applied for the quoted zone, as a percentage (1, 1.5, 2). */
-  codFeePercent: z.number().nonnegative().default(0),
 
   totalCents: z.number().int().nonnegative(),
 

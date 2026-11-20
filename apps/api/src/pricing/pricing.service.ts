@@ -1,7 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import {
   MAX_LINE_QUANTITY,
-  codFeeBpsFor,
   codFeeCents,
   parcelWeightGrams,
   shippingCentsFor,
@@ -166,7 +165,6 @@ export class PricingService {
 
       codFeeCents: codFee,
       codFeeIfCodCents: codFeeIfCod,
-      codFeePercent: codFeeBpsFor(tier, codRates) / 100,
       totalCents: collectedCents + codFee,
 
       freeDeliveryThresholdCents: terms.freeDeliveryThresholdCents,

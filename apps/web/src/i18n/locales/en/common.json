@@ -263,7 +263,7 @@
       "cardUnavailable": "Card payments are not switched on yet.",
       "senderNumber": "bKash/Rocket/Nagad number you paid from",
       "transactionId": "Transaction ID",
-      "codFeeNote": "A {{percent}}% cash-on-delivery charge ({{amount}}) is added to cover the courier's cash-handling fee. Pay with bKash, Rocket or Nagad to skip it.",
+      "codFeeNote": "To avoid the COD charge, pay with bKash, Rocket or Nagad.",
       "codChargesApplicable": "COD charges applicable"
     },
     "items": {

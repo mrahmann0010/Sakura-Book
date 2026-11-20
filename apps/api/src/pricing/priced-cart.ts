@@ -58,8 +58,6 @@ export type PricedCart = {
   codFeeCents: number;
   /** What COD would add. Never inside `totalCents`. */
   codFeeIfCodCents: number;
-  /** The COD rate for the quoted zone, as a percentage. */
-  codFeePercent: number;
   totalCents: number;
   freeDeliveryThresholdCents: number;
 };
@@ -88,7 +86,6 @@ export function toCartQuote(priced: PricedCart): CartQuote {
 
     codFeeCents: priced.codFeeCents,
     codFeeIfCodCents: priced.codFeeIfCodCents,
-    codFeePercent: priced.codFeePercent,
     totalCents: priced.totalCents,
     freeDeliveryThresholdCents: priced.freeDeliveryThresholdCents,
   };

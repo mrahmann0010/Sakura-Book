@@ -260,7 +260,7 @@
       "cardUnavailable": "カード決済はまだご利用いただけません。",
       "senderNumber": "送金元のbKash/Rocket/Nagad番号",
       "transactionId": "取引ID",
-      "codFeeNote": "配達員の現金取扱手数料として、代引き手数料{{percent}}%（{{amount}}）が加算されます。bKash・Rocket・Nagadでお支払いの場合はかかりません。",
+      "codFeeNote": "代引き手数料をかけずにお支払いいただくには、bKash・Rocket・Nagadをご利用ください。",
       "codChargesApplicable": "代引き手数料がかかります"
     },
     "items": {

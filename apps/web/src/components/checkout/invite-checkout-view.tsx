@@ -479,10 +479,7 @@ export function InviteCheckoutView({
                   method={method}
                   codFeeNote={
                     deliveryKnown && cart.codFeeIfCod > 0
-                      ? t("checkout.payment.codFeeNote", {
-                          percent: cart.codFeePercent,
-                          amount: formatMoney(cart.codFeeIfCod, money),
-                        })
+                      ? t("checkout.payment.codFeeNote")
                       : undefined
                   }
                   amount={total}
